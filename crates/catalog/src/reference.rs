@@ -3084,6 +3084,21 @@ pub struct Firmware {
     pub body_id: String,
     /// Human-readable firmware version string.
     pub version: String,
+    /// How the firmware starts: the entry a camera opens it through.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "RunStart | null")
+    )]
+    pub start: Option<fujimod_catalog_run_inputs::RunStart>,
+    /// The DRAM address space the firmware's own memory plan reaches, for a
+    /// body whose installed capacity is unknown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "RunDramAddressSpace | null")
+    )]
+    pub dram_address_space: Option<fujimod_catalog_run_inputs::RunDramAddressSpace>,
     /// Firmware update content, when distributed for this version.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub update: Option<ContentIdentity>,
@@ -3118,6 +3133,9 @@ impl Firmware {
         validate_id(&self.body_id)?;
         if let Some(content) = &self.update {
             content.validate()?;
+        }
+        if let Some(address_space) = &self.dram_address_space {
+            address_space.validate()?;
         }
         if let Some(boot_rom) = &self.boot_rom {
             boot_rom.content.validate()?;

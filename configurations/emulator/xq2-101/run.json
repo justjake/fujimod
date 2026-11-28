@@ -5,11 +5,7 @@
   "purpose": "rom_boot",
   "body_id": "xq",
   "firmware_id": "xq2-101",
-  "start": {
-    "kind": "rom"
-  },
   "execution": null,
-  "inputs": null,
   "scene": null,
   "overlays": []
 }

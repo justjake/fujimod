@@ -5,11 +5,9 @@
   "soc_id": "xp5",
   "dram_bytes": 2818572288,
   "hardware": {
-    "profiles": {
-      "gfx100rf": {
-        "dram_basis": "The stock bus-drain selector (0x15b0a5c in firmware 1.12) ends the first memory region at 0xa8000000 and names two further bus ports at 0x100000000 and 0x180000000, so installed capacity is larger and unmeasured.",
-        "limits": []
-      }
+    "board": {
+      "dram_basis": "The stock bus-drain selector (0x15b0a5c in firmware 1.12) ends the first memory region at 0xa8000000 and names two further bus ports at 0x100000000 and 0x180000000, so installed capacity is larger and unmeasured.",
+      "limits": []
     },
     "bus_drain": [
       {

@@ -4,6 +4,9 @@
   "id": "x20-103",
   "body_id": "x20",
   "version": "1.03",
+  "start": {
+    "kind": "rom"
+  },
   "update": {
     "size": 27362476,
     "sha256": "7e3dd41696b6ffbd02a8d4b6555eba766a4850b18cbc0f69939f6487d8e0914b"

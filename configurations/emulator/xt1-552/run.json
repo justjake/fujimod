@@ -5,11 +5,7 @@
   "purpose": "rom_boot",
   "body_id": "xt1",
   "firmware_id": "xt1-552",
-  "start": {
-    "kind": "rom"
-  },
   "execution": null,
-  "inputs": null,
   "scene": null,
   "overlays": []
 }

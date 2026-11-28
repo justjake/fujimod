@@ -67,12 +67,6 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         ),
     );
     documents.insert(
-        "emulator-hardware-inputs.generated.schema.json",
-        schema::<fujimod_catalog_run_inputs::HardwareInputs>(
-            fujimod_catalog_run_inputs::HARDWARE_INPUTS_SCHEMA_URI,
-        ),
-    );
-    documents.insert(
         "emulator-firmware-inputs.generated.schema.json",
         schema::<fujimod_catalog_run_inputs::RunFirmwareInputs>(
             fujimod_catalog_run_inputs::RUN_FIRMWARE_INPUTS_SCHEMA_URI,

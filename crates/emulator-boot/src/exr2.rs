@@ -1,9 +1,9 @@
 //! Catalog-driven EXR II plan assembly.
 //!
-//! A body's hardware profile exports its native construction: the node
-//! identities, register windows, dependencies and model wiring. The run
-//! configuration supplies each node's startup options by node identity. This
-//! module joins the two into the plan the EXR II board builds. Body differences
+//! A body's board exports its native construction: the node identities,
+//! register windows, dependencies and model wiring, and each node's startup
+//! options by node identity. This module joins them into the plan the EXR II
+//! board builds. Body differences
 //! stay in catalog data; no identity or device value is chosen here.
 
 use fujimod_catalog::ResolvedSelection;
@@ -13,56 +13,37 @@ use fujimod_emulator_exr2_plan::{BootEntry, Model, Plan};
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
 
-/// The body hardware profile whose exported construction a run builds, when
-/// the configuration selects one that declares a construction.
-pub(super) fn construction_profile(
+/// The body's board, when it exports a native construction.
+pub(super) fn construction_board(
     resolved: &ResolvedConfiguration,
-) -> Option<(&str, &fujimod_catalog::profiles::BodyProfile)> {
-    let configuration = &resolved.configuration;
-    let profile_id = configuration
-        .preset
-        .as_ref()?
-        .hardware_selection
-        .as_ref()?
-        .body_profile_id
-        .as_str();
-    let profile = resolved
-        .reference
-        .body
-        .hardware
-        .as_ref()?
-        .profiles
-        .get(profile_id)?;
-    profile.construction.as_ref()?;
-    Some((profile_id, profile))
+) -> Option<&fujimod_catalog::profiles::BodyBoard> {
+    resolved.board().filter(|board| board.construction.is_some())
 }
 
-/// Whether the run selects a body profile that exports a native construction.
+/// Whether the body's board exports a native construction.
 pub(super) fn available(resolved: &ResolvedConfiguration) -> bool {
-    construction_profile(resolved).is_some()
+    construction_board(resolved).is_some()
 }
 
-/// Build the closed EXR II plan a configuration's body profile exports.
+/// Build the closed EXR II plan the body's board exports.
 pub(super) fn assemble(
     resolved: &ResolvedConfiguration,
     scene_input: &Exr2RunScene,
 ) -> Result<(Plan, Value, Value), String> {
     let configuration = &resolved.configuration;
     let selection = &resolved.reference;
-    let preset = configuration
-        .preset
-        .as_ref()
-        .ok_or_else(|| format!("run {} declares no preset", configuration.id))?;
-    let (profile_id, profile) = construction_profile(resolved).ok_or_else(|| {
+    let preset = configuration.preset.as_ref();
+    let virtual_card = preset.and_then(|preset| preset.virtual_card.as_ref());
+    let board = construction_board(resolved).ok_or_else(|| {
         format!(
-            "body {} profile declares no exported native construction",
+            "body {} board declares no exported native construction",
             selection.body.id
         )
     })?;
-    let construction = profile
+    let construction = board
         .construction
         .as_ref()
-        .expect("construction_profile checks the construction");
+        .expect("construction_board checks the construction");
     let mut nodes = Vec::with_capacity(construction.nodes.len());
     for node in &construction.nodes {
         let mut model = serde_json::to_value(&node.model)
@@ -85,7 +66,7 @@ pub(super) fn assemble(
             None => serde_json::Map::new(),
         };
         let mut configured = !options.is_empty();
-        if let Some(inputs) = preset.native_device_inputs.get(&node.name) {
+        if let Some(inputs) = board.native_device_inputs.get(&node.name) {
             configured = true;
             let inputs = serde_json::to_value(inputs)
                 .map_err(|error| format!("node {} inputs: {error}", node.name))?;
@@ -122,9 +103,9 @@ pub(super) fn assemble(
     }
     // A run that declares a virtual card replaces any clock-only node with the
     // card host. The host owns the SDHCI clock and reset windows.
-    if let Some(card) = &preset.virtual_card {
+    if let Some(card) = virtual_card {
         nodes.retain(|node| node.get("name").and_then(Value::as_str) != Some("sd_clocks"));
-        let high_speed = preset.factory_options.sd_card_profile
+        let high_speed = preset.and_then(|preset| preset.factory_options.sd_card_profile.clone())
             == Some(
                 fujimod_catalog_run_inputs::RunSdCardProfile::DeclaredBlankSdhcHighSpeedUnmeasured,
             );
@@ -132,10 +113,7 @@ pub(super) fn assemble(
     }
     let mut wires = serde_json::to_value(&construction.wires)
         .map_err(|error| {
-            format!(
-                "body {} profile {profile_id} wires: {error}",
-                selection.body.id
-            )
+            format!("body {} board wires: {error}", selection.body.id)
         })?
         .as_object()
         .cloned()
@@ -173,7 +151,7 @@ pub(super) fn assemble(
     debug_assert!(matches!(plan.boot_entry, BootEntry::Rom));
 
     let mut scene_value = scene(selection, scene_input)?;
-    if preset.virtual_card.is_some() {
+    if virtual_card.is_some() {
         scene_value["files"] = json!({"virtual_card_files": {}});
     }
     Ok((plan, plan_value, scene_value))

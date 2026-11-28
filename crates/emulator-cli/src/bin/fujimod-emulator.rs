@@ -605,10 +605,7 @@ fn resolve_boot(arguments: &Arguments) -> Result<Boot, String> {
             .ok_or("--cpu-backend requires a run configuration with factory options")?
             .factory_options
             .cpu_backend = Some(backend);
-        fujimod_catalog_resolution::validate_selection(
-            &resolved.configuration,
-            &resolved.reference,
-        )?;
+        resolved.validate()?;
     }
     Ok(Boot {
         resolved,

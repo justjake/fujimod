@@ -5,12 +5,184 @@
   "soc_id": "xp5",
   "dram_bytes": 2147483648,
   "hardware": {
-    "profiles": {
-      "xh2s": {
-        "dram_basis": "The stock bus-drain helpers split memory at 0x80000000; the first region ends there. Memory above it (0x80000000..0x98000000) is used by a debug-gated memory test at 0x306b1d4, so installed capacity is larger and unmeasured.",
-        "limits": []
-      }
+    "board": {
+      "dram_basis": "The stock bus-drain helpers split memory at 0x80000000; the first region ends there. Memory above it (0x80000000..0x98000000) is used by a debug-gated memory test at 0x306b1d4, so installed capacity is larger and unmeasured.",
+      "limits": []
     },
+    "inputs": {
+      "kind": "xp5",
+      "ticks_per_second": 1000000000,
+      "blocks": [
+        {
+          "kind": "adc",
+          "block_id": "adc",
+          "samples": [
+            2713,
+            4095,
+            4095,
+            3774,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095
+          ]
+        },
+        {
+          "kind": "flash",
+          "block_id": "flash-aperture",
+          "part_id": "xh2s-serial-nor",
+          "source": "firmware_update",
+          "erased_tail": 255,
+          "seeds": []
+        },
+        {
+          "kind": "gpio",
+          "block_id": "gpio",
+          "levels": [],
+          "outputs": [
+            {
+              "port": 12,
+              "levels": 1280
+            }
+          ],
+          "pins": [
+            {
+              "port": 11,
+              "pin": 4,
+              "high": false
+            },
+            {
+              "port": 9,
+              "pin": 3,
+              "high": true
+            },
+            {
+              "port": 11,
+              "pin": 5,
+              "high": false
+            },
+            {
+              "port": 11,
+              "pin": 13,
+              "high": false
+            }
+          ]
+        }
+      ],
+      "parts": [
+        {
+          "kind": "clock",
+          "part_id": "power-controller",
+          "seconds": 845151906,
+          "valid": true,
+          "registers": [
+            {
+              "register": 0,
+              "value": 33280
+            },
+            {
+              "register": 3,
+              "value": 672
+            },
+            {
+              "register": 14,
+              "value": 18449
+            },
+            {
+              "register": 16,
+              "value": 2
+            },
+            {
+              "register": 47,
+              "value": 2080
+            },
+            {
+              "register": 48,
+              "value": 1825
+            },
+            {
+              "register": 49,
+              "value": 24408
+            },
+            {
+              "register": 50,
+              "value": 2992
+            },
+            {
+              "register": 72,
+              "value": 17
+            }
+          ]
+        },
+        {
+          "kind": "bis_revision",
+          "part_id": "bis-configuration",
+          "revision": [
+            0,
+            0
+          ],
+          "samples": [
+            0,
+            0
+          ],
+          "block": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "idle_high": false
+        },
+        {
+          "kind": "motion",
+          "part_id": "lsm6ds",
+          "temperature": 0,
+          "angular_rate": [
+            0,
+            0,
+            0
+          ],
+          "acceleration": [
+            0,
+            0,
+            16384
+          ]
+        },
+        {
+          "kind": "hdmi_sink",
+          "part_id": "hdmi-connector",
+          "connected": false
+        }
+      ],
+      "timings": []
+    },
+    "bus_byte_times": [
+      {
+        "block_id": "i2c1",
+        "ticks": 1000000
+      },
+      {
+        "block_id": "i2c2",
+        "ticks": 1000000
+      }
+    ],
+    "polled_serial_blocks": [
+      "spi4",
+      "spi5",
+      "spi8"
+    ],
+    "idle_status_blocks": [
+      "input"
+    ],
     "serial_attachments": [
       {
         "part_id": "power-controller",

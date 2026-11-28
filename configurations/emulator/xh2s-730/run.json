@@ -5,9 +5,6 @@
   "purpose": "rom_boot",
   "body_id": "xh2s",
   "firmware_id": "xh2s-730",
-  "start": {
-    "kind": "setup"
-  },
   "execution": {
     "mode": "strict",
     "engine": "hypervisor",
@@ -17,169 +14,61 @@
       "denominator": 1
     }
   },
-  "inputs": {
-    "kind": "xp5",
-    "ticks_per_second": 1000000000,
-    "blocks": [
-      {
-        "kind": "adc",
-        "block_id": "adc",
-        "samples": [
-          2713, 4095, 4095, 3774, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095
-        ]
-      },
-      {
-        "kind": "flash",
-        "block_id": "flash-aperture",
-        "part_id": "xh2s-serial-nor",
-        "source": "firmware_update",
-        "erased_tail": 255,
-        "seeds": []
-      },
-      {
-        "kind": "gpio",
-        "block_id": "gpio",
-        "levels": [],
-        "outputs": [
-          {
-            "port": 12,
-            "levels": 1280
-          }
-        ],
-        "pins": [
-          {
-            "port": 11,
-            "pin": 4,
-            "high": false
-          },
-          {
-            "port": 9,
-            "pin": 3,
-            "high": true
-          },
-          {
-            "port": 11,
-            "pin": 5,
-            "high": false
-          },
-          {
-            "port": 11,
-            "pin": 13,
-            "high": false
-          }
-        ]
-      }
-    ],
-    "parts": [
-      {
-        "kind": "clock",
-        "part_id": "power-controller",
-        "seconds": 845151906,
-        "valid": true,
-        "registers": [
-          {
-            "register": 0,
-            "value": 33280
-          },
-          {
-            "register": 3,
-            "value": 672
-          },
-          {
-            "register": 14,
-            "value": 18449
-          },
-          {
-            "register": 16,
-            "value": 2
-          },
-          {
-            "register": 47,
-            "value": 2080
-          },
-          {
-            "register": 48,
-            "value": 1825
-          },
-          {
-            "register": 49,
-            "value": 24408
-          },
-          {
-            "register": 50,
-            "value": 2992
-          },
-          {
-            "register": 72,
-            "value": 17
-          }
-        ]
-      },
-      {
-        "kind": "bis_revision",
-        "part_id": "bis-configuration",
-        "revision": [0, 0],
-        "samples": [0, 0],
-        "block": [0, 0, 0, 0, 0, 0],
-        "idle_high": false
-      },
-      {
-        "kind": "motion",
-        "part_id": "lsm6ds",
-        "temperature": 0,
-        "angular_rate": [0, 0, 0],
-        "acceleration": [0, 0, 16384]
-      },
-      {
-        "kind": "hdmi_sink",
-        "part_id": "hdmi-connector",
-        "connected": false
-      }
-    ],
-    "timings": [],
-    "ladders": []
-  },
   "scene": {
     "kind": "xp5",
     "frames": [
       {
-        "block_ids": ["receiver0"],
+        "block_ids": [
+          "receiver0"
+        ],
         "period_ticks": 33333000,
         "active_ticks": 10000000,
         "luma": null
       },
       {
-        "block_ids": ["receiver1"],
+        "block_ids": [
+          "receiver1"
+        ],
         "period_ticks": 33333000,
         "active_ticks": null,
         "luma": null
       },
       {
-        "block_ids": ["input"],
+        "block_ids": [
+          "input"
+        ],
         "period_ticks": 33333000,
         "active_ticks": 10000000,
         "luma": null
       },
       {
-        "block_ids": ["movdc0"],
+        "block_ids": [
+          "movdc0"
+        ],
         "period_ticks": 33333000,
         "active_ticks": null,
         "luma": 128
       },
       {
-        "block_ids": ["movdc1"],
+        "block_ids": [
+          "movdc1"
+        ],
         "period_ticks": 33333000,
         "active_ticks": null,
         "luma": 128
       },
       {
-        "block_ids": ["movdc2"],
+        "block_ids": [
+          "movdc2"
+        ],
         "period_ticks": 33333000,
         "active_ticks": null,
         "luma": 128
       },
       {
-        "block_ids": ["preview"],
+        "block_ids": [
+          "preview"
+        ],
         "period_ticks": 33333000,
         "active_ticks": null,
         "luma": 128
@@ -188,31 +77,18 @@
     "statistics": [],
     "command_images": [
       {
-        "block_ids": ["rifp"],
+        "block_ids": [
+          "rifp"
+        ],
         "luma": 128
       }
     ]
   },
-  "bus_byte_times": [
-    {
-      "block_id": "i2c1",
-      "ticks": 1000000
-    },
-    {
-      "block_id": "i2c2",
-      "ticks": 1000000
-    }
-  ],
   "overlays": [],
   "preset": {
     "factory_options": {},
-    "hardware_selection": {
-      "soc_profile_id": "xp5",
-      "body_profile_id": "xh2s"
-    },
     "firmware_profile_id": "xh2s-730"
   },
-  "polled_serial_blocks": ["spi4", "spi5", "spi8"],
   "audio_signals": [
     {
       "block_id": "audio-serial-0",
@@ -226,6 +102,5 @@
       "tone_hz": 1000,
       "tone_amplitude_thousandths": 250
     }
-  ],
-  "idle_status_blocks": ["input"]
+  ]
 }

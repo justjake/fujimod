@@ -1,5 +1,5 @@
 //! Closed startup inputs and scheduling limits for native device models.
-//! Physical windows, IRQ wiring and device dependencies belong to hardware profiles.
+//! Physical windows, IRQ wiring and device dependencies belong to the body's construction.
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

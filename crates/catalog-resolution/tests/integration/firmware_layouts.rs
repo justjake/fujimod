@@ -1,5 +1,5 @@
 use fujimod_catalog::Firmware;
-use fujimod_catalog_run_inputs::HardwareInputs;
+use fujimod_catalog_run_inputs::HardwareReset;
 use std::{fs, path::PathBuf};
 
 #[test]
@@ -19,24 +19,22 @@ fn firmware_layouts_and_body_inputs_decode_as_closed_records() {
                 .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
         }
     }
-    for entry in fs::read_dir(root.join("configurations/emulator")).unwrap() {
-        let path = entry.unwrap().path().join("hardware-inputs.json");
-        if path.exists() {
-            let inputs: HardwareInputs = serde_json::from_slice(&fs::read(&path).unwrap())
-                .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
-            assert_eq!(inputs.schema, 1);
-            assert_eq!(
-                inputs.schema_uri,
-                fujimod_catalog_run_inputs::HARDWARE_INPUTS_SCHEMA_URI
-            );
-        }
-    }
+}
+
+/// A body's resting reset inputs.
+fn resting(body: &str) -> HardwareReset {
+    fujimod_catalog::ReferenceCatalog::bundled()
+        .unwrap()
+        .body(body)
+        .and_then(|body| body.hardware.as_ref())
+        .and_then(|hardware| hardware.reset_inputs.clone())
+        .unwrap_or_else(|| panic!("body {body} declares resting reset inputs"))
 }
 
 #[test]
 fn xt1_rec_inputs_release_contacts_and_select_idle_positions() {
-    let inputs = HardwareInputs::bundled("xt1-rec").unwrap();
-    let reset = inputs.reset.inputs.unwrap();
+    let inputs = resting("xt1");
+    let reset = inputs.inputs.unwrap();
     let gpio = reset.gpio.gpio_inputs;
     assert_eq!(gpio.get("0"), Some(&3630)); // GPIO0.1 grip absent; GPIO0.9 idle.
     assert_eq!(gpio.get("2"), Some(&4608)); // GPIO2.8 remains low.
@@ -48,22 +46,22 @@ fn xt1_rec_inputs_release_contacts_and_select_idle_positions() {
 
 #[test]
 fn xt30_boot_inputs_declare_the_usb_port_and_its_port_detection() {
-    let inputs = HardwareInputs::bundled("xt30-201-boot").unwrap();
-    let cable = inputs.reset.usb_cable.expect("declared USB cable");
+    let inputs = resting("xt30");
+    let cable = inputs.usb_cable.expect("declared USB cable");
     assert_eq!((cable.vbus_bank, cable.vbus_pin), (15, 15));
     assert_eq!(cable.speed, "high");
-    let phy = inputs.reset.usb_phy_input.expect("declared USB PHY");
+    let phy = inputs.usb_phy_input.expect("declared USB PHY");
     assert_eq!(phy.parallel, 0);
     assert_eq!(phy.registers, vec![0; 32]);
-    let power = inputs.reset.spi_inputs.expect("declared power registers");
+    let power = inputs.spi_inputs.expect("declared power registers");
     let registers = power["1"].power_registers.as_ref().unwrap();
     assert_eq!(registers.inputs.get("21"), Some(&1));
 }
 
 #[test]
 fn xt30_boot_inputs_declare_the_sd_host_slot() {
-    let inputs = HardwareInputs::bundled("xt30-201-boot").unwrap();
-    let cards = inputs.reset.sd_cards;
+    let inputs = resting("xt30");
+    let cards = inputs.sd_cards;
     assert_eq!(cards.len(), 1);
     let slot = &cards[0];
     // Host 0, port 0: the only SDHCI window the X-T30 slot API opens.
@@ -83,9 +81,8 @@ fn xt3_boot_wires_the_touch_bus_to_a_declared_byte_i2c_controller() {
         .resolve("xt3", "xt3-511")
         .unwrap()
         .soc;
-    let inputs = HardwareInputs::bundled("xt3-discovery").unwrap();
+    let inputs = resting("xt3");
     let wired = inputs
-        .reset
         .byte_i2c_inputs
         .expect("declared byte I2C buses");
     assert_eq!(wired.keys().collect::<Vec<_>>(), ["2"]);
@@ -111,9 +108,8 @@ fn xt3_boot_wires_the_touch_bus_to_a_declared_byte_i2c_controller() {
 fn xt3_discovery_inputs_release_the_x_t3_buttons() {
     let catalog = fujimod_catalog::ReferenceCatalog::bundled().unwrap();
     let body = catalog.body("xt3").expect("declared X-T3 body");
-    let inputs = HardwareInputs::bundled("xt3-discovery").unwrap();
+    let inputs = resting("xt3");
     let levels = inputs
-        .reset
         .gpio_input
         .expect("declared GPIO levels")
         .levels;

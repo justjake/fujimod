@@ -5,14 +5,135 @@
   "soc_id": "xp5",
   "dram_bytes": 2147483648,
   "hardware": {
-    "profiles": {
-      "xh2": {
-        "dram_basis": "The stock bus-drain classifier 0x14d1a1c splits memory at 0x80000000 and the kernel's initial identity maps (0x59324) request 0..0x40000000 and 0x40000000+0x40000000 below it. Memory above it (0x80000000 and 0x90000000, 128 MiB each) is mapped by the routine at 0x2d547e8, so installed capacity may be larger and is unmeasured.",
-        "limits": [
-          "UNVERIFIED: dram_bytes is the firmware's first memory region (0..0x80000000), not a measured installed capacity."
-        ]
-      }
+    "board": {
+      "dram_basis": "The stock bus-drain classifier 0x14d1a1c splits memory at 0x80000000 and the kernel's initial identity maps (0x59324) request 0..0x40000000 and 0x40000000+0x40000000 below it. Memory above it (0x80000000 and 0x90000000, 128 MiB each) is mapped by the routine at 0x2d547e8, so installed capacity may be larger and is unmeasured.",
+      "limits": [
+        "UNVERIFIED: dram_bytes is the firmware's first memory region (0..0x80000000), not a measured installed capacity."
+      ]
     },
+    "inputs": {
+      "kind": "xp5",
+      "ticks_per_second": 1000000000,
+      "blocks": [
+        {
+          "kind": "adc",
+          "block_id": "adc",
+          "samples": [
+            2713,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095
+          ]
+        },
+        {
+          "kind": "flash",
+          "block_id": "flash-aperture",
+          "part_id": "xh2-serial-nor",
+          "source": "firmware_update",
+          "erased_tail": 255,
+          "seeds": []
+        },
+        {
+          "kind": "gpio",
+          "block_id": "gpio",
+          "levels": [],
+          "outputs": [
+            {
+              "port": 15,
+              "levels": 40960
+            }
+          ],
+          "pins": [
+            {
+              "port": 11,
+              "pin": 4,
+              "high": false
+            }
+          ]
+        }
+      ],
+      "parts": [
+        {
+          "kind": "clock",
+          "part_id": "power-controller",
+          "seconds": 845151906,
+          "valid": true
+        },
+        {
+          "kind": "bis_revision",
+          "part_id": "bis-configuration",
+          "revision": [
+            0,
+            0
+          ],
+          "samples": [
+            0,
+            0
+          ],
+          "block": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "idle_high": false
+        },
+        {
+          "kind": "motion",
+          "part_id": "lsm6ds",
+          "temperature": 0,
+          "angular_rate": [
+            0,
+            0,
+            0
+          ],
+          "acceleration": [
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "timings": []
+    },
+    "bus_byte_times": [
+      {
+        "block_id": "i2c1",
+        "ticks": 1000000
+      },
+      {
+        "block_id": "i2c2",
+        "ticks": 1000000
+      }
+    ],
+    "polled_serial_blocks": [
+      "spi2",
+      "spi8"
+    ],
+    "unobserved_interrupt_blocks": [
+      "spi5"
+    ],
+    "sd_clock_steps": [
+      {
+        "block_id": "sd-host-0",
+        "interface": 2,
+        "default_speed": 4,
+        "high_speed": 2
+      }
+    ],
     "serial_attachments": [
       {
         "part_id": "power-controller",

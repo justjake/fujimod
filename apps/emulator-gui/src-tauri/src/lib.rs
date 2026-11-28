@@ -174,7 +174,7 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
         resolved.override_engine(engine)?;
     }
     if !matches!(
-        resolved.configuration.start,
+        resolved.start,
         RunStart::Loader | RunStart::Rom
     ) {
         return Err("This camera cannot start from the firmware file alone.".into());
@@ -199,7 +199,7 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
                     .execution
                     .map(|execution| execution.engine)
             ));
-            if !matches!(resolved.configuration.inputs, Some(RunInputs::Xp5(_))) {
+            if !matches!(resolved.inputs, Some(RunInputs::Xp5(_))) {
                 let selection = resolved.reference.clone();
                 let boot_request = fujimod_emulator_boot::Request {
                     update: fujimod_emulator_boot::FirmwareFile::Path(update),

@@ -1,4 +1,4 @@
-//! Declared hardware profiles selected independently from run inputs.
+//! Declared body boards, device graphs and SoC register layouts.
 
 use crate::parts::Pin;
 use serde::{Deserialize, Serialize};
@@ -967,11 +967,11 @@ pub struct Touch {
     pub ticks_per_second: u64,
 }
 
-/// Declared body profile facts.
+/// A body's board: the one complete description of the hardware it models.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-pub struct BodyProfile {
+pub struct BodyBoard {
     /// Body-specific device replacements on processor blocks.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub block_overrides: Vec<BlockOverride>,
@@ -981,6 +981,16 @@ pub struct BodyProfile {
     /// Exported construction topology, including native node identities and hardware parameters.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub construction: Option<fujimod_catalog_construction::ConstructionProfile>,
+    /// Each construction node's startup values and scheduling limits, by node identity.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub native_device_inputs: BTreeMap<String, fujimod_catalog_run_inputs::RunNativeDeviceInputs>,
+    /// The construction node carrying the microcontroller packet, for a body
+    /// with no attached microcontroller part.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcu: Option<fujimod_catalog_run_inputs::RunMcuPacket>,
+    /// The board timer rate of a construction.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ticks_per_second: Option<u64>,
     /// Declared attachments.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attachments: Option<PartAssemblies>,
@@ -2225,16 +2235,6 @@ pub struct ResetRelease {
     pub source: u64,
     /// Declared target.
     pub target: u64,
-}
-
-/// Declared soc profile facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-pub struct SocProfile {
-    /// Qualification of the declared processor cache capacities.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cache_basis: Option<String>,
 }
 
 /// Device implementations selected by a declared hardware graph.

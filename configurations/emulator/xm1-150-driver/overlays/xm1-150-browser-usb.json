@@ -11,10 +11,7 @@
       },
       "limits": [],
       "usb_connected": true,
-      "firmware_inputs_id": "xm1-150-browser-usb-catalog-inputs",
-      "hardware_selection": {
-        "body_profile_id": "xm1-150-browser-usb"
-      }
+      "firmware_inputs_id": "xm1-150-browser-usb-catalog-inputs"
     }
   }
 }

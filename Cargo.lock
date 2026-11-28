@@ -2010,6 +2010,7 @@ dependencies = [
  "fujimod-catalog-memory-reservations",
  "fujimod-catalog-remote",
  "fujimod-catalog-restart",
+ "fujimod-catalog-run-inputs",
  "fujimod-catalog-settings",
  "fujimod-catalog-workflows",
  "fujimod-workspace-hack",
@@ -2219,6 +2220,7 @@ name = "fujimod-catalog-run-inputs"
 version = "0.1.0"
 dependencies = [
  "fujimod-catalog-construction",
+ "fujimod-catalog-controls",
  "fujimod-catalog-identity",
  "fujimod-workspace-hack",
  "schemars 1.2.3",

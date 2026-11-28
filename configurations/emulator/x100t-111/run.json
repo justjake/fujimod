@@ -5,11 +5,7 @@
   "purpose": "rom_boot",
   "body_id": "x100t",
   "firmware_id": "x100t-111",
-  "start": {
-    "kind": "rom"
-  },
   "execution": null,
-  "inputs": null,
   "scene": null,
   "overlays": []
 }

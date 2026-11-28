@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 pub struct Empty {}
 
 /// Declared adc input facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetAdcInput"))]
@@ -29,7 +29,7 @@ pub struct AdcInput {
 }
 
 /// Declared select facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetSelect"))]
@@ -43,7 +43,7 @@ pub struct Select {
 }
 
 /// Declared sd card format facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetSdCardFormat"))]
@@ -59,7 +59,7 @@ pub struct SdCardFormat {
 }
 
 /// Declared card facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetCard"))]
@@ -75,7 +75,7 @@ pub struct Card {
 }
 
 /// Declared interval facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetInterval"))]
@@ -89,7 +89,7 @@ pub struct Interval {
 }
 
 /// Declared exe m facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetKeyOverride"))]
@@ -103,7 +103,7 @@ pub struct KeyOverride {
 }
 
 /// Explicit electrical predicates selected for a named control during a rehearsal.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetControlOverride"))]
@@ -113,7 +113,7 @@ pub struct ControlOverride {
 }
 
 /// Declared gpio gpio facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetPadLevel"))]
@@ -127,7 +127,7 @@ pub struct PadLevel {
 }
 
 /// Declared external inputs facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetExternalInputs"))]
@@ -137,7 +137,7 @@ pub struct ExternalInputs {
 }
 
 /// Declared code witnesses facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetCodeWindow"))]
@@ -152,7 +152,7 @@ pub struct CodeWindow {
 }
 
 /// Declared diagnostics facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetDiagnostic"))]
@@ -173,7 +173,7 @@ pub struct Diagnostic {
 }
 
 /// Declared result query facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetResultQuery"))]
@@ -189,7 +189,7 @@ pub struct ResultQuery {
 }
 
 /// Declared firmwares facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetAutofocusObservations"))]
@@ -219,7 +219,7 @@ pub struct AutofocusObservations {
 }
 
 /// Declared shutter facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetShutter"))]
@@ -233,7 +233,7 @@ pub struct Shutter {
 }
 
 /// Declared autofocus gate facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetAutofocusGate"))]
@@ -271,7 +271,7 @@ pub struct AutofocusGate {
 }
 
 /// SD card in the slot at power-on: identity, size and filesystem.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetSdCardInput"))]
@@ -289,7 +289,7 @@ pub struct SdCardInput {
 }
 
 /// The card in the slot of one SD host at power-on.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetSdSlotCard"))]
@@ -301,7 +301,7 @@ pub struct SdSlotCard {
 }
 
 /// Refresh-rate level the DRAM device reports to its controller.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetDramRefreshInput"))]
@@ -313,7 +313,7 @@ pub struct DramRefreshInput {
 }
 
 /// A register-file part on an I2C bus at power-on.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetI2cPartInput"))]
@@ -393,7 +393,7 @@ pub struct TouchChipInput {
 }
 
 /// An X-mount lens attached at power-on, answering on its serial link.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetLensInput"))]
@@ -430,7 +430,7 @@ pub struct LensInput {
 
 /// Body flash records of a registered lens: an asset holding the bytes of
 /// each flash region in order.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetLensRegistration"))]
@@ -446,7 +446,7 @@ pub struct LensRegistration {
 }
 
 /// The shutter's motor and position sensors on the GPIO banks.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetShutterInput"))]
@@ -470,7 +470,7 @@ pub struct ShutterInput {
 }
 
 /// Keys whose GPIO inputs also reach external interrupt lines.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetKeyLines"))]
@@ -484,7 +484,7 @@ pub struct KeyLinesInput {
 }
 
 /// GPIO pads wired to level-sensitive processor interrupt inputs.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetGpioInterrupts"))]
@@ -496,7 +496,7 @@ pub struct GpioInterruptsInput {
 }
 
 /// One GPIO pad held onto a processor interrupt input while at its active level.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetGpioInterruptRoute"))]
@@ -512,7 +512,7 @@ pub struct GpioInterruptRoute {
 }
 
 /// Command dials whose quadrature phases drive countdown timer channels' count inputs.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetCountdownDials"))]
@@ -524,7 +524,7 @@ pub struct CountdownDialsInput {
 }
 
 /// One command dial wired to a countdown timer channel's count inputs.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetCountdownDial"))]
@@ -541,7 +541,7 @@ pub struct CountdownDial {
 
 /// Frame period of the imaging pipeline: the frame sync, the statistics
 /// engine and the frame laws of the imaging register blocks.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetImagingFrames"))]
@@ -553,7 +553,7 @@ pub struct ImagingFramesInput {
 }
 
 /// Instruction throughput of each core against the tick clock.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetExecutionClock"))]
@@ -565,7 +565,7 @@ pub struct ExecutionClock {
 }
 
 /// PLLs running at kernel entry.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetPllInput"))]
@@ -577,7 +577,7 @@ pub struct PllInput {
 }
 
 /// Declared gpio input facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetGpioInput"))]
@@ -589,7 +589,7 @@ pub struct GpioInput {
 }
 
 /// Declared inputs gpio facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetInputsGpio"))]
@@ -604,7 +604,7 @@ pub struct InputsGpio {
 }
 
 /// Declared power facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetPower"))]
@@ -636,7 +636,7 @@ pub struct Power {
 }
 
 /// One further write-only display panel on the serial bus.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetPanelRoute"))]
@@ -650,7 +650,7 @@ pub struct PanelRoute {
 }
 
 /// Declared hardwarereset inputs facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetHardwareresetInputs"))]
@@ -664,12 +664,14 @@ pub struct HardwareresetInputs {
     pub mcu_packet_hex: String,
     /// Declared power.
     pub power: Power,
-    /// Declared usb connected.
+    /// Whether a USB cable is connected at power-on: a run's choice; a body
+    /// rests with none.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub usb_connected: bool,
 }
 
 /// Declared words facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetWords"))]
@@ -683,7 +685,7 @@ pub struct Words {
 }
 
 /// Declared loader handoff facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetLoaderHandoff"))]
@@ -709,7 +711,7 @@ fn is_false(value: &bool) -> bool {
 }
 
 /// Declared processed frame input facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetProcessedFrameInput"))]
@@ -723,7 +725,7 @@ pub struct ProcessedFrameInput {
 }
 
 /// Declared statistics scene facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetStatisticsScene"))]
@@ -741,7 +743,7 @@ pub struct StatisticsScene {
 }
 
 /// Declared sensor input facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetSensorInput"))]
@@ -757,7 +759,7 @@ pub struct SensorInput {
 }
 
 /// Contents behind a memory-mapped flash read aperture.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetFlashApertureContents"))]
@@ -772,7 +774,7 @@ pub struct FlashApertureContents {
 }
 
 /// Declared NOR register device and array behind one flash-aperture chip select.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetFlashApertureNor"))]
@@ -798,7 +800,7 @@ pub struct FlashApertureNor {
 }
 
 /// Declared serial flash geometry facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetSerialFlashGeometry"))]
@@ -816,7 +818,7 @@ pub struct SerialFlashGeometry {
 }
 
 /// Declared serial flash facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetSerialFlash"))]
@@ -832,7 +834,7 @@ pub struct SerialFlash {
 }
 
 /// Declared power registers facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetPowerRegisters"))]
@@ -852,7 +854,7 @@ pub struct PowerRegisters {
 }
 
 /// Declared disable writes facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetDisableWrites"))]
@@ -865,7 +867,7 @@ pub struct DisableWrites {
 
 /// Declared wake alarm facts: writing 1 to `enable` arms the countdown last
 /// written to the stored register `seconds`, and writing 0 disarms it.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetPowerAlarm"))]
@@ -879,7 +881,7 @@ pub struct PowerAlarm {
 }
 
 /// Declared strobe facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetStrobe"))]
@@ -893,7 +895,7 @@ pub struct Strobe {
 }
 
 /// Declared rtc facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetRtc"))]
@@ -925,7 +927,7 @@ pub struct Rtc {
 }
 
 /// Declared power checksum registers facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetPowerChecksumRegisters"))]
@@ -949,7 +951,7 @@ pub struct PowerChecksumRegisters {
 }
 
 /// Declared spi inputs facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetSpiInputs"))]
@@ -970,7 +972,7 @@ pub struct SpiInputs {
 }
 
 /// One GPIO pad.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetGpioPad"))]
@@ -984,7 +986,7 @@ pub struct GpioPad {
 /// Declared in-body stabilizer controller behind one SPI port: its GPIO
 /// wiring, its boot delay and its command replies. The link protocol is
 /// observed behavior; the boot delay and reply data are declared.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetStabilizerLink"))]
@@ -1008,7 +1010,7 @@ pub struct StabilizerLink {
 }
 
 /// Declared temperature input facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetTemperatureInput"))]
@@ -1020,7 +1022,7 @@ pub struct TemperatureInput {
 }
 
 /// One register of a declared sub-CPU register file.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetSubCpuRegister"))]
@@ -1034,7 +1036,7 @@ pub struct SubCpuRegister {
 }
 
 /// Declared register-file peer behind one serial port.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetSubCpu"))]
@@ -1056,7 +1058,7 @@ pub struct SubCpuInputs {
 
 /// USB port of a body: VBUS reaches a GPIO input pin, and a host on the data
 /// lines negotiates `speed` ("high" or "super").
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetUsbCable"))]
@@ -1073,7 +1075,7 @@ pub struct UsbCableInput {
 
 /// USB PHY programming-port state at reset: the 32 indexed register bytes and
 /// the parallel-interface configuration word.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetUsbPhy"))]
@@ -1089,7 +1091,7 @@ pub struct UsbPhyInput {
 /// Seconds count in four consecutive sub-CPU registers, least significant
 /// byte first, that advances with device time while its hold register's bit 0
 /// is set.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetSubCpuClock"))]
@@ -1107,7 +1109,7 @@ pub struct SubCpuClock {
 }
 
 /// Declared byte-frame register peer behind one serial port.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetBatteryGauge"))]
@@ -1122,7 +1124,7 @@ pub struct BatteryGaugeInputs {
 }
 
 /// Declared serial port with nothing attached.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetIdleSerialPort"))]
@@ -1134,7 +1136,7 @@ pub struct IdleSerialPort {
 }
 
 /// Declared uniform scene the imaging statistics engine sums.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetZoneStatistics"))]
@@ -1156,7 +1158,7 @@ pub struct ZoneStatistics {
 /// high byte) of one select on the imaging control page's register bus.
 /// The zone sums scale by value / reference; before the pair is written the
 /// sums are the declared ones.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct ZoneExposure {
@@ -1173,7 +1175,7 @@ pub struct ZoneExposure {
 }
 
 /// Declared uniform image a live-view output unit writes at each frame.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetLiveViewImage"))]
@@ -1205,7 +1207,7 @@ pub struct LiveViewImage {
 /// reprograms the color unit 0xfff47000 (film matrix, curves, white-balance
 /// gains) for every live-view frame, so the unit develops this scene with the
 /// words it holds when the frame completes.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetLiveViewFilm"))]
@@ -1226,7 +1228,7 @@ pub struct LiveViewFilm {
 }
 
 /// Declared per-site light of the film scene's wall in camera space.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetCameraRawRadiance"))]
@@ -1239,7 +1241,7 @@ pub struct CameraRawRadiance {
 
 /// Host RGB image of a live-view output unit: an asset holding rows of red,
 /// green and blue bytes, sampled into the programmed buffer at each frame.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetLiveViewHostImage"))]
@@ -1258,7 +1260,7 @@ pub struct LiveViewHostImage {
 
 /// Declared sensor data of the still read-out: a profile the read-out unit
 /// writes into the line count, destination and stride the firmware programmed.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetSensorFrame"))]
@@ -1272,7 +1274,7 @@ pub struct SensorFrame {
 /// Declared still development: the register blocks that develop the
 /// read-out and scale the picture, acting on the registers the firmware
 /// programs, with a declared approximation.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetStillDevelopment"))]
@@ -1305,7 +1307,7 @@ pub struct StillDevelopment {
 
 /// Declared body calibration records in flash: bytes the firmware reads
 /// from its factory calibration stores, placed past the installed update.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetFlashCalibration"))]
@@ -1317,7 +1319,7 @@ pub struct FlashCalibration {
 }
 
 /// One declared calibration record.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetFlashCalibrationRecord"))]
@@ -1332,7 +1334,7 @@ pub struct FlashCalibrationRecord {
 
 /// Declared contents of one statistics engine output buffer: an asset
 /// holding the little-endian u32 words written each frame.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetStatisticsBuffer"))]
@@ -1353,7 +1355,7 @@ pub struct StatisticsBuffer {
 }
 
 /// Declared hardware reset facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct HardwareReset {
@@ -1467,49 +1469,6 @@ pub struct HardwareReset {
     /// Declared temperature input.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub temperature_input: Option<TemperatureInput>,
-}
-
-/// Stable schema identity for explicit body reset inputs.
-pub const HARDWARE_INPUTS_SCHEMA_URI: &str =
-    "https://fujimod.com/schemas/emulator-hardware-inputs.generated.schema.json";
-
-/// A named set of reset inputs for one body hardware profile.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-pub struct HardwareInputs {
-    /// Schema identity.
-    #[serde(rename = "$schema")]
-    pub schema_uri: String,
-    /// Document version.
-    pub schema: u32,
-    /// Input profile identity.
-    pub id: String,
-    /// Body receiving these inputs.
-    pub body_id: String,
-    /// Declared external and reset values.
-    pub reset: HardwareReset,
-}
-
-impl HardwareInputs {
-    /// Resolve a bundled body reset-input document by its stable identity.
-    pub fn bundled(id: &str) -> Result<Self, String> {
-        fujimod_catalog_identity::validate_id(id)?;
-        let document = super::BUNDLED_HARDWARE_INPUTS
-            .iter()
-            .find_map(|(candidate, document)| (*candidate == id).then_some(*document))
-            .ok_or_else(|| format!("unsupported hardware-input profile: {id}"))?;
-        let inputs: Self = serde_json::from_str(document)
-            .map_err(|error| format!("hardware-input profile {id}: {error}"))?;
-        if inputs.schema != 1 || inputs.schema_uri != HARDWARE_INPUTS_SCHEMA_URI || inputs.id != id
-        {
-            return Err(format!(
-                "hardware-input profile {id} schema or identity differs"
-            ));
-        }
-        fujimod_catalog_identity::validate_id(&inputs.body_id)?;
-        Ok(inputs)
-    }
 }
 
 /// Panel transport words, chip-selection conditions, framing and endpoint index.

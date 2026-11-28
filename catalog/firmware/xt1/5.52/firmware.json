@@ -4,6 +4,9 @@
   "id": "xt1-552",
   "body_id": "xt1",
   "version": "5.52",
+  "start": {
+    "kind": "rom"
+  },
   "update": {
     "size": 42599472,
     "sha256": "4cf56ba6abb4298a844422c016289228bb0acce0a2ae2c6755c05fffb38e92db"

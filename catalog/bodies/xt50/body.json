@@ -4,11 +4,9 @@
   "id": "xt50",
   "soc_id": "xp5",
   "hardware": {
-    "profiles": {
-      "xt50": {
-        "dram_basis": "Installed capacity is unmeasured; the update's memory map and Linux device tree bound the address space only.",
-        "limits": []
-      }
+    "board": {
+      "dram_basis": "Installed capacity is unmeasured; the update's memory map and Linux device tree bound the address space only.",
+      "limits": []
     },
     "serial_attachments": [
       {

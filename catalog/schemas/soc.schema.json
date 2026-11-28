@@ -4806,20 +4806,6 @@
       "additionalProperties": false,
       "description": "Additional hardware parameters whose meaning depends on the processor family.",
       "properties": {
-        "profiles": {
-          "additionalProperties": {
-            "$ref": "#/$defs/SocProfile"
-          },
-          "description": "Named hardware profiles, selected explicitly by a run preset.",
-          "type": "object"
-        }
-      },
-      "type": "object"
-    },
-    "SocProfile": {
-      "additionalProperties": false,
-      "description": "Declared soc profile facts.",
-      "properties": {
         "cache_basis": {
           "description": "Qualification of the declared processor cache capacities.",
           "type": [

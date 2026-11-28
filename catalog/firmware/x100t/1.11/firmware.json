@@ -4,6 +4,9 @@
   "id": "x100t-111",
   "body_id": "x100t",
   "version": "1.11",
+  "start": {
+    "kind": "rom"
+  },
   "update": {
     "size": 53086984,
     "sha256": "8c84b29e3b9b4b7385653e66c7027707995826ddf29a7e80232302de60f3dd3d"

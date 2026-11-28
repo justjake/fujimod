@@ -98,7 +98,7 @@ pub(super) fn open_startup(
     let second_card = cards.get(&2);
     let sd_image = first_card.image.clone();
     let card_files = crate::media::read_files(&first_card.files)?;
-    let start = configuration.configuration.start;
+    let start = configuration.start;
     if start == RunStart::SdCard
         && sd_image.is_none()
         && !card_files

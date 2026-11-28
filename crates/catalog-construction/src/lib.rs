@@ -627,23 +627,6 @@ pub enum VideoEncoderBackend {
     Software,
 }
 
-/// Explicit selection of SoC and body hardware profiles.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(
-    all(target_arch = "wasm32", not(target_os = "emscripten")),
-    derive(tsify::Tsify),
-    tsify(hashmap_as_object, missing_as_null)
-)]
-pub struct HardwareSelection {
-    /// Profile identity within the selected SoC, when the processor declares one.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub soc_profile_id: Option<String>,
-    /// Profile identity within the selected body.
-    pub body_profile_id: String,
-}
-
 /// Compression backend selection; register and DMA behavior is shared.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

@@ -4,6 +4,13 @@
   "id": "xe4-201",
   "body_id": "xe4",
   "version": "2.01",
+  "start": {
+    "kind": "loader"
+  },
+  "dram_address_space": {
+    "limit_bytes": 536870912,
+    "basis": "Declared virtual address-space limit used for the Discovery run; physical DRAM size is unknown."
+  },
   "update": {
     "size": 50136328,
     "sha256": "ce80e4a88f0fffff998d3144ef51411d8285d16c06e4791c89cd36823769f8c2"

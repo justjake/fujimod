@@ -304,13 +304,13 @@ fn duplicate_assets_and_malformed_document_bytes_refuse() {
 fn published_x70_connection_limits_are_nonempty_strings() {
     let bodies =
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../catalog/bodies/x70");
-    for name in ["x70", "x70-rec-usb"] {
+    {
         let path = bodies.join("body.json");
         let bytes =
             std::fs::read(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
         let document: serde_json::Value = serde_json::from_slice(&bytes)
             .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
-        let connections = document["hardware"]["profiles"][name]
+        let connections = document["hardware"]["board"]
             .get("connections")
             .and_then(serde_json::Value::as_array)
             .unwrap_or_else(|| panic!("{}: missing connections", path.display()));

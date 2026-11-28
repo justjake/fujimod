@@ -1093,27 +1093,7 @@ Body = TypedDict(
 )
 
 
-class BodyConnection(TypedDict, total=False):
-    evidence: NotRequired[Evidence | None]
-    id: Required[str]
-    kind: Required[ConnectionKind]
-    signals: NotRequired[list[ConnectionSignal]]
-
-
-class BodyHardware(TypedDict, total=False):
-    bus_drain: NotRequired[list[BusDrain]]
-    card_slots: NotRequired[list[CardSlotWiring]]
-    gpio_feedback: NotRequired[list[GpioFeedback]]
-    keypad_samples: NotRequired[dict[str, int]]
-    lens_mount: NotRequired[LensMount | None]
-    profiles: NotRequired[dict[str, BodyProfile]]
-    serial_attachments: NotRequired[list[SerialAttachment]]
-    stabilizer: NotRequired[StabilizerMount | None]
-    thermal_connection_ids: NotRequired[list[str]]
-    xp4_lens_mount: NotRequired[Xp4LensMount | None]
-
-
-class BodyProfile(TypedDict, total=False):
+class BodyBoard(TypedDict, total=False):
     attachments: NotRequired[HardwarePartAssemblies | None]
     block_overrides: NotRequired[list[BlockOverride]]
     card_contacts: NotRequired[HardwareCardContacts | None]
@@ -1131,10 +1111,40 @@ class BodyProfile(TypedDict, total=False):
     interrupt_notes: NotRequired[str | None]
     lens_notes: NotRequired[str | None]
     limits: NotRequired[list[str] | None]
+    mcu: NotRequired[RunMcuPacket | None]
+    native_device_inputs: NotRequired[dict[str, RunNativeDeviceInputs]]
     panel_notes: NotRequired[str | None]
     pin_interrupts: NotRequired[list[HardwarePinInterrupt] | None]
     preview_activity: NotRequired[HardwarePreviewActivity | None]
+    ticks_per_second: NotRequired[int | None]
     touch: NotRequired[HardwareTouch | None]
+
+
+class BodyConnection(TypedDict, total=False):
+    evidence: NotRequired[Evidence | None]
+    id: Required[str]
+    kind: Required[ConnectionKind]
+    signals: NotRequired[list[ConnectionSignal]]
+
+
+class BodyHardware(TypedDict, total=False):
+    board: NotRequired[BodyBoard | None]
+    bus_byte_times: NotRequired[list[RunBusByteTime]]
+    bus_drain: NotRequired[list[BusDrain]]
+    card_slots: NotRequired[list[CardSlotWiring]]
+    gpio_feedback: NotRequired[list[GpioFeedback]]
+    idle_status_blocks: NotRequired[list[str]]
+    inputs: NotRequired[RunInputs | None]
+    keypad_samples: NotRequired[dict[str, int]]
+    lens_mount: NotRequired[LensMount | None]
+    polled_serial_blocks: NotRequired[list[str]]
+    reset_inputs: NotRequired[HardwareReset | None]
+    sd_clock_steps: NotRequired[list[RunSdClockSteps]]
+    serial_attachments: NotRequired[list[SerialAttachment]]
+    stabilizer: NotRequired[StabilizerMount | None]
+    thermal_connection_ids: NotRequired[list[str]]
+    unobserved_interrupt_blocks: NotRequired[list[str]]
+    xp4_lens_mount: NotRequired[Xp4LensMount | None]
 
 
 class BodyRamRegion(TypedDict, total=False):
@@ -2618,12 +2628,14 @@ Firmware = TypedDict(
         ],
         "body_id": Required["str"],
         "boot_rom": NotRequired["BootRomIdentity | None"],
+        "dram_address_space": NotRequired["RunDramAddressSpace | None"],
         "generated_facts": NotRequired["FirmwareGeneratedFacts | None"],
         "id": Required["str"],
         "installation": NotRequired["FirmwareInstallation | None"],
         "layouts": NotRequired["FirmwareLayouts | None"],
         "reset_release": NotRequired["HardwareResetRelease | None"],
         "schema": Required["int"],
+        "start": NotRequired["RunStart | None"],
         "update": NotRequired["ContentIdentity | None"],
         "version": Required["str"],
     },
@@ -3664,6 +3676,45 @@ class HardwareRegisterIdleBits(TypedDict, total=False):
     offset: Required[int]
 
 
+class HardwareReset(TypedDict, total=False):
+    adc_input: NotRequired[ResetAdcInput | None]
+    autofocus_gate: NotRequired[ResetAutofocusGate | None]
+    battery_gauge: NotRequired[ResetBatteryGauge | None]
+    byte_i2c_inputs: NotRequired[dict[str, ResetByteI2cInput] | None]
+    countdown_dials: NotRequired[ResetCountdownDials | None]
+    dram_refresh: NotRequired[ResetDramRefreshInput | None]
+    execution_clock: NotRequired[ResetExecutionClock | None]
+    execution_scope: NotRequired[str | None]
+    flash_aperture: NotRequired[ResetFlashApertureContents | None]
+    flash_calibration: NotRequired[ResetFlashCalibration | None]
+    gpio_input: NotRequired[ResetGpioInput | None]
+    gpio_interrupts: NotRequired[ResetGpioInterrupts | None]
+    i2c_parts: NotRequired[list[ResetI2cPartInput]]
+    idle_serial_ports: NotRequired[list[ResetIdleSerialPort]]
+    imaging_frames: NotRequired[ResetImagingFrames | None]
+    inputs: NotRequired[ResetHardwareresetInputs | None]
+    kernel_unit: NotRequired[str | None]
+    key_lines: NotRequired[ResetKeyLines | None]
+    lens: NotRequired[ResetLensInput | None]
+    live_view_image: NotRequired[ResetLiveViewImage | None]
+    loader_handoff: NotRequired[ResetLoaderHandoff | None]
+    pll_input: NotRequired[ResetPllInput | None]
+    processed_frame_input: NotRequired[ResetProcessedFrameInput | None]
+    sd_card: NotRequired[ResetSdCardInput | None]
+    sd_cards: NotRequired[list[ResetSdSlotCard]]
+    sensor_frame: NotRequired[ResetSensorFrame | None]
+    sensor_input: NotRequired[ResetSensorInput | None]
+    serial_flash: NotRequired[ResetSerialFlash | None]
+    shutter: NotRequired[ResetShutterInput | None]
+    spi_inputs: NotRequired[dict[str, ResetSpiInputs] | None]
+    still_development: NotRequired[ResetStillDevelopment | None]
+    sub_cpu: NotRequired[ResetSubCpu | None]
+    temperature_input: NotRequired[ResetTemperatureInput | None]
+    usb_cable: NotRequired[ResetUsbCable | None]
+    usb_phy_input: NotRequired[ResetUsbPhy | None]
+    zone_statistics: NotRequired[ResetZoneStatistics | None]
+
+
 class HardwareResetCheck(TypedDict, total=False):
     address: Required[int]
     expected_hex: Required[str]
@@ -3712,11 +3763,6 @@ class HardwareSecondaryControlBus(TypedDict, total=False):
     profile: Required[str]
     replies: Required[HardwareSecondaryBusRegisters]
     transfer_ticks: Required[int]
-
-
-class HardwareSelection(TypedDict, total=False):
-    body_profile_id: Required[str]
-    soc_profile_id: NotRequired[str | None]
 
 
 class HardwareSensorCapture(TypedDict, total=False):
@@ -5116,9 +5162,549 @@ class RequestTransportVariant1(TypedDict, total=False):
     translation: Required[list[WordValue]]
 
 
+class ResetAdcInput(TypedDict, total=False):
+    ambient_celsius: NotRequired[int | None]
+    basis: Required[str]
+    samples: Required[list[int]]
+    thermal_channels: NotRequired[list[int] | None]
+
+
+class ResetAutofocusGate(TypedDict, total=False):
+    boot_entry: NotRequired[str | None]
+    card: Required[ResetCard]
+    completion_hold_ticks: Required[int]
+    control_overrides: Required[dict[str, ResetControlOverride]]
+    external_inputs: NotRequired[ResetExternalInputs | None]
+    firmwares: Required[dict[str, ResetAutofocusObservations]]
+    first_boot_instructions: Required[int]
+    key_hold_ticks: Required[int]
+    key_release_ticks: Required[int]
+    restart_instructions: Required[int]
+    scan_instructions: Required[int]
+    scene_settle_ticks: Required[int]
+    setup_keys: Required[list[str]]
+    shutter: Required[ResetShutter]
+
+
+class ResetAutofocusObservations(TypedDict, total=False):
+    code_witnesses: Required[list[ResetCodeWindow]]
+    complete_state: NotRequired[int | None]
+    diagnostics: NotRequired[list[ResetDiagnostic] | None]
+    primary_states: NotRequired[int | None]
+    rec_ui: Required[int]
+    result_query: NotRequired[ResetResultQuery | None]
+    sample_slots: Required[list[int]]
+    system: Required[int]
+    ui: Required[int]
+
+
+class ResetBatteryGauge(TypedDict, total=False):
+    basis: Required[str]
+    port: Required[int]
+    registers: Required[list[ResetSubCpuRegister]]
+
+
+class ResetByteI2cInput(TypedDict, total=False):
+    basis: Required[str]
+    touch_chip: NotRequired[ResetTouchChipInput | None]
+
+
+class ResetCameraRawRadiance(TypedDict, total=False):
+    basis: Required[str]
+    radiance: Required[list[int]]
+
+
+class ResetCard(TypedDict, total=False):
+    sd_card_format: Required[ResetSdCardFormat]
+    sd_card_present: Required[bool]
+    sd_card_profile: Required[str]
+    sd_card_sectors: Required[int]
+
+
+class ResetCodeWindow(TypedDict, total=False):
+    address: Required[int]
+    bytes: NotRequired[int | None]
+    sha256: Required[str]
+
+
+class ResetControlOverride(TypedDict, total=False):
+    input: Required[dict[str, list[ResetKeyOverride]]]
+
+
+class ResetCountdownDial(TypedDict, total=False):
+    channel: Required[int]
+    control: Required[str]
+    phase_ticks: Required[int]
+    rest_phase: Required[int]
+
+
+class ResetCountdownDials(TypedDict, total=False):
+    basis: Required[str]
+    dials: Required[list[ResetCountdownDial]]
+
+
+class ResetDiagnostic(TypedDict, total=False):
+    address: NotRequired[int | None]
+    name: Required[str]
+    offset: NotRequired[int | None]
+    pointer: NotRequired[int | None]
+    size: Required[int]
+
+
+class ResetDisableWrites(TypedDict, total=False):
+    register: Required[int]
+    value: Required[int]
+
+
+class ResetDramRefreshInput(TypedDict, total=False):
+    basis: Required[str]
+    level: Required[int]
+
+
+class ResetExecutionClock(TypedDict, total=False):
+    basis: Required[str]
+    instructions_per_tick: Required[tuple[int, int]]
+
+
+class ResetExternalInputs(TypedDict, total=False):
+    gpio: Required[list[ResetPadLevel]]
+
+
+class ResetFlashApertureContents(TypedDict, total=False):
+    basis: Required[str]
+    contents: Required[str]
+    nor: NotRequired[ResetFlashApertureNor | None]
+
+
+class ResetFlashApertureNor(TypedDict, total=False):
+    basis: Required[str]
+    chip_select: Required[int]
+    enhanced_volatile_reset: Required[int]
+    erase_ticks: Required[int]
+    identification: NotRequired[list[int]]
+    page_bytes: Required[int]
+    page_ticks: Required[int]
+    register_write_ticks: Required[int]
+
+
+class ResetFlashCalibration(TypedDict, total=False):
+    basis: Required[str]
+    records: Required[list[ResetFlashCalibrationRecord]]
+
+
+class ResetFlashCalibrationRecord(TypedDict, total=False):
+    basis: Required[str]
+    data: Required[str]
+    flash: Required[int]
+
+
+class ResetGpioInput(TypedDict, total=False):
+    basis: Required[str]
+    levels: Required[list[int]]
+
+
+class ResetGpioInterruptRoute(TypedDict, total=False):
+    active_high: Required[bool]
+    line: Required[int]
+    pin: Required[int]
+    port: Required[int]
+
+
+class ResetGpioInterrupts(TypedDict, total=False):
+    basis: Required[str]
+    routes: Required[list[ResetGpioInterruptRoute]]
+
+
+class ResetGpioPad(TypedDict, total=False):
+    pin: Required[int]
+    port: Required[int]
+
+
+class ResetHardwareresetInputs(TypedDict, total=False):
+    gpio: Required[ResetInputsGpio]
+    mcu_packet_basis: NotRequired[str | None]
+    mcu_packet_hex: Required[str]
+    power: Required[ResetPower]
+    usb_connected: NotRequired[bool]
+
+
+class ResetI2cPartInput(TypedDict, total=False):
+    address: Required[int]
+    basis: Required[str]
+    bus: Required[int]
+    little_endian: Required[bool]
+    registers: Required[list[tuple[int, int]]]
+    select_mask: Required[int]
+    touch_panel: NotRequired[Xt20TouchPanelInput | None]
+    width: Required[int]
+
+
+class ResetIdleSerialPort(TypedDict, total=False):
+    basis: Required[str]
+    port: Required[int]
+
+
+class ResetImagingFrames(TypedDict, total=False):
+    basis: Required[str]
+    period_ticks: Required[int]
+
+
+class ResetInputsGpio(TypedDict, total=False):
+    boot_source: NotRequired[int | None]
+    gpio_inputs: Required[dict[str, int]]
+    profile_name: Required[str]
+
+
+class ResetInterval(TypedDict, total=False):
+    kind: Required[str]
+    lower: Required[int]
+    upper: Required[int]
+
+
+class ResetKeyLines(TypedDict, total=False):
+    basis: Required[str]
+    lines: Required[list[tuple[int, int, int]]]
+    poll_ticks: Required[int]
+
+
+class ResetKeyOverride(TypedDict, total=False):
+    channel: Required[int]
+    interval: Required[ResetInterval]
+    kind: Required[str]
+
+
+class ResetLensInput(TypedDict, total=False):
+    basis: Required[str]
+    contacts: Required[list[tuple[int, int, bool]]]
+    drive_ticks: Required[int]
+    line: Required[int]
+    page: Required[str]
+    poll_ticks: Required[int]
+    port: Required[int]
+    power: Required[tuple[int, int, int]]
+    ready: Required[tuple[int, int]]
+    ready_ticks: Required[int]
+    registration: NotRequired[ResetLensRegistration | None]
+    release_ticks: Required[int]
+    replies: Required[list[tuple[int, int]]]
+
+
+class ResetLensRegistration(TypedDict, total=False):
+    asset: Required[str]
+    basis: Required[str]
+    regions: Required[list[tuple[int, int]]]
+    sha256: Required[str]
+
+
+class ResetLiveViewFilm(TypedDict, total=False):
+    basis: Required[str]
+    camera_raw_radiance: NotRequired[ResetCameraRawRadiance | None]
+    linear_rgb: Required[list[int]]
+    white_balance_reference: Required[list[int]]
+
+
+class ResetLiveViewHostImage(TypedDict, total=False):
+    asset: Required[str]
+    basis: Required[str]
+    height: Required[int]
+    sha256: Required[str]
+    width: Required[int]
+
+
+class ResetLiveViewImage(TypedDict, total=False):
+    basis: Required[str]
+    film: NotRequired[ResetLiveViewFilm | None]
+    host_image: NotRequired[ResetLiveViewHostImage | None]
+    lines: Required[int]
+    scene: NotRequired[str | None]
+    unit: Required[int]
+    ycbcr: Required[list[int]]
+
+
+class ResetLoaderHandoff(TypedDict, total=False):
+    address: Required[int]
+    basis: Required[str]
+    fill: Required[int]
+    section_table: NotRequired[bool]
+    size: Required[int]
+    words: Required[list[ResetWords]]
+
+
+class ResetPadLevel(TypedDict, total=False):
+    level: Required[int]
+    pin: Required[int]
+    port: Required[int]
+
+
+class ResetPanelRoute(TypedDict, total=False):
+    basis: Required[str]
+    selection: Required[list[list[int]]]
+    transport: Required[list[int]]
+
+
+class ResetPllInput(TypedDict, total=False):
+    basis: Required[str]
+    running: Required[list[int]]
+
+
+class ResetPower(TypedDict, total=False):
+    adc_samples: Required[list[int]]
+    additional_panels: NotRequired[list[ResetPanelRoute] | None]
+    boot_reply: Required[int]
+    mcu_registers: NotRequired[list[int] | None]
+    panel_contract: NotRequired[tuple[list[int], list[int], list[int | None], int] | None]
+    profile_name: Required[str]
+    spi0_input_profile: NotRequired[str | None]
+    spi_endpoints: NotRequired[list[tuple[int, int, list[int], bool, list[list[int]]]] | None]
+    spi_status_registers: NotRequired[list[list[int]] | None]
+
+
+class ResetPowerAlarm(TypedDict, total=False):
+    basis: Required[str]
+    enable: Required[int]
+    seconds: Required[int]
+
+
+class ResetPowerChecksumRegisters(TypedDict, total=False):
+    alarm: NotRequired[ResetPowerAlarm | None]
+    basis: Required[str]
+    chip_select: Required[ResetSelect]
+    disable_writes: Required[list[ResetDisableWrites]]
+    inputs: Required[dict[str, int]]
+    retained_registers: Required[list[int]]
+    rtc: NotRequired[ResetRtc | None]
+
+
+class ResetPowerRegisters(TypedDict, total=False):
+    ambient_celsius: Required[int]
+    basis: Required[str]
+    chip_select: Required[ResetSelect]
+    inputs: Required[dict[str, int]]
+    rtc_basis: Required[str]
+    rtc_ticks_per_second: Required[int]
+
+
+class ResetProcessedFrameInput(TypedDict, total=False):
+    basis: Required[str]
+    frame_period_ticks: Required[int]
+    luma: Required[int]
+
+
+class ResetResultQuery(TypedDict, total=False):
+    address: Required[int]
+    class_offset: Required[int]
+    position_offset: Required[int]
+    valid_offset: Required[int]
+
+
+class ResetRtc(TypedDict, total=False):
+    commit_value: Required[int]
+    control: Required[int]
+    initial_control: Required[int]
+    initial_seconds: Required[int]
+    read_high: Required[int]
+    read_low: Required[int]
+    retained_valid_mask: Required[int]
+    stage_high: Required[int]
+    stage_low: Required[int]
+    strobe: Required[ResetStrobe]
+    ticks_per_second: Required[int]
+    valid_mask: Required[int]
+
+
+class ResetSdCardFormat(TypedDict, total=False):
+    filesystem: Required[str]
+    label: Required[str]
+    partition_start: Required[int]
+    sectors_per_cluster: Required[int]
+
+
+class ResetSdCardInput(TypedDict, total=False):
+    basis: Required[str]
+    format: Required[ResetSdCardFormat]
+    high_speed: Required[bool]
+    rca: Required[int]
+    sectors: Required[int]
+
+
+class ResetSdSlotCard(TypedDict, total=False):
+    card: Required[ResetSdCardInput]
+    host_base: Required[int]
+
+
+class ResetSelect(TypedDict, total=False):
+    active_high: Required[bool]
+    pin: Required[int]
+    port: Required[int]
+
+
+class ResetSensorFrame(TypedDict, total=False):
+    basis: Required[str]
+    profile: Required[str]
+
+
+class ResetSensorInput(TypedDict, total=False):
+    basis: Required[str]
+    frame_active_ticks: Required[int]
+    frame_period_ticks: Required[int]
+    statistics_scene: Required[ResetStatisticsScene]
+
+
+class ResetSerialFlash(TypedDict, total=False):
+    basis: Required[str]
+    contents: Required[str]
+    geometry: Required[ResetSerialFlashGeometry]
+    jedec_id: Required[int]
+
+
+class ResetSerialFlashGeometry(TypedDict, total=False):
+    basis: Required[str]
+    erase_bytes: Required[int]
+    erase_ticks: Required[int]
+    page_bytes: Required[int]
+    page_ticks: Required[int]
+
+
+class ResetShutter(TypedDict, total=False):
+    active_level: Required[int]
+    pin: Required[int]
+    port: Required[int]
+
+
+class ResetShutterInput(TypedDict, total=False):
+    basis: Required[str]
+    line: Required[int]
+    mode: Required[tuple[int, int]]
+    motor: Required[tuple[int, int]]
+    poll_ticks: Required[int]
+    positions: Required[list[list[bool]]]
+    sensors: Required[list[tuple[int, int]]]
+    step_ticks: Required[int]
+
+
+class ResetSpiInputs(TypedDict, total=False):
+    basis: Required[str]
+    level: Required[str]
+    power_checksum_registers: NotRequired[ResetPowerChecksumRegisters | None]
+    power_registers: NotRequired[ResetPowerRegisters | None]
+    stabilizer_link: NotRequired[ResetStabilizerLink | None]
+
+
+class ResetStabilizerLink(TypedDict, total=False):
+    basis: Required[str]
+    boot_ticks: Required[int]
+    power: Required[list[ResetGpioPad]]
+    ready: Required[ResetGpioPad]
+    replies: NotRequired[dict[str, int] | None]
+    reset: Required[ResetGpioPad]
+    select: Required[ResetSelect]
+
+
+class ResetStatisticsBuffer(TypedDict, total=False):
+    asset: Required[str]
+    basis: Required[str]
+    light_words: NotRequired[list[int]]
+    output: Required[int]
+    sha256: Required[str]
+
+
+class ResetStatisticsScene(TypedDict, total=False):
+    black_level: Required[int]
+    luma: Required[int]
+    name: Required[str]
+    samples_per_cell: Required[int]
+    signal_shift: Required[int]
+
+
+class ResetStillDevelopment(TypedDict, total=False):
+    basis: Required[str]
+    color: NotRequired[int | None]
+    developer: Required[int]
+    profile: Required[str]
+    resizer: Required[int]
+    source_phase: Required[tuple[int, int]]
+    tone: NotRequired[int | None]
+    white_balance_reference: NotRequired[list[int] | None]
+
+
+class ResetStrobe(TypedDict, total=False):
+    clear_from_ticks: Required[int]
+    mask: Required[int]
+    set_through_ticks: Required[int]
+
+
+class ResetSubCpu(TypedDict, total=False):
+    basis: Required[str]
+    clock: NotRequired[ResetSubCpuClock | None]
+    port: Required[int]
+    profile_header: NotRequired[int | None]
+    registers: Required[list[ResetSubCpuRegister]]
+
+
+class ResetSubCpuClock(TypedDict, total=False):
+    basis: Required[str]
+    first: Required[int]
+    hold: Required[int]
+    seconds: Required[int]
+    ticks_per_second: Required[int]
+
+
+class ResetSubCpuRegister(TypedDict, total=False):
+    name: Required[str]
+    register: Required[int]
+    value: Required[int]
+
+
+class ResetTemperatureInput(TypedDict, total=False):
+    basis: Required[str]
+    millicelsius: Required[int]
+
+
+class ResetTouchChipInput(TypedDict, total=False):
+    address: Required[int]
+    basis: Required[str]
+    contact_ids: Required[list[int]]
+    heartbeat_register: Required[int]
+    input_ready_irq: Required[int]
+    mode_register: Required[int]
+    report_register: Required[int]
+    restart_register: Required[int]
+    restart_value: Required[int]
+    ticks_per_second: Required[int]
+    writable_registers: Required[list[int]]
+
+
+class ResetUsbCable(TypedDict, total=False):
+    basis: Required[str]
+    speed: Required[str]
+    vbus_bank: Required[int]
+    vbus_pin: Required[int]
+
+
+class ResetUsbPhy(TypedDict, total=False):
+    basis: Required[str]
+    parallel: Required[int]
+    registers: Required[list[int]]
+
+
+class ResetWords(TypedDict, total=False):
+    name: Required[str]
+    offset: Required[int]
+    value: Required[int]
+
+
+class ResetZoneStatistics(TypedDict, total=False):
+    basis: Required[str]
+    buffers: NotRequired[list[ResetStatisticsBuffer]]
+    exposure: NotRequired[ZoneExposure | None]
+    zone_sums: Required[list[int]]
+
+
 class ResolvedConfiguration(TypedDict, total=False):
     configuration: Required[RunConfiguration]
+    inputs: NotRequired[RunInputs | None]
     reference: Required[ResolvedSelection]
+    start: Required[RunStart]
 
 
 class ResolvedSelection(TypedDict, total=False):
@@ -5273,22 +5859,15 @@ RunConfiguration = TypedDict(
         "audio_signals": NotRequired["list[RunAudioSignal]"],
         "body_id": Required["str"],
         "browser_camera": NotRequired["RunBrowserCamera | None"],
-        "bus_byte_times": NotRequired["list[RunBusByteTime]"],
-        "dram_address_space": NotRequired["RunDramAddressSpace | None"],
         "execution": NotRequired["RunExecution | None"],
         "firmware_id": Required["str"],
         "id": Required["str"],
-        "idle_status_blocks": NotRequired["list[str]"],
-        "inputs": NotRequired["RunInputs | None"],
         "overlays": Required["list[str]"],
-        "polled_serial_blocks": NotRequired["list[str]"],
         "preset": NotRequired["RunPreset | None"],
         "purpose": Required["RunPurpose"],
         "scene": NotRequired["RunScene | None"],
         "schema": Required["int"],
-        "sd_clock_steps": NotRequired["list[RunSdClockSteps]"],
-        "start": Required["RunStart"],
-        "unobserved_interrupt_blocks": NotRequired["list[str]"],
+        "start": NotRequired["RunStart | None"],
     },
     total=False,
 )
@@ -5960,7 +6539,6 @@ class RunOverlayChangeVariant0(TypedDict, total=False):
 
 class RunOverlayChangeVariant1(TypedDict, total=False):
     connected: Required[bool]
-    hardware_selection: NotRequired[HardwareSelection | None]
     kind: Required[Literal["usb_connection"]]
 
 
@@ -6021,19 +6599,15 @@ class RunPreset(TypedDict, total=False):
     files: NotRequired[dict[str, dict[str, str]]]
     firmware_inputs_id: NotRequired[str | None]
     firmware_profile_id: NotRequired[str | None]
-    hardware_inputs_id: NotRequired[str | None]
     hardware_notes: NotRequired[dict[str, str]]
-    hardware_selection: NotRequired[HardwareSelection | None]
     initial_gpio: NotRequired[list[RunPadLevel]]
     limits: NotRequired[list[str]]
-    mcu: NotRequired[RunMcuPacket | None]
     nand_inputs: NotRequired[dict[str, RunNandSceneInput]]
-    native_device_inputs: NotRequired[dict[str, RunNativeDeviceInputs]]
     observer: NotRequired[RunObserver | None]
+    power_on_inputs: NotRequired[HardwareReset | None]
     purpose: NotRequired[RunPurpose | None]
     settings: NotRequired[RunPowerOnSettings | None]
     start: NotRequired[RunStart | None]
-    ticks_per_second: NotRequired[int | None]
     usb_connected: NotRequired[bool | None]
     virtual_card: NotRequired[RunVirtualCard | None]
 
@@ -6480,10 +7054,6 @@ class SocBlockView(TypedDict, total=False):
 
 
 class SocHardware(TypedDict, total=False):
-    profiles: NotRequired[dict[str, SocProfile]]
-
-
-class SocProfile(TypedDict, total=False):
     cache_basis: NotRequired[str | None]
 
 
@@ -6667,6 +7237,19 @@ class Xp4LensMount(TypedDict, total=False):
     ready_connection_id: Required[str]
     sense_connection_ids: Required[list[str]]
     supply_connection_ids: Required[list[str]]
+
+
+class Xt20TouchPanelInput(TypedDict, total=False):
+    input_ready_irq: Required[int]
+    report_register: Required[int]
+
+
+class ZoneExposure(TypedDict, total=False):
+    basis: Required[str]
+    high: Required[int]
+    low: Required[int]
+    reference: Required[int]
+    select: Required[int]
 
 
 class ZoomMechanism(TypedDict, total=False):

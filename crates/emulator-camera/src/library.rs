@@ -1,10 +1,11 @@
 //! Firmware source records, and the catalog resolution that turns a body and
-//! a firmware choice into the firmware's run configuration.
+//! a firmware choice into a resolved camera.
 //!
-//! A request names a body and, optionally, one of its firmwares. Each catalog
-//! firmware has one canonical run configuration,
-//! `configurations/emulator/<firmware-id>/run.json`; nothing else maps a
-//! firmware to the hardware it runs on.
+//! A request names a body and, optionally, one of its firmwares. The body
+//! record is the hardware and the firmware record says how it starts; a
+//! firmware's run configuration, `configurations/emulator/<firmware-id>/run.json`
+//! when it has one, adds only session defaults (execution, scene, settings).
+//! Nothing maps a firmware to the hardware it runs on.
 //!
 //! A firmware library is a directory of source records:
 //!
@@ -78,7 +79,10 @@ pub enum LibraryError {
         "body {body} cannot start from an empty flash yet: the {processor} camera builder starts only installed firmware"
     )]
     EmptyFlash { body: String, processor: String },
-    #[error("firmware {0} has no run configuration yet (configurations/emulator/{0}/run.json)")]
+    #[error(
+        "firmware {0} has no run configuration (configurations/emulator/{0}/run.json) for its \
+         overlays"
+    )]
     NoRunConfiguration(String),
     #[error("{0}")]
     Missing(String),
@@ -319,8 +323,8 @@ impl Library {
         }
     }
 
-    /// Catalog firmwares this library holds the files of and whose canonical
-    /// run opens, in catalog identity order.
+    /// Catalog firmwares this library holds the files of and that plan to
+    /// open, in catalog identity order.
     pub fn firmwares(&self) -> Vec<LibraryFirmware> {
         self.catalog
             .firmware_ids()
@@ -445,19 +449,25 @@ impl Library {
         })
     }
 
-    /// The firmware's canonical run configuration,
-    /// `configurations/emulator/<firmware-id>`, resolved with the overlays.
+    /// The firmware resolved on its body: its run configuration,
+    /// `configurations/emulator/<firmware-id>`, with the overlays, or its body
+    /// and firmware records alone when it has none.
     pub fn resolved(
         &self,
         firmware_id: &str,
         overlays: &[String],
     ) -> Result<ResolvedConfiguration, LibraryError> {
         self.firmware(firmware_id)?;
-        if !RunConfiguration::bundled_ids().any(|id| id == firmware_id) {
+        let resolved = if RunConfiguration::bundled_ids().any(|id| id == firmware_id) {
+            ResolvedConfiguration::with_overlays(firmware_id, overlays)
+        } else if overlays.is_empty() {
+            // Without a run configuration the camera opens from its body and
+            // firmware records and the processor's own choices.
+            ResolvedConfiguration::from_records(firmware_id)
+        } else {
             return Err(LibraryError::NoRunConfiguration(firmware_id.into()));
         }
-        let resolved = ResolvedConfiguration::with_overlays(firmware_id, overlays)
-            .map_err(LibraryError::Catalog)?;
+        .map_err(LibraryError::Catalog)?;
         if resolved.configuration.firmware_id != firmware_id {
             return Err(LibraryError::Missing(format!(
                 "run configuration {firmware_id} names firmware {}, not {firmware_id}",

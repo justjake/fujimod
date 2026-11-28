@@ -867,6 +867,8 @@ mod tests {
                 id: "test-firmware".into(),
                 body_id: "test-body".into(),
                 version: "test".into(),
+                start: None,
+                dram_address_space: None,
                 update: None,
                 boot_rom: None,
                 installation: None,

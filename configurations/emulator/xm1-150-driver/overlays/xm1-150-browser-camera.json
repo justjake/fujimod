@@ -52,11 +52,7 @@
         "partition_start": 8192,
         "sectors_per_cluster": 64,
         "sectors": 16777216
-      },
-      "hardware_selection": {
-        "body_profile_id": "xm1-rec"
-      },
-      "hardware_inputs_id": "xm1-rec"
+      }
     }
   }
 }

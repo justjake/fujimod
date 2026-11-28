@@ -4,6 +4,13 @@
   "id": "xt4-212",
   "body_id": "xt4",
   "version": "2.12",
+  "start": {
+    "kind": "loader"
+  },
+  "dram_address_space": {
+    "limit_bytes": 4026531840,
+    "basis": "The X-T4 2.12 still memory plan places its shooting buffer pool at 0x2023a000..0xf0000000, so the software-visible DRAM space ends at 0xf0000000; the installed capacity is not measured."
+  },
   "update": {
     "size": 51278280,
     "sha256": "853d273b5603d3a2b93493f0ebd6a762b0b4b6bdc70317777775ae5f8ed93bc5"

@@ -9,11 +9,44 @@
       "factory_options": {},
       "execution_scope": "offline-boot-development",
       "purpose": "service_session",
-      "hardware_selection": {
-        "body_profile_id": "xm1-service-session"
+      "firmware_profile_id": "xm1-150-service-session",
+      "power_on_inputs": {
+        "inputs": {
+          "gpio": {
+            "gpio_inputs": {
+              "0": 3104,
+              "2": 4608,
+              "3": 776,
+              "12": 128,
+              "11": 0
+            },
+            "profile_name": "Synthetic X-M1 USB+UP+S2 entry; flag mapping2/16/8 comes from stock635280; electrical levels borrowed/unmeasured."
+          },
+          "power": {
+            "profile_name": "Synthetic loader boot reason0; remaining ADC borrowed; MCU runtime status still separate rehearsal input",
+            "adc_samples": [
+              0,
+              0,
+              1023,
+              63,
+              534,
+              640,
+              0,
+              825,
+              128,
+              60,
+              0,
+              0
+            ],
+            "boot_reply": 0,
+            "spi0_input_profile": "absent-hot-shoe-flash-fixed-low-miso"
+          },
+          "mcu_packet_hex": "00006400d00700ff008000040000aa98",
+          "mcu_packet_basis": "Synthetic DAT default main-header bytes/checksum; required stock startup checksum pairing, not a capture."
+        },
+        "execution_scope": "offline-boot-development"
       },
-      "hardware_inputs_id": "xm1-service-session",
-      "firmware_profile_id": "xm1-150-service-session"
+      "usb_connected": true
     }
   }
 }

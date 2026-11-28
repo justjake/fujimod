@@ -227,7 +227,7 @@ fn first_start(
 fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
     let configuration = &resolved.configuration;
     configuration.validate(&configuration.id)?;
-    fujimod_catalog_resolution::validate_selection(configuration, &resolved.reference)?;
+    resolved.validate()?;
     match configuration.purpose {
         RunPurpose::RomBoot => (),
         RunPurpose::ServiceSession => {
@@ -243,7 +243,7 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
             return Err("native X70 boot does not support shutdown runs".into());
         }
     }
-    match configuration.start {
+    match resolved.start {
         RunStart::Rom => (),
         RunStart::Loader => {
             return Err("native X70 boot does not support loader-start configurations".into());
@@ -255,7 +255,7 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
             return Err("native X70 boot does not support setup-start configurations".into());
         }
     }
-    let inputs = match configuration.inputs.as_ref() {
+    let inputs = match resolved.inputs.as_ref() {
         Some(RunInputs::Exr2(inputs)) => Some(inputs),
         Some(RunInputs::Xp4(_)) => {
             return Err("native X70 boot does not support XP4 startup inputs".into());
@@ -307,7 +307,7 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
     )
     .map_err(|error| format!("firmware observation facts: {error}"))?;
     let quantum = execution_policy.quantum;
-    let board_ticks_per_second = configuration
+    let board_ticks_per_second = resolved
         .inputs
         .as_ref()
         .and_then(|inputs| match inputs {
@@ -333,6 +333,7 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
         x70::assemble(
             &resolved.reference,
             configuration,
+            resolved.start,
             dram_address_space_limit_bytes,
             inputs.ok_or("native X70 boot requires declared startup inputs")?,
             scene_input,
@@ -419,10 +420,8 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
             })
         }
         None => resolved
-            .configuration
-            .preset
-            .as_ref()
-            .and_then(|preset| preset.mcu.as_ref())
+            .board()
+            .and_then(|board| board.mcu.as_ref())
             .map(|mcu| {
                 Ok::<Mcu, String>(Mcu {
                     node: mcu.node.clone(),
@@ -926,7 +925,7 @@ pub fn startup_path(resolved: &ResolvedConfiguration) -> Result<StartupPath, Str
         return Ok(StartupPath::Exr2);
     }
     let soc = resolved.reference.soc.id.as_str();
-    match (resolved.configuration.inputs.as_ref(), soc) {
+    match (resolved.inputs.as_ref(), soc) {
         (Some(RunInputs::Xp5(_)), _) => Ok(StartupPath::Xp5),
         (Some(RunInputs::Xp4(_)) | None, "xp4" | "xpp") => Ok(StartupPath::Application),
         (None, "exr2") => Err(format!(
@@ -960,7 +959,7 @@ pub fn boot_rom_use(resolved: &ResolvedConfiguration) -> Result<BootRomUse, Stri
         StartupPath::Application => BootRomUse::Unused,
         StartupPath::Xp5 => xp5::boot_rom_use(
             &resolved.configuration.firmware_id,
-            resolved.configuration.start,
+            resolved.start,
         ),
     })
 }
@@ -1111,19 +1110,17 @@ pub fn open_request(
 /// Open a supported configured board from caller-selected files.
 pub fn open(resolved: ResolvedConfiguration, inputs: StartupInputs) -> Result<Camera, String> {
     let exr2_run = is_exr2_run(&resolved);
-    let exr2_ticks = match resolved.configuration.inputs.as_ref() {
+    let exr2_ticks = match resolved.inputs.as_ref() {
         Some(RunInputs::Exr2(inputs)) => Some(inputs.mcu.rtc.ticks_per_second),
         None if exr2_run => Some(
             resolved
-                .configuration
-                .preset
-                .as_ref()
-                .and_then(|preset| preset.ticks_per_second)
+                .board()
+                .and_then(|board| board.ticks_per_second)
                 .ok_or("EXR II run without startup inputs declares no board timer rate")?,
         ),
         _ => None,
     };
-    match (resolved.configuration.inputs.as_ref(), inputs) {
+    match (resolved.inputs.as_ref(), inputs) {
         (_, StartupInputs::Exr2 { options, mode }) if exr2_run => {
             let session = open_exr2(resolved, options, mode)?;
             let quantum = session_quantum(&session)?;
@@ -1169,9 +1166,9 @@ pub fn open(resolved: ResolvedConfiguration, inputs: StartupInputs) -> Result<Ca
 /// or from a body construction that carries its reset values.
 fn is_exr2_run(resolved: &ResolvedConfiguration) -> bool {
     matches!(
-        resolved.configuration.inputs.as_ref(),
+        resolved.inputs.as_ref(),
         Some(RunInputs::Exr2(_))
-    ) || (resolved.configuration.inputs.is_none() && exr2::available(resolved))
+    ) || (resolved.inputs.is_none() && exr2::available(resolved))
 }
 
 /// Optional instruction-entry trace shared by native boot workflows.
@@ -1542,7 +1539,7 @@ fn open_prepared_epoch(
     if let Some(packet_bytes) = &settings {
         settings_packet(&mut devices, prepared.mcu.as_ref(), packet_bytes)?;
     }
-    let declared = match prepared.resolved.configuration.inputs.as_ref() {
+    let declared = match prepared.resolved.inputs.as_ref() {
         Some(RunInputs::Exr2(inputs)) => inputs.settings.clone(),
         _ => prepared
             .resolved
@@ -2127,7 +2124,7 @@ fn to_rec_inner(
                 .is_some_and(|first_start| confirmations < first_start.max_presses)
         {
             let start = spec.first_start.as_ref().expect("checked above");
-            let inputs = match spec.resolved.configuration.inputs.as_ref() {
+            let inputs = match spec.resolved.inputs.as_ref() {
                 Some(RunInputs::Exr2(inputs)) => inputs,
                 _ => return Err("first start requires EXR II run inputs".into()),
             };

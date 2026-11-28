@@ -5,11 +5,7 @@
   "purpose": "rom_boot",
   "body_id": "x30",
   "firmware_id": "x30-103",
-  "start": {
-    "kind": "rom"
-  },
   "execution": null,
-  "inputs": null,
   "scene": null,
   "overlays": []
 }

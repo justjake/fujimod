@@ -5,88 +5,235 @@
   "soc_id": "exr2",
   "dram_bytes": 536870912,
   "hardware": {
-    "profiles": {
-      "x100t-rec": {
-        "control_bus_order": [
-          "device-0",
-          "device-1",
-          "device-2",
-          "device-3",
-          "device-4",
-          "device-5",
-          "device-6",
-          "device-7",
-          "device-8"
+    "board": {
+      "control_bus_order": [
+        "device-0",
+        "device-1",
+        "device-2",
+        "device-3",
+        "device-4",
+        "device-5",
+        "device-6",
+        "device-7",
+        "device-8"
+      ],
+      "attachments": {
+        "serial_part": [
+          "mixed-width-dual-counter-lens"
+        ]
+      },
+      "card_contacts": {
+        "basis": "Declared catalog input.",
+        "detect": [
+          12,
+          7,
+          0
         ],
-        "attachments": {
-          "serial_part": [
-            "mixed-width-dual-counter-lens"
-          ]
-        },
-        "card_contacts": {
-          "basis": "Declared catalog input.",
-          "detect": [
-            12,
-            7,
-            0
+        "write_protect": [
+          12,
+          6,
+          1
+        ]
+      },
+      "controllers": {
+        "control_bus0": {
+          "command_targets": [
+            {
+              "address": 57,
+              "basis": "EVF eye sensor, a TAOS/AMS proximity sensor as on the X-E2S (register prefix 0xA0 = command + auto-increment, ID register 0x12 = 0x39). X100T 1.11 configures it through 0x95FE18/0x95FE84/0x95FEE8 (register table 0xAFF1C4) when the display path changes; its output is GPIO 12.1, polled by the eyesensor task. Replies are the X-E2S declaration, not measured.",
+              "commands": [
+                229
+              ],
+              "prefix_mask": 224,
+              "prefix_value": 160,
+              "read_frames": [
+                [
+                  19,
+                  "00"
+                ],
+                [
+                  24,
+                  "0000"
+                ]
+              ],
+              "register_mask": 31,
+              "write_masks": [
+                [
+                  0,
+                  255
+                ],
+                [
+                  1,
+                  255
+                ],
+                [
+                  2,
+                  255
+                ],
+                [
+                  3,
+                  255
+                ],
+                [
+                  4,
+                  255
+                ],
+                [
+                  5,
+                  255
+                ],
+                [
+                  6,
+                  255
+                ],
+                [
+                  7,
+                  255
+                ],
+                [
+                  8,
+                  255
+                ],
+                [
+                  9,
+                  255
+                ],
+                [
+                  10,
+                  255
+                ],
+                [
+                  11,
+                  255
+                ],
+                [
+                  12,
+                  255
+                ],
+                [
+                  13,
+                  255
+                ],
+                [
+                  14,
+                  255
+                ],
+                [
+                  15,
+                  255
+                ],
+                [
+                  30,
+                  255
+                ]
+              ]
+            }
           ],
-          "write_protect": [
-            12,
-            6,
-            1
-          ]
+          "profile": "declared-register-status-pair-latched-irq-unmeasured",
+          "sensor": {
+            "address": 28,
+            "basis": "Declared catalog input.",
+            "reply_model": "stationary-z-plus-1g"
+          },
+          "status_targets": [
+            {
+              "address": 68,
+              "basis": "Declared catalog input.",
+              "status_hex": "0000",
+              "writable_registers": [
+                1,
+                2,
+                3,
+                4,
+                6
+              ],
+              "write_replies": [
+                [
+                  2,
+                  32,
+                  "0001"
+                ],
+                [
+                  2,
+                  64,
+                  "0000"
+                ]
+              ]
+            }
+          ],
+          "transfer_ticks": 4
         },
-        "controllers": {
-          "control_bus0": {
-            "command_targets": [
+        "control_bus1": {
+          "basis": "Declared catalog input.",
+          "profile": "declared-bus1-register-replies-unmeasured",
+          "replies": {
+            "extra_registers": [
               {
-                "address": 57,
-                "basis": "EVF eye sensor, a TAOS/AMS proximity sensor as on the X-E2S (register prefix 0xA0 = command + auto-increment, ID register 0x12 = 0x39). X100T 1.11 configures it through 0x95FE18/0x95FE84/0x95FEE8 (register table 0xAFF1C4) when the display path changes; its output is GPIO 12.1, polled by the eyesensor task. Replies are the X-E2S declaration, not measured.",
-                "commands": [
-                  229
+                "address": 10,
+                "basis": "Bus1 chip 10, after the lens bridge (114) and the PWIC (48), as on the X70. X100T 1.11 addresses it in mode 9, e.g. entering playback, which stops without it. Registers and masks are the X70's declaration of the same chip, not measured on an X100T.",
+                "modes": [
+                  1,
+                  9
                 ],
-                "prefix_mask": 224,
-                "prefix_value": 160,
-                "read_frames": [
-                  [
-                    19,
-                    "00"
-                  ],
-                  [
-                    24,
-                    "0000"
-                  ]
-                ],
-                "register_mask": 31,
-                "write_masks": [
-                  [
-                    0,
-                    255
-                  ],
-                  [
-                    1,
-                    255
-                  ],
+                "values": [
                   [
                     2,
-                    255
-                  ],
-                  [
-                    3,
-                    255
-                  ],
-                  [
-                    4,
-                    255
+                    0
                   ],
                   [
                     5,
-                    255
+                    0
                   ],
                   [
-                    6,
-                    255
+                    7,
+                    0
                   ],
+                  [
+                    8,
+                    0
+                  ],
+                  [
+                    9,
+                    0
+                  ],
+                  [
+                    10,
+                    0
+                  ],
+                  [
+                    11,
+                    0
+                  ],
+                  [
+                    12,
+                    0
+                  ],
+                  [
+                    13,
+                    0
+                  ],
+                  [
+                    14,
+                    0
+                  ],
+                  [
+                    16,
+                    0
+                  ],
+                  [
+                    17,
+                    0
+                  ],
+                  [
+                    18,
+                    0
+                  ],
+                  [
+                    19,
+                    0
+                  ]
+                ],
+                "write_masks": [
                   [
                     7,
                     255
@@ -120,2783 +267,1145 @@
                     255
                   ],
                   [
-                    15,
+                    16,
                     255
                   ],
                   [
-                    30,
+                    17,
+                    255
+                  ],
+                  [
+                    18,
                     255
                   ]
                 ]
               }
             ],
-            "profile": "declared-register-status-pair-latched-irq-unmeasured",
-            "sensor": {
-              "address": 28,
-              "basis": "Declared catalog input.",
-              "reply_model": "stationary-z-plus-1g"
-            },
-            "status_targets": [
-              {
-                "address": 68,
-                "basis": "Declared catalog input.",
-                "status_hex": "0000",
-                "writable_registers": [
-                  1,
-                  2,
-                  3,
-                  4,
-                  6
-                ],
-                "write_replies": [
-                  [
-                    2,
-                    32,
-                    "0001"
-                  ],
-                  [
-                    2,
-                    64,
-                    "0000"
-                  ]
-                ]
-              }
-            ],
-            "transfer_ticks": 4
-          },
-          "control_bus1": {
-            "basis": "Declared catalog input.",
-            "profile": "declared-bus1-register-replies-unmeasured",
-            "replies": {
-              "extra_registers": [
-                {
-                  "address": 10,
-                  "basis": "Bus1 chip 10, after the lens bridge (114) and the PWIC (48), as on the X70. X100T 1.11 addresses it in mode 9, e.g. entering playback, which stops without it. Registers and masks are the X70's declaration of the same chip, not measured on an X100T.",
-                  "modes": [
-                    1,
-                    9
-                  ],
-                  "values": [
-                    [
-                      2,
-                      0
-                    ],
-                    [
-                      5,
-                      0
-                    ],
-                    [
-                      7,
-                      0
-                    ],
-                    [
-                      8,
-                      0
-                    ],
-                    [
-                      9,
-                      0
-                    ],
-                    [
-                      10,
-                      0
-                    ],
-                    [
-                      11,
-                      0
-                    ],
-                    [
-                      12,
-                      0
-                    ],
-                    [
-                      13,
-                      0
-                    ],
-                    [
-                      14,
-                      0
-                    ],
-                    [
-                      16,
-                      0
-                    ],
-                    [
-                      17,
-                      0
-                    ],
-                    [
-                      18,
-                      0
-                    ],
-                    [
-                      19,
-                      0
-                    ]
-                  ],
-                  "write_masks": [
-                    [
-                      7,
-                      255
-                    ],
-                    [
-                      8,
-                      255
-                    ],
-                    [
-                      9,
-                      255
-                    ],
-                    [
-                      10,
-                      255
-                    ],
-                    [
-                      11,
-                      255
-                    ],
-                    [
-                      12,
-                      255
-                    ],
-                    [
-                      13,
-                      255
-                    ],
-                    [
-                      14,
-                      255
-                    ],
-                    [
-                      16,
-                      255
-                    ],
-                    [
-                      17,
-                      255
-                    ],
-                    [
-                      18,
-                      255
-                    ]
-                  ]
-                }
-              ],
-              "pwic_address": 48,
-              "pwic_modes": [
-                1
-              ],
-              "pwic_read_prefixes": [
-                [
-                  32,
-                  "000000"
-                ]
-              ],
-              "pwic_values": [
-                [
-                  1,
-                  0
-                ],
-                [
-                  2,
-                  0
-                ],
-                [
-                  4,
-                  0
-                ],
-                [
-                  5,
-                  0
-                ],
-                [
-                  6,
-                  0
-                ],
-                [
-                  7,
-                  0
-                ],
-                [
-                  8,
-                  0
-                ],
-                [
-                  9,
-                  0
-                ],
-                [
-                  11,
-                  0
-                ],
-                [
-                  14,
-                  0
-                ],
-                [
-                  32,
-                  128
-                ],
-                [
-                  97,
-                  0
-                ],
-                [
-                  98,
-                  0
-                ]
-              ],
-              "pwic_write_masks": [
-                [
-                  1,
-                  31
-                ],
-                [
-                  2,
-                  255
-                ],
-                [
-                  4,
-                  255
-                ],
-                [
-                  5,
-                  255
-                ],
-                [
-                  6,
-                  240
-                ],
-                [
-                  7,
-                  7
-                ],
-                [
-                  8,
-                  119
-                ],
-                [
-                  9,
-                  243
-                ],
-                [
-                  11,
-                  255
-                ],
-                [
-                  14,
-                  1
-                ],
-                [
-                  32,
-                  31
-                ],
-                [
-                  97,
-                  16
-                ],
-                [
-                  98,
-                  1
-                ]
-              ],
-              "register_address": 114,
-              "register_modes": [
-                1
-              ],
-              "register_values": [
-                [
-                  0,
-                  0
-                ],
-                [
-                  1,
-                  0
-                ],
-                [
-                  2,
-                  0
-                ],
-                [
-                  3,
-                  0
-                ]
-              ],
-              "register_write_masks": [
-                [
-                  0,
-                  255
-                ],
-                [
-                  1,
-                  255
-                ],
-                [
-                  2,
-                  255
-                ],
-                [
-                  3,
-                  31
-                ]
-              ]
-            },
-            "transfer_ticks": 4
-          },
-          "display_timing": {
-            "basis": "Declared catalog input.",
-            "frame_period_ticks": 400000,
-            "phase_profile": "declared-external-phase-clock-unmeasured",
-            "stop_delay_ticks": 2
-          },
-          "fe80": {
-            "basis": "Declared catalog input.",
-            "periods": [
-              12,
-              13,
-              16
-            ],
-            "upload_setup_phases": [
-              "routed"
-            ]
-          }
-        },
-        "counter_feedback": "declared-lens-step-feedback-unmeasured",
-        "dram_basis": "Declared catalog input.",
-        "encoders": [
-          {
-            "name": "command_dial",
-            "options": {
-              "phase_ticks": 120000,
-              "pins": [
-                {
-                  "port": 3,
-                  "pin": 8
-                },
-                {
-                  "port": 3,
-                  "pin": 9
-                }
-              ],
-              "rest_phase": 3
-            }
-          },
-          {
-            "adc": "adc",
-            "name": "focus_ring",
-            "options": {
-              "phase_ticks": 120000,
-              "outputs": {
-                "kind": "adc",
-                "channels": [
-                  6,
-                  7
-                ],
-                "levels": [
-                  {
-                    "low": 500,
-                    "high": 1000
-                  },
-                  {
-                    "low": 500,
-                    "high": 1000
-                  }
-                ]
-              },
-              "rest_phase": 3
-            }
-          }
-        ],
-        "graph": {
-          "attachment_order": [
-            "bootcontrols",
-            "kernelinterrupts",
-            "nandcontroller",
-            "fujidecompressor",
-            "imagescaler",
-            "loadermemorydma",
-            "usbcontrol",
-            "powerdevices",
-            "audio",
-            "pulsetimer",
-            "lensfeedback",
-            "pulseoutputs",
-            "lensendpoint",
-            "spi2serial",
-            "controlbus",
-            "secondarycontrolbus",
-            "lensbridge",
-            "fe80control",
-            "inputprocessingcontrol",
-            "inputauxiliarycontrol",
-            "producercontrol",
-            "imageparametercontrol",
-            "imageworkcontrol",
-            "faceanalysiscontrol",
-            "afextractioncontrol",
-            "hdmisink",
-            "hdmistartup",
-            "outputcontrol",
-            "graphicsaccelerator",
-            "displayscanout",
-            "displaytiming",
-            "displayformatter",
-            "rawcapture",
-            "prefilter",
-            "rawstatistics",
-            "stillisp",
-            "imagewarp",
-            "imagetransfer",
-            "avccodec",
-            "jpegencoder",
-            "rawreadback",
-            "imagecombination"
-          ],
-          "construction_order": [
-            "bootcontrols",
-            "kernelinterrupts",
-            "nandcontroller",
-            "fujidecompressor",
-            "imagescaler",
-            "loadermemorydma",
-            "powerdevices",
-            "usbcontrol",
-            "audio",
-            "pulseoutputs",
-            "pulsetimer",
-            "lensfeedback",
-            "lensendpoint",
-            "spi2serial",
-            "controlbus",
-            "secondarycontrolbus",
-            "lensbridge",
-            "fe80control",
-            "inputprocessingcontrol",
-            "inputauxiliarycontrol",
-            "producercontrol",
-            "imageparametercontrol",
-            "imageworkcontrol",
-            "faceanalysiscontrol",
-            "afextractioncontrol",
-            "hdmisink",
-            "hdmistartup",
-            "outputcontrol",
-            "graphicsaccelerator",
-            "displayscanout",
-            "displaytiming",
-            "displayformatter",
-            "rawcapture",
-            "prefilter",
-            "rawstatistics",
-            "stillisp",
-            "imagewarp",
-            "imagetransfer",
-            "avccodec",
-            "jpegencoder",
-            "rawreadback",
-            "imagecombination"
-          ],
-          "devices": [
-            {
-              "kind": "BootControls",
-              "name": "bootcontrols",
-              "refs": {}
-            },
-            {
-              "kind": "KernelInterrupts",
-              "name": "kernelinterrupts",
-              "refs": {}
-            },
-            {
-              "kind": "NandController",
-              "name": "nandcontroller",
-              "refs": {}
-            },
-            {
-              "kind": "FujiDecompressor",
-              "name": "fujidecompressor",
-              "refs": {}
-            },
-            {
-              "boot_entries": [
-                "loader"
-              ],
-              "kind": "ImageScaler",
-              "name": "imagescaler",
-              "refs": {}
-            },
-            {
-              "kind": "LoaderMemoryDMA",
-              "name": "loadermemorydma",
-              "refs": {}
-            },
-            {
-              "kind": "USBControl",
-              "name": "usbcontrol",
-              "refs": {
-                "power": "powerdevices"
-              }
-            },
-            {
-              "kind": "PowerDevices",
-              "name": "powerdevices",
-              "refs": {}
-            },
-            {
-              "kind": "SerialAudioTransmitSink",
-              "model_choices": {
-                "models": {
-                  "declared-silent-stereo-pcm48000": {
-                    "dependencies": [],
-                    "kind": "SerialAudioReceiveSource",
-                    "refs": {}
-                  }
-                },
-                "option": "audio_input_profile"
-              },
-              "name": "audio",
-              "refs": {}
-            },
-            {
-              "kind": "PulseOutputs",
-              "name": "pulseoutputs",
-              "refs": {}
-            },
-            {
-              "kind": "QuadratureCounters",
-              "name": "lensfeedback",
-              "refs": {
-                "pulse_source": "pulseoutputs"
-              }
-            },
-            {
-              "kind": "MixedWidthLensController",
-              "name": "lensendpoint",
-              "refs": {
-                "encoder_source": "lensfeedback",
-                "gpio_source": "bootcontrols",
-                "pulse_source": "pulseoutputs"
-              }
-            },
-            {
-              "kind": "SPI2Serial",
-              "name": "spi2serial",
-              "refs": {
-                "endpoint": "lensendpoint"
-              }
-            },
-            {
-              "kind": "ControlBus",
-              "name": "controlbus",
-              "refs": {}
-            },
-            {
-              "kind": "SecondaryControlBus",
-              "name": "secondarycontrolbus",
-              "refs": {
-                "power": "powerdevices"
-              }
-            },
-            {
-              "kind": "FE80Control",
-              "name": "fe80control",
-              "refs": {}
-            },
-            {
-              "kind": "InputProcessingControl",
-              "name": "inputprocessingcontrol",
-              "refs": {}
-            },
-            {
-              "kind": "InputAuxiliaryControl",
-              "name": "inputauxiliarycontrol",
-              "refs": {}
-            },
-            {
-              "kind": "ProducerControl",
-              "name": "producercontrol",
-              "refs": {}
-            },
-            {
-              "kind": "ImageParameterControl",
-              "name": "imageparametercontrol",
-              "refs": {}
-            },
-            {
-              "kind": "ImageWorkControl",
-              "name": "imageworkcontrol",
-              "refs": {}
-            },
-            {
-              "kind": "FaceAnalysisControl",
-              "name": "faceanalysiscontrol",
-              "refs": {}
-            },
-            {
-              "kind": "AFExtractionControl",
-              "name": "afextractioncontrol",
-              "refs": {}
-            },
-            {
-              "kind": "HDMISink",
-              "name": "hdmisink",
-              "refs": {}
-            },
-            {
-              "kind": "HDMIStartup",
-              "name": "hdmistartup",
-              "refs": {
-                "sink": "hdmisink"
-              }
-            },
-            {
-              "kind": "OutputControl",
-              "name": "outputcontrol",
-              "refs": {}
-            },
-            {
-              "kind": "GraphicsAccelerator",
-              "name": "graphicsaccelerator",
-              "refs": {}
-            },
-            {
-              "kind": "DisplayScanout",
-              "name": "displayscanout",
-              "refs": {}
-            },
-            {
-              "kind": "DisplayTiming",
-              "name": "displaytiming",
-              "refs": {}
-            },
-            {
-              "kind": "DisplayFormatter",
-              "name": "displayformatter",
-              "refs": {}
-            },
-            {
-              "boot_entries": [
-                "loader"
-              ],
-              "kind": "X70SensorCaptureDMA",
-              "name": "rawcapture",
-              "refs": {
-                "input_controller": "inputprocessingcontrol"
-              }
-            },
-            {
-              "boot_entries": [
-                "rom",
-                "loader"
-              ],
-              "kind": "PrefilterControl",
-              "name": "prefilter",
-              "refs": {}
-            },
-            {
-              "boot_entries": [
-                "loader"
-              ],
-              "kind": "RawStatisticsControl",
-              "name": "rawstatistics",
-              "refs": {}
-            },
-            {
-              "boot_entries": [
-                "loader"
-              ],
-              "kind": "X70StillISPControl",
-              "name": "stillisp",
-              "refs": {}
-            },
-            {
-              "boot_entries": [
-                "loader"
-              ],
-              "kind": "ImageWarpControl",
-              "name": "imagewarp",
-              "refs": {}
-            },
-            {
-              "boot_entries": [
-                "loader"
-              ],
-              "kind": "ImageTransferControl",
-              "name": "imagetransfer",
-              "refs": {}
-            },
-            {
-              "boot_entries": [
-                "loader"
-              ],
-              "kind": "AvcCodecControl",
-              "name": "avccodec",
-              "refs": {}
-            },
-            {
-              "boot_entries": [
-                "loader"
-              ],
-              "kind": "ApproximateJPEGEncodeControl",
-              "name": "jpegencoder",
-              "refs": {
-                "stream_source": "imagewarp"
-              }
-            },
-            {
-              "kind": "PulseTimerControl",
-              "name": "pulsetimer",
-              "refs": {
-                "pulse_source": "pulseoutputs"
-              }
-            },
-            {
-              "kind": "MemoryReadback",
-              "name": "rawreadback",
-              "refs": {
-                "image_output": "imageworkcontrol",
-                "input_controller": "inputprocessingcontrol",
-                "parameters": "imageparametercontrol"
-              }
-            },
-            {
-              "kind": "ImageCombination",
-              "name": "imagecombination",
-              "refs": {}
-            },
-            {
-              "kind": "LensBridge",
-              "name": "lensbridge",
-              "refs": {
-                "bus": "secondarycontrolbus",
-                "pulse_source": "pulseoutputs"
-              }
-            }
-          ],
-          "optional_devices": [
-            "SDCardController",
-            "JPEGDecodeControl"
-          ]
-        },
-        "imaging": {
-          "af_extraction": {
-            "profile": "register-pdaf-packed12-aperture-sad-unmeasured"
-          },
-          "capture_color": {
-            "basis": "X70 X-Trans II capture colour (same sensor), X100T 23 mm projection; reference white and saturation fitted on a grey scene under the X100T firmware white balance, not measured.",
-            "black": 0,
-            "full_scale": 16380,
-            "initial_rgb": [
-              128,
-              128,
-              128
-            ],
-            "processing_cfa": [
-              0,
-              2,
-              1,
-              2,
-              0,
-              1,
-              1,
-              1,
-              0,
-              1,
-              1,
-              2,
-              1,
-              1,
-              2,
-              1,
-              1,
-              0,
-              2,
-              0,
-              1,
-              0,
-              2,
-              1,
-              1,
-              1,
-              2,
-              1,
-              1,
-              0,
-              1,
-              1,
-              0,
-              1,
-              1,
-              2
-            ],
-            "radiometry": {
-              "pixel_clock_hz": 33000000,
-              "projection": {
-                "focal_length_mm": 23.0,
-                "focus": "lens_focus",
-                "relative_illumination": {
-                  "radial-polynomial": {
-                    "r2": 0.651,
-                    "r4": 0.492
-                  }
-                },
-                "sensor_width_mm": 23.6,
-                "subject_distance_mm": 2000.0
-              },
-              "rolling_references": [
-                {
-                  "horizontal": 706,
-                  "lines": 857,
-                  "mode": 236,
-                  "vertical": 9348
-                },
-                {
-                  "horizontal": 734,
-                  "lines": 1671,
-                  "mode": 236,
-                  "vertical": 1671
-                },
-                {
-                  "horizontal": 737,
-                  "lines": 820,
-                  "mode": 236,
-                  "vertical": 8955
-                },
-                {
-                  "horizontal": 750,
-                  "lines": 1760,
-                  "mode": 236,
-                  "vertical": 1760
-                }
-              ],
-              "mode_change_frames": 2,
-              "saturation_lux_seconds": 0.4,
-              "shutter": {
-                "closing_delay_seconds": [
-                  [
-                    2.8284271247461903,
-                    0.002822613636363636
-                  ],
-                  [
-                    3.174802103936399,
-                    0.0028564999999999997
-                  ],
-                  [
-                    3.5635948725613575,
-                    0.0028807045454545452
-                  ],
-                  [
-                    4.000000000000001,
-                    0.0028903863636363636
-                  ],
-                  [
-                    4.489848193237492,
-                    0.002919431818181818
-                  ],
-                  [
-                    5.039684199579493,
-                    0.0029387954545454543
-                  ],
-                  [
-                    5.656854249492381,
-                    0.0029484772727272728
-                  ],
-                  [
-                    6.349604207872798,
-                    0.002967840909090909
-                  ],
-                  [
-                    7.127189745122715,
-                    0.0029920454545454543
-                  ],
-                  [
-                    8.000000000000002,
-                    0.0029968863636363635
-                  ],
-                  [
-                    8.979696386474986,
-                    0.0030017272727272727
-                  ],
-                  [
-                    10.079368399158986,
-                    0.0030259318181818182
-                  ],
-                  [
-                    11.313708498984761,
-                    0.0030549772727272726
-                  ],
-                  [
-                    12.699208415745595,
-                    0.003079181818181818
-                  ],
-                  [
-                    14.25437949024543,
-                    0.0031227499999999997
-                  ],
-                  [
-                    16.000000000000004,
-                    0.0031663181818181816
-                  ]
-                ]
-              },
-              "shutter_output": 0,
-              "ticks_per_second": 12000000,
-              "white_luminance": 10000.0,
-              "live_view": {
-                "reference_white": [
-                  606,
-                  302,
-                  540
-                ],
-                "saturation_lux_seconds": 1.0
-              }
-            },
-            "reference_white": [
-              612,
-              302,
-              545
-            ],
-            "sensor_cfa": [
-              1,
-              1,
-              2,
-              1,
-              1,
-              0,
-              1,
-              1,
-              0,
-              1,
-              1,
-              2,
-              0,
-              2,
-              1,
-              2,
-              0,
-              1,
-              1,
-              1,
-              0,
-              1,
-              1,
-              2,
-              1,
-              1,
-              2,
-              1,
-              1,
-              0,
-              2,
-              0,
-              1,
-              0,
-              2,
+            "pwic_address": 48,
+            "pwic_modes": [
               1
             ],
-            "sensor_image_area": [
-              0,
-              62,
-              4992,
-              3300
-            ]
-          },
-          "fe80_processing": {
-            "arithmetic": "thresholded-horizontal-energy-unmeasured",
-            "basis": "Declared catalog input.",
-            "options": {
-              "irq": 88,
-              "pixels_per_tick": 64
-            }
-          },
-          "focus_axis": {
-            "infinity_position": -300,
-            "output": "lens_focus",
-            "steps_per_mm": 267.0
-          },
-          "iris_mechanics": {
-            "boundary": "end_stop",
-            "travel_limits": [
-              -109,
-              0
-            ]
-          },
-          "iris_optics": {
-            "actuator": "bridge",
-            "output": "lens_aperture",
-            "positions": [
+            "pwic_read_prefixes": [
               [
-                -102.0,
-                2.0
-              ],
-              [
-                -78.0,
-                2.8284271247461903
-              ],
-              [
-                -66.0,
-                4.0
-              ],
-              [
-                -54.0,
-                5.656854249492381
-              ],
-              [
-                -42.0,
-                8.0
-              ],
-              [
-                -30.0,
-                11.313708498984761
-              ],
-              [
-                -11.0,
-                16.0
+                32,
+                "000000"
               ]
-            ]
-          },
-          "nd_filter": {
-            "basis": "Built-in 3 EV ND filter, a two-coil actuator on the lens unit output register 0xD400 (idle 0x054; insert coil bit 7 = 0xD4D4, remove coil bit 8 = 0xD554). X100T 1.11 parks it out at power-on and, with ND FILTER ON, swings it in for the exposure only; live view previews the ND digitally. Observed in the emulator; the 3 EV factor is the camera specification.",
-            "factor": 8.0,
-            "insert_mask": 128,
-            "output": "lens_nd",
-            "register": 54272,
-            "remove_mask": 256
-          },
-          "sensor_capture": {
-            "cfa_origin": [
-              0,
-              62
             ],
-            "dma_ticks": 153600,
-            "height": 3362,
-            "period_ticks": 1200000,
-            "width": 4992
-          }
-        },
-        "limits": [],
-        "pin_interrupts": [
-          {
-            "edge": "falling",
-            "outputs": [
-              {
-                "Core": {
-                  "core": 0,
-                  "line": 10
-                }
-              }
-            ],
-            "pin": {
-              "port": 0,
-              "pin": 2
-            }
-          },
-          {
-            "edge": "falling",
-            "outputs": [
-              {
-                "Core": {
-                  "core": 0,
-                  "line": 11
-                }
-              }
-            ],
-            "pin": {
-              "port": 0,
-              "pin": 3
-            }
-          }
-        ]
-      },
-      "x100t-rec-walkthrough": {
-        "control_bus_order": [
-          "device-0",
-          "device-1",
-          "device-2",
-          "device-3",
-          "device-4",
-          "device-5",
-          "device-6",
-          "device-7",
-          "device-8"
-        ],
-        "attachments": {
-          "serial_part": [
-            "mixed-width-dual-counter-lens"
-          ]
-        },
-        "card_contacts": {
-          "basis": "Declared catalog input.",
-          "detect": [
-            12,
-            7,
-            0
-          ],
-          "write_protect": [
-            12,
-            6,
-            1
-          ]
-        },
-        "controllers": {
-          "control_bus0": {
-            "profile": "declared-register-status-pair-latched-irq-unmeasured",
-            "sensor": {
-              "address": 28,
-              "basis": "Declared catalog input.",
-              "reply_model": "stationary-z-plus-1g"
-            },
-            "status_targets": [
-              {
-                "address": 68,
-                "basis": "Declared catalog input.",
-                "status_hex": "0000",
-                "writable_registers": [
-                  1,
-                  2,
-                  3,
-                  4,
-                  6
-                ],
-                "write_replies": [
-                  [
-                    2,
-                    32,
-                    "0001"
-                  ],
-                  [
-                    2,
-                    64,
-                    "0000"
-                  ]
-                ]
-              }
-            ],
-            "transfer_ticks": 4
-          },
-          "control_bus1": {
-            "basis": "Declared catalog input.",
-            "profile": "declared-bus1-register-replies-unmeasured",
-            "replies": {
-              "extra_registers": [
-                {
-                  "address": 10,
-                  "basis": "Bus1 chip 10, after the lens bridge (114) and the PWIC (48), as on the X70. X100T 1.11 addresses it in mode 9, e.g. entering playback, which stops without it. Registers and masks are the X70's declaration of the same chip, not measured on an X100T.",
-                  "modes": [
-                    1,
-                    9
-                  ],
-                  "values": [
-                    [
-                      2,
-                      0
-                    ],
-                    [
-                      5,
-                      0
-                    ],
-                    [
-                      7,
-                      0
-                    ],
-                    [
-                      8,
-                      0
-                    ],
-                    [
-                      9,
-                      0
-                    ],
-                    [
-                      10,
-                      0
-                    ],
-                    [
-                      11,
-                      0
-                    ],
-                    [
-                      12,
-                      0
-                    ],
-                    [
-                      13,
-                      0
-                    ],
-                    [
-                      14,
-                      0
-                    ],
-                    [
-                      16,
-                      0
-                    ],
-                    [
-                      17,
-                      0
-                    ],
-                    [
-                      18,
-                      0
-                    ],
-                    [
-                      19,
-                      0
-                    ]
-                  ],
-                  "write_masks": [
-                    [
-                      7,
-                      255
-                    ],
-                    [
-                      8,
-                      255
-                    ],
-                    [
-                      9,
-                      255
-                    ],
-                    [
-                      10,
-                      255
-                    ],
-                    [
-                      11,
-                      255
-                    ],
-                    [
-                      12,
-                      255
-                    ],
-                    [
-                      13,
-                      255
-                    ],
-                    [
-                      14,
-                      255
-                    ],
-                    [
-                      16,
-                      255
-                    ],
-                    [
-                      17,
-                      255
-                    ],
-                    [
-                      18,
-                      255
-                    ]
-                  ]
-                }
-              ],
-              "pwic_address": 48,
-              "pwic_modes": [
-                1
-              ],
-              "pwic_read_prefixes": [
-                [
-                  32,
-                  "000000"
-                ]
-              ],
-              "pwic_values": [
-                [
-                  1,
-                  0
-                ],
-                [
-                  2,
-                  0
-                ],
-                [
-                  4,
-                  0
-                ],
-                [
-                  5,
-                  0
-                ],
-                [
-                  6,
-                  0
-                ],
-                [
-                  7,
-                  0
-                ],
-                [
-                  8,
-                  0
-                ],
-                [
-                  9,
-                  0
-                ],
-                [
-                  11,
-                  0
-                ],
-                [
-                  14,
-                  0
-                ],
-                [
-                  32,
-                  128
-                ],
-                [
-                  97,
-                  0
-                ],
-                [
-                  98,
-                  0
-                ]
-              ],
-              "pwic_write_masks": [
-                [
-                  1,
-                  31
-                ],
-                [
-                  2,
-                  255
-                ],
-                [
-                  4,
-                  255
-                ],
-                [
-                  5,
-                  255
-                ],
-                [
-                  6,
-                  240
-                ],
-                [
-                  7,
-                  7
-                ],
-                [
-                  8,
-                  119
-                ],
-                [
-                  9,
-                  243
-                ],
-                [
-                  11,
-                  255
-                ],
-                [
-                  14,
-                  1
-                ],
-                [
-                  32,
-                  31
-                ],
-                [
-                  97,
-                  16
-                ],
-                [
-                  98,
-                  1
-                ]
-              ],
-              "register_address": 114,
-              "register_modes": [
-                1
-              ],
-              "register_values": [
-                [
-                  0,
-                  0
-                ],
-                [
-                  1,
-                  0
-                ],
-                [
-                  2,
-                  0
-                ],
-                [
-                  3,
-                  0
-                ]
-              ],
-              "register_write_masks": [
-                [
-                  0,
-                  255
-                ],
-                [
-                  1,
-                  255
-                ],
-                [
-                  2,
-                  255
-                ],
-                [
-                  3,
-                  31
-                ]
-              ]
-            },
-            "transfer_ticks": 4
-          },
-          "display_timing": {
-            "basis": "Declared catalog input.",
-            "frame_period_ticks": 400000,
-            "phase_profile": "declared-external-phase-clock-unmeasured",
-            "stop_delay_ticks": 2
-          },
-          "fe80": {
-            "basis": "Declared catalog input.",
-            "periods": [
-              12,
-              13,
-              16
-            ],
-            "upload_setup_phases": [
-              "routed"
-            ]
-          }
-        },
-        "counter_feedback": "declared-lens-step-feedback-unmeasured",
-        "dram_basis": "Declared catalog input.",
-        "encoders": [
-          {
-            "name": "command_dial",
-            "options": {
-              "phase_ticks": 120000,
-              "pins": [
-                {
-                  "port": 3,
-                  "pin": 8
-                },
-                {
-                  "port": 3,
-                  "pin": 9
-                }
-              ],
-              "rest_phase": 3
-            }
-          },
-          {
-            "adc": "adc",
-            "name": "focus_ring",
-            "options": {
-              "phase_ticks": 120000,
-              "outputs": {
-                "kind": "adc",
-                "channels": [
-                  6,
-                  7
-                ],
-                "levels": [
-                  {
-                    "low": 500,
-                    "high": 1000
-                  },
-                  {
-                    "low": 500,
-                    "high": 1000
-                  }
-                ]
-              },
-              "rest_phase": 3
-            }
-          }
-        ],
-        "graph": {
-          "attachment_order": [
-            "bootcontrols",
-            "kernelinterrupts",
-            "nandcontroller",
-            "fujidecompressor",
-            "imagescaler",
-            "loadermemorydma",
-            "usbcontrol",
-            "powerdevices",
-            "audio",
-            "pulsetimer",
-            "lensfeedback",
-            "pulseoutputs",
-            "lensendpoint",
-            "spi2serial",
-            "controlbus",
-            "secondarycontrolbus",
-            "lensbridge",
-            "fe80control",
-            "inputprocessingcontrol",
-            "inputauxiliarycontrol",
-            "producercontrol",
-            "imageparametercontrol",
-            "imageworkcontrol",
-            "faceanalysiscontrol",
-            "afextractioncontrol",
-            "hdmisink",
-            "hdmistartup",
-            "outputcontrol",
-            "graphicsaccelerator",
-            "displayscanout",
-            "displaytiming",
-            "displayformatter",
-            "rawcapture",
-            "prefilter",
-            "rawstatistics",
-            "stillisp",
-            "imagewarp",
-            "imagetransfer",
-            "avccodec",
-            "jpegencoder",
-            "rawreadback",
-            "imagecombination"
-          ],
-          "construction_order": [
-            "bootcontrols",
-            "kernelinterrupts",
-            "nandcontroller",
-            "fujidecompressor",
-            "imagescaler",
-            "loadermemorydma",
-            "powerdevices",
-            "usbcontrol",
-            "audio",
-            "pulseoutputs",
-            "pulsetimer",
-            "lensfeedback",
-            "lensendpoint",
-            "spi2serial",
-            "controlbus",
-            "secondarycontrolbus",
-            "lensbridge",
-            "fe80control",
-            "inputprocessingcontrol",
-            "inputauxiliarycontrol",
-            "producercontrol",
-            "imageparametercontrol",
-            "imageworkcontrol",
-            "faceanalysiscontrol",
-            "afextractioncontrol",
-            "hdmisink",
-            "hdmistartup",
-            "outputcontrol",
-            "graphicsaccelerator",
-            "displayscanout",
-            "displaytiming",
-            "displayformatter",
-            "rawcapture",
-            "prefilter",
-            "rawstatistics",
-            "stillisp",
-            "imagewarp",
-            "imagetransfer",
-            "avccodec",
-            "jpegencoder",
-            "rawreadback",
-            "imagecombination"
-          ],
-          "devices": [
-            {
-              "kind": "BootControls",
-              "name": "bootcontrols",
-              "refs": {}
-            },
-            {
-              "kind": "KernelInterrupts",
-              "name": "kernelinterrupts",
-              "refs": {}
-            },
-            {
-              "kind": "NandController",
-              "name": "nandcontroller",
-              "refs": {}
-            },
-            {
-              "kind": "FujiDecompressor",
-              "name": "fujidecompressor",
-              "refs": {}
-            },
-            {
-              "boot_entries": [
-                "loader"
-              ],
-              "kind": "ImageScaler",
-              "name": "imagescaler",
-              "refs": {}
-            },
-            {
-              "kind": "LoaderMemoryDMA",
-              "name": "loadermemorydma",
-              "refs": {}
-            },
-            {
-              "kind": "USBControl",
-              "name": "usbcontrol",
-              "refs": {
-                "power": "powerdevices"
-              }
-            },
-            {
-              "kind": "PowerDevices",
-              "name": "powerdevices",
-              "refs": {}
-            },
-            {
-              "kind": "SerialAudioTransmitSink",
-              "model_choices": {
-                "models": {
-                  "declared-silent-stereo-pcm48000": {
-                    "dependencies": [],
-                    "kind": "SerialAudioReceiveSource",
-                    "refs": {}
-                  }
-                },
-                "option": "audio_input_profile"
-              },
-              "name": "audio",
-              "refs": {}
-            },
-            {
-              "kind": "PulseOutputs",
-              "name": "pulseoutputs",
-              "refs": {}
-            },
-            {
-              "kind": "QuadratureCounters",
-              "name": "lensfeedback",
-              "refs": {
-                "pulse_source": "pulseoutputs"
-              }
-            },
-            {
-              "kind": "MixedWidthLensController",
-              "name": "lensendpoint",
-              "refs": {
-                "encoder_source": "lensfeedback",
-                "gpio_source": "bootcontrols",
-                "pulse_source": "pulseoutputs"
-              }
-            },
-            {
-              "kind": "SPI2Serial",
-              "name": "spi2serial",
-              "refs": {
-                "endpoint": "lensendpoint"
-              }
-            },
-            {
-              "kind": "ControlBus",
-              "name": "controlbus",
-              "refs": {}
-            },
-            {
-              "kind": "SecondaryControlBus",
-              "name": "secondarycontrolbus",
-              "refs": {
-                "power": "powerdevices"
-              }
-            },
-            {
-              "kind": "FE80Control",
-              "name": "fe80control",
-              "refs": {}
-            },
-            {
-              "kind": "InputProcessingControl",
-              "name": "inputprocessingcontrol",
-              "refs": {}
-            },
-            {
-              "kind": "InputAuxiliaryControl",
-              "name": "inputauxiliarycontrol",
-              "refs": {}
-            },
-            {
-              "kind": "ProducerControl",
-              "name": "producercontrol",
-              "refs": {}
-            },
-            {
-              "kind": "ImageParameterControl",
-              "name": "imageparametercontrol",
-              "refs": {}
-            },
-            {
-              "kind": "ImageWorkControl",
-              "name": "imageworkcontrol",
-              "refs": {}
-            },
-            {
-              "kind": "FaceAnalysisControl",
-              "name": "faceanalysiscontrol",
-              "refs": {}
-            },
-            {
-              "kind": "AFExtractionControl",
-              "name": "afextractioncontrol",
-              "refs": {}
-            },
-            {
-              "kind": "HDMISink",
-              "name": "hdmisink",
-              "refs": {}
-            },
-            {
-              "kind": "HDMIStartup",
-              "name": "hdmistartup",
-              "refs": {
-                "sink": "hdmisink"
-              }
-            },
-            {
-              "kind": "OutputControl",
-              "name": "outputcontrol",
-              "refs": {}
-            },
-            {
-              "kind": "GraphicsAccelerator",
-              "name": "graphicsaccelerator",
-              "refs": {}
-            },
-            {
-              "kind": "DisplayScanout",
-              "name": "displayscanout",
-              "refs": {}
-            },
-            {
-              "kind": "DisplayTiming",
-              "name": "displaytiming",
-              "refs": {}
-            },
-            {
-              "kind": "DisplayFormatter",
-              "name": "displayformatter",
-              "refs": {}
-            },
-            {
-              "boot_entries": [
-                "loader"
-              ],
-              "kind": "X70SensorCaptureDMA",
-              "name": "rawcapture",
-              "refs": {
-                "input_controller": "inputprocessingcontrol"
-              }
-            },
-            {
-              "boot_entries": [
-                "rom",
-                "loader"
-              ],
-              "kind": "PrefilterControl",
-              "name": "prefilter",
-              "refs": {}
-            },
-            {
-              "boot_entries": [
-                "loader"
-              ],
-              "kind": "RawStatisticsControl",
-              "name": "rawstatistics",
-              "refs": {}
-            },
-            {
-              "boot_entries": [
-                "loader"
-              ],
-              "kind": "X70StillISPControl",
-              "name": "stillisp",
-              "refs": {}
-            },
-            {
-              "boot_entries": [
-                "loader"
-              ],
-              "kind": "ImageWarpControl",
-              "name": "imagewarp",
-              "refs": {}
-            },
-            {
-              "boot_entries": [
-                "loader"
-              ],
-              "kind": "ImageTransferControl",
-              "name": "imagetransfer",
-              "refs": {}
-            },
-            {
-              "boot_entries": [
-                "loader"
-              ],
-              "kind": "AvcCodecControl",
-              "name": "avccodec",
-              "refs": {}
-            },
-            {
-              "boot_entries": [
-                "loader"
-              ],
-              "kind": "ApproximateJPEGEncodeControl",
-              "name": "jpegencoder",
-              "refs": {
-                "stream_source": "imagewarp"
-              }
-            },
-            {
-              "kind": "PulseTimerControl",
-              "name": "pulsetimer",
-              "refs": {
-                "pulse_source": "pulseoutputs"
-              }
-            },
-            {
-              "kind": "MemoryReadback",
-              "name": "rawreadback",
-              "refs": {
-                "image_output": "imageworkcontrol",
-                "input_controller": "inputprocessingcontrol",
-                "parameters": "imageparametercontrol"
-              }
-            },
-            {
-              "kind": "ImageCombination",
-              "name": "imagecombination",
-              "refs": {}
-            },
-            {
-              "kind": "LensBridge",
-              "name": "lensbridge",
-              "refs": {
-                "bus": "secondarycontrolbus",
-                "pulse_source": "pulseoutputs"
-              }
-            }
-          ],
-          "optional_devices": [
-            "SDCardController",
-            "JPEGDecodeControl"
-          ]
-        },
-        "imaging": {
-          "af_extraction": {
-            "profile": "register-pdaf-packed12-aperture-sad-unmeasured"
-          },
-          "capture_color": {
-            "basis": "X70 X-Trans II capture colour (same sensor), still model without radiometric projection, as the X70 strict REC profile.",
-            "black": 0,
-            "full_scale": 16380,
-            "initial_rgb": [
-              128,
-              128,
-              128
-            ],
-            "processing_cfa": [
-              0,
-              2,
-              1,
-              2,
-              0,
-              1,
-              1,
-              1,
-              0,
-              1,
-              1,
-              2,
-              1,
-              1,
-              2,
-              1,
-              1,
-              0,
-              2,
-              0,
-              1,
-              0,
-              2,
-              1,
-              1,
-              1,
-              2,
-              1,
-              1,
-              0,
-              1,
-              1,
-              0,
-              1,
-              1,
-              2
-            ],
-            "reference_white": [
-              606,
-              302,
-              421
-            ],
-            "sensor_cfa": [
-              1,
-              1,
-              2,
-              1,
-              1,
-              0,
-              1,
-              1,
-              0,
-              1,
-              1,
-              2,
-              0,
-              2,
-              1,
-              2,
-              0,
-              1,
-              1,
-              1,
-              0,
-              1,
-              1,
-              2,
-              1,
-              1,
-              2,
-              1,
-              1,
-              0,
-              2,
-              0,
-              1,
-              0,
-              2,
-              1
-            ],
-            "sensor_image_area": [
-              0,
-              62,
-              4992,
-              3300
-            ]
-          },
-          "fe80_processing": {
-            "arithmetic": "thresholded-horizontal-energy-unmeasured",
-            "basis": "Declared catalog input.",
-            "options": {
-              "irq": 88,
-              "pixels_per_tick": 64
-            }
-          },
-          "focus_imaging": {
-            "basis": "The X70 strict focus model, sharp at -51 pulses: where X100T 1.11 rests the focus motor at REC (stock diagnostic overlay FOCUS_PLS -51). For strict REC boots and walkthroughs; the radiometric x100t-rec keeps lens defocus, iris and ND exposure for the browser.",
-            "contrast": {
-              "kind": "squared_horizontal_gradients",
-              "luma_bits": 8
-            },
-            "face_detector": {
-              "mode": "retained_words"
-            },
-            "input_clock_mode": "input_enable",
-            "memory_bytes_per_tick": 16,
-            "metering": "rgb_cell_means12",
-            "optics": {
-              "maximum_radius": 32,
-              "pulses_per_radius": 8,
-              "target_position": -51
-            },
-            "raster": {
-              "height": 853,
-              "stride": 4992,
-              "width": 2496
-            }
-          },
-          "iris_mechanics": {
-            "boundary": "end_stop",
-            "travel_limits": [
-              -109,
-              0
-            ]
-          },
-          "iris_optics": {
-            "actuator": "bridge",
-            "output": "lens_aperture",
-            "positions": [
+            "pwic_values": [
               [
-                -102.0,
-                2.0
-              ],
-              [
-                -78.0,
-                2.8284271247461903
-              ],
-              [
-                -66.0,
-                4.0
-              ],
-              [
-                -54.0,
-                5.656854249492381
-              ],
-              [
-                -42.0,
-                8.0
-              ],
-              [
-                -30.0,
-                11.313708498984761
-              ],
-              [
-                -11.0,
-                16.0
-              ]
-            ]
-          },
-          "sensor_capture": {
-            "cfa_origin": [
-              0,
-              62
-            ],
-            "dma_ticks": 153600,
-            "height": 3362,
-            "period_ticks": 1200000,
-            "width": 4992
-          }
-        },
-        "limits": [],
-        "pin_interrupts": [
-          {
-            "edge": "falling",
-            "outputs": [
-              {
-                "Core": {
-                  "core": 0,
-                  "line": 10
-                }
-              }
-            ],
-            "pin": {
-              "port": 0,
-              "pin": 2
-            }
-          },
-          {
-            "edge": "falling",
-            "outputs": [
-              {
-                "Core": {
-                  "core": 0,
-                  "line": 11
-                }
-              }
-            ],
-            "pin": {
-              "port": 0,
-              "pin": 3
-            }
-          }
-        ]
-      },
-      "x100t-service-transports": {
-        "control_bus_order": [
-          "device-0",
-          "device-1",
-          "device-2",
-          "device-3",
-          "device-4",
-          "device-5",
-          "device-6",
-          "device-7",
-          "device-8"
-        ],
-        "attachments": {
-          "serial_part": [
-            "mixed-width-dual-counter-lens"
-          ]
-        },
-        "card_contacts": {
-          "basis": "Declared catalog input.",
-          "detect": [
-            12,
-            7,
-            0
-          ],
-          "write_protect": [
-            12,
-            6,
-            1
-          ]
-        },
-        "controllers": {
-          "control_bus0": {
-            "profile": "declared-register-status-pair-latched-irq-unmeasured",
-            "sensor": {
-              "address": 28,
-              "basis": "Declared catalog input.",
-              "reply_model": "stationary-z-plus-1g"
-            },
-            "status_targets": [
-              {
-                "address": 68,
-                "basis": "Declared catalog input.",
-                "status_hex": "0000",
-                "writable_registers": [
-                  1,
-                  2,
-                  3,
-                  4,
-                  6
-                ],
-                "write_replies": [
-                  [
-                    2,
-                    32,
-                    "0001"
-                  ],
-                  [
-                    2,
-                    64,
-                    "0000"
-                  ]
-                ]
-              }
-            ],
-            "transfer_ticks": 4
-          },
-          "control_bus1": {
-            "basis": "Declared catalog input.",
-            "profile": "declared-bus1-register-replies-unmeasured",
-            "replies": {
-              "extra_registers": [
-                {
-                  "address": 10,
-                  "basis": "Bus1 chip 10, after the lens bridge (114) and the PWIC (48), as on the X70. X100T 1.11 addresses it in mode 9, e.g. entering playback, which stops without it. Registers and masks are the X70's declaration of the same chip, not measured on an X100T.",
-                  "modes": [
-                    1,
-                    9
-                  ],
-                  "values": [
-                    [
-                      2,
-                      0
-                    ],
-                    [
-                      5,
-                      0
-                    ],
-                    [
-                      7,
-                      0
-                    ],
-                    [
-                      8,
-                      0
-                    ],
-                    [
-                      9,
-                      0
-                    ],
-                    [
-                      10,
-                      0
-                    ],
-                    [
-                      11,
-                      0
-                    ],
-                    [
-                      12,
-                      0
-                    ],
-                    [
-                      13,
-                      0
-                    ],
-                    [
-                      14,
-                      0
-                    ],
-                    [
-                      16,
-                      0
-                    ],
-                    [
-                      17,
-                      0
-                    ],
-                    [
-                      18,
-                      0
-                    ],
-                    [
-                      19,
-                      0
-                    ]
-                  ],
-                  "write_masks": [
-                    [
-                      7,
-                      255
-                    ],
-                    [
-                      8,
-                      255
-                    ],
-                    [
-                      9,
-                      255
-                    ],
-                    [
-                      10,
-                      255
-                    ],
-                    [
-                      11,
-                      255
-                    ],
-                    [
-                      12,
-                      255
-                    ],
-                    [
-                      13,
-                      255
-                    ],
-                    [
-                      14,
-                      255
-                    ],
-                    [
-                      16,
-                      255
-                    ],
-                    [
-                      17,
-                      255
-                    ],
-                    [
-                      18,
-                      255
-                    ]
-                  ]
-                }
-              ],
-              "pwic_address": 48,
-              "pwic_modes": [
-                1
-              ],
-              "pwic_read_prefixes": [
-                [
-                  32,
-                  "000000"
-                ]
-              ],
-              "pwic_values": [
-                [
-                  1,
-                  0
-                ],
-                [
-                  2,
-                  0
-                ],
-                [
-                  4,
-                  0
-                ],
-                [
-                  5,
-                  0
-                ],
-                [
-                  6,
-                  0
-                ],
-                [
-                  7,
-                  0
-                ],
-                [
-                  8,
-                  0
-                ],
-                [
-                  9,
-                  0
-                ],
-                [
-                  11,
-                  0
-                ],
-                [
-                  14,
-                  0
-                ],
-                [
-                  32,
-                  128
-                ],
-                [
-                  97,
-                  0
-                ],
-                [
-                  98,
-                  0
-                ]
-              ],
-              "pwic_write_masks": [
-                [
-                  1,
-                  31
-                ],
-                [
-                  2,
-                  255
-                ],
-                [
-                  4,
-                  255
-                ],
-                [
-                  5,
-                  255
-                ],
-                [
-                  6,
-                  240
-                ],
-                [
-                  7,
-                  7
-                ],
-                [
-                  8,
-                  119
-                ],
-                [
-                  9,
-                  243
-                ],
-                [
-                  11,
-                  255
-                ],
-                [
-                  14,
-                  1
-                ],
-                [
-                  32,
-                  31
-                ],
-                [
-                  97,
-                  16
-                ],
-                [
-                  98,
-                  1
-                ]
-              ],
-              "register_address": 114,
-              "register_modes": [
-                1
-              ],
-              "register_values": [
-                [
-                  0,
-                  0
-                ],
-                [
-                  1,
-                  0
-                ],
-                [
-                  2,
-                  0
-                ],
-                [
-                  3,
-                  0
-                ]
-              ],
-              "register_write_masks": [
-                [
-                  0,
-                  255
-                ],
-                [
-                  1,
-                  255
-                ],
-                [
-                  2,
-                  255
-                ],
-                [
-                  3,
-                  31
-                ]
-              ]
-            },
-            "transfer_ticks": 4
-          },
-          "display_timing": {
-            "basis": "Declared catalog input.",
-            "frame_period_ticks": 400000,
-            "phase_profile": "declared-external-phase-clock-unmeasured",
-            "stop_delay_ticks": 2
-          },
-          "fe80": {
-            "basis": "Declared catalog input.",
-            "periods": [
-              12,
-              13,
-              16
-            ],
-            "upload_setup_phases": [
-              "routed"
-            ]
-          },
-          "usb": {
-            "basis": "Declared catalog input.",
-            "in_endpoints": [
-              [
-                128,
+                1,
                 0
               ],
               [
-                130,
+                2,
+                0
+              ],
+              [
+                4,
+                0
+              ],
+              [
+                5,
+                0
+              ],
+              [
+                6,
+                0
+              ],
+              [
+                7,
+                0
+              ],
+              [
+                8,
+                0
+              ],
+              [
+                9,
+                0
+              ],
+              [
+                11,
+                0
+              ],
+              [
+                14,
+                0
+              ],
+              [
+                32,
+                128
+              ],
+              [
+                97,
+                0
+              ],
+              [
+                98,
+                0
+              ]
+            ],
+            "pwic_write_masks": [
+              [
+                1,
+                31
+              ],
+              [
+                2,
+                255
+              ],
+              [
+                4,
+                255
+              ],
+              [
+                5,
+                255
+              ],
+              [
+                6,
+                240
+              ],
+              [
+                7,
+                7
+              ],
+              [
+                8,
+                119
+              ],
+              [
+                9,
+                243
+              ],
+              [
+                11,
+                255
+              ],
+              [
+                14,
                 1
               ],
               [
-                131,
-                2
+                32,
+                31
+              ],
+              [
+                97,
+                16
+              ],
+              [
+                98,
+                1
               ]
             ],
-            "out_endpoints": [
+            "register_address": 114,
+            "register_modes": [
+              1
+            ],
+            "register_values": [
               [
                 0,
                 0
               ],
               [
                 1,
-                1
+                0
+              ],
+              [
+                2,
+                0
+              ],
+              [
+                3,
+                0
               ]
             ],
-            "packet_bytes": 64,
-            "transfer_ticks": 4
-          }
+            "register_write_masks": [
+              [
+                0,
+                255
+              ],
+              [
+                1,
+                255
+              ],
+              [
+                2,
+                255
+              ],
+              [
+                3,
+                31
+              ]
+            ]
+          },
+          "transfer_ticks": 4
         },
-        "counter_feedback": "declared-lens-step-feedback-unmeasured",
-        "dram_basis": "Declared catalog input.",
-        "graph": {
-          "attachment_order": [
-            "bootcontrols",
-            "kernelinterrupts",
-            "nandcontroller",
-            "fujidecompressor",
-            "loadermemorydma",
-            "usbcontrol",
-            "powerdevices",
-            "audio",
-            "lensfeedback",
-            "pulseoutputs",
-            "lensendpoint",
-            "spi2serial",
-            "controlbus",
-            "secondarycontrolbus",
-            "lensbridge",
-            "fe80control",
-            "inputprocessingcontrol",
-            "inputauxiliarycontrol",
-            "producercontrol",
-            "imageparametercontrol",
-            "imageworkcontrol",
-            "faceanalysiscontrol",
-            "hdmisink",
-            "hdmistartup",
-            "outputcontrol",
-            "graphicsaccelerator",
-            "displayscanout",
-            "displaytiming",
-            "displayformatter"
+        "display_timing": {
+          "basis": "Declared catalog input.",
+          "frame_period_ticks": 400000,
+          "phase_profile": "declared-external-phase-clock-unmeasured",
+          "stop_delay_ticks": 2
+        },
+        "fe80": {
+          "basis": "Declared catalog input.",
+          "periods": [
+            12,
+            13,
+            16
           ],
-          "construction_order": [
-            "bootcontrols",
-            "kernelinterrupts",
-            "nandcontroller",
-            "fujidecompressor",
-            "loadermemorydma",
-            "powerdevices",
-            "usbcontrol",
-            "audio",
-            "pulseoutputs",
-            "lensfeedback",
-            "lensendpoint",
-            "spi2serial",
-            "controlbus",
-            "secondarycontrolbus",
-            "lensbridge",
-            "fe80control",
-            "inputprocessingcontrol",
-            "inputauxiliarycontrol",
-            "producercontrol",
-            "imageparametercontrol",
-            "imageworkcontrol",
-            "faceanalysiscontrol",
-            "hdmisink",
-            "hdmistartup",
-            "outputcontrol",
-            "graphicsaccelerator",
-            "displayscanout",
-            "displaytiming",
-            "displayformatter"
-          ],
-          "devices": [
-            {
-              "kind": "BootControls",
-              "name": "bootcontrols",
-              "refs": {}
-            },
-            {
-              "kind": "KernelInterrupts",
-              "name": "kernelinterrupts",
-              "refs": {}
-            },
-            {
-              "kind": "NandController",
-              "name": "nandcontroller",
-              "refs": {}
-            },
-            {
-              "kind": "FujiDecompressor",
-              "name": "fujidecompressor",
-              "refs": {}
-            },
-            {
-              "kind": "LoaderMemoryDMA",
-              "name": "loadermemorydma",
-              "refs": {}
-            },
-            {
-              "kind": "USBControl",
-              "name": "usbcontrol",
-              "refs": {
-                "power": "powerdevices"
-              }
-            },
-            {
-              "kind": "PowerDevices",
-              "name": "powerdevices",
-              "refs": {}
-            },
-            {
-              "kind": "SerialAudioTransmitSink",
-              "name": "audio",
-              "refs": {}
-            },
-            {
-              "kind": "PulseOutputs",
-              "name": "pulseoutputs",
-              "refs": {}
-            },
-            {
-              "kind": "QuadratureCounters",
-              "name": "lensfeedback",
-              "refs": {
-                "pulse_source": "pulseoutputs"
-              }
-            },
-            {
-              "kind": "MixedWidthLensController",
-              "name": "lensendpoint",
-              "refs": {
-                "encoder_source": "lensfeedback",
-                "gpio_source": "bootcontrols",
-                "pulse_source": "pulseoutputs"
-              }
-            },
-            {
-              "kind": "SPI2Serial",
-              "name": "spi2serial",
-              "refs": {
-                "endpoint": "lensendpoint"
-              }
-            },
-            {
-              "kind": "ControlBus",
-              "name": "controlbus",
-              "refs": {}
-            },
-            {
-              "kind": "SecondaryControlBus",
-              "name": "secondarycontrolbus",
-              "refs": {
-                "power": "powerdevices"
-              }
-            },
-            {
-              "kind": "FE80Control",
-              "name": "fe80control",
-              "refs": {}
-            },
-            {
-              "kind": "InputProcessingControl",
-              "name": "inputprocessingcontrol",
-              "refs": {}
-            },
-            {
-              "kind": "InputAuxiliaryControl",
-              "name": "inputauxiliarycontrol",
-              "refs": {}
-            },
-            {
-              "kind": "ProducerControl",
-              "name": "producercontrol",
-              "refs": {}
-            },
-            {
-              "kind": "ImageParameterControl",
-              "name": "imageparametercontrol",
-              "refs": {}
-            },
-            {
-              "kind": "ImageWorkControl",
-              "name": "imageworkcontrol",
-              "refs": {}
-            },
-            {
-              "kind": "FaceAnalysisControl",
-              "name": "faceanalysiscontrol",
-              "refs": {}
-            },
-            {
-              "kind": "HDMISink",
-              "name": "hdmisink",
-              "refs": {}
-            },
-            {
-              "kind": "HDMIStartup",
-              "name": "hdmistartup",
-              "refs": {
-                "sink": "hdmisink"
-              }
-            },
-            {
-              "kind": "OutputControl",
-              "name": "outputcontrol",
-              "refs": {}
-            },
-            {
-              "kind": "GraphicsAccelerator",
-              "name": "graphicsaccelerator",
-              "refs": {}
-            },
-            {
-              "kind": "DisplayScanout",
-              "name": "displayscanout",
-              "refs": {}
-            },
-            {
-              "kind": "DisplayTiming",
-              "name": "displaytiming",
-              "refs": {}
-            },
-            {
-              "kind": "DisplayFormatter",
-              "name": "displayformatter",
-              "refs": {}
-            },
-            {
-              "kind": "LensBridge",
-              "name": "lensbridge",
-              "refs": {
-                "bus": "secondarycontrolbus",
-                "pulse_source": "pulseoutputs"
-              }
-            }
+          "upload_setup_phases": [
+            "routed"
           ]
         },
-        "imaging": {
-          "fe80_processing": {
-            "arithmetic": "thresholded-horizontal-energy-unmeasured",
-            "basis": "Declared catalog input.",
-            "options": {
-              "irq": 88,
-              "pixels_per_tick": 64
-            }
-          },
-          "focus_imaging": {
-            "basis": "Declared catalog input.",
-            "contrast": {
-              "kind": "squared_horizontal_gradients",
-              "luma_bits": 12
-            },
-            "face_detector": {
-              "mode": "retained_words"
-            },
-            "frame_phase": 0,
-            "input_clock_mode": "source_mask",
-            "input_period_ticks": 200000,
-            "memory_bytes_per_tick": 16,
-            "metering": "rgb_cell_means12",
-            "optics": {
-              "maximum_radius": 32,
-              "pulses_per_radius": 16,
-              "target_position": 0
-            },
-            "raster": {
-              "height": 853,
-              "stride": 4992,
-              "width": 2496
-            },
-            "statistics_pixels_per_tick": 64
+        "usb": {
+          "basis": "Declared catalog input.",
+          "in_endpoints": [
+            [
+              128,
+              0
+            ],
+            [
+              130,
+              1
+            ],
+            [
+              131,
+              2
+            ]
+          ],
+          "out_endpoints": [
+            [
+              0,
+              0
+            ],
+            [
+              1,
+              1
+            ]
+          ],
+          "packet_bytes": 64,
+          "transfer_ticks": 4
+        }
+      },
+      "counter_feedback": "declared-lens-step-feedback-unmeasured",
+      "dram_basis": "Declared catalog input.",
+      "encoders": [
+        {
+          "name": "command_dial",
+          "options": {
+            "phase_ticks": 120000,
+            "pins": [
+              {
+                "port": 3,
+                "pin": 8
+              },
+              {
+                "port": 3,
+                "pin": 9
+              }
+            ],
+            "rest_phase": 3
           }
         },
-        "limits": [],
-        "pin_interrupts": [
-          {
-            "edge": "falling",
-            "outputs": [
-              {
-                "Core": {
-                  "core": 0,
-                  "line": 10
+        {
+          "adc": "adc",
+          "name": "focus_ring",
+          "options": {
+            "phase_ticks": 120000,
+            "outputs": {
+              "kind": "adc",
+              "channels": [
+                6,
+                7
+              ],
+              "levels": [
+                {
+                  "low": 500,
+                  "high": 1000
+                },
+                {
+                  "low": 500,
+                  "high": 1000
                 }
-              }
+              ]
+            },
+            "rest_phase": 3
+          }
+        }
+      ],
+      "graph": {
+        "attachment_order": [
+          "bootcontrols",
+          "kernelinterrupts",
+          "nandcontroller",
+          "fujidecompressor",
+          "imagescaler",
+          "loadermemorydma",
+          "usbcontrol",
+          "powerdevices",
+          "audio",
+          "pulsetimer",
+          "lensfeedback",
+          "pulseoutputs",
+          "lensendpoint",
+          "spi2serial",
+          "controlbus",
+          "secondarycontrolbus",
+          "lensbridge",
+          "fe80control",
+          "inputprocessingcontrol",
+          "inputauxiliarycontrol",
+          "producercontrol",
+          "imageparametercontrol",
+          "imageworkcontrol",
+          "faceanalysiscontrol",
+          "afextractioncontrol",
+          "hdmisink",
+          "hdmistartup",
+          "outputcontrol",
+          "graphicsaccelerator",
+          "displayscanout",
+          "displaytiming",
+          "displayformatter",
+          "rawcapture",
+          "prefilter",
+          "rawstatistics",
+          "stillisp",
+          "imagewarp",
+          "imagetransfer",
+          "avccodec",
+          "jpegencoder",
+          "rawreadback",
+          "imagecombination"
+        ],
+        "construction_order": [
+          "bootcontrols",
+          "kernelinterrupts",
+          "nandcontroller",
+          "fujidecompressor",
+          "imagescaler",
+          "loadermemorydma",
+          "powerdevices",
+          "usbcontrol",
+          "audio",
+          "pulseoutputs",
+          "pulsetimer",
+          "lensfeedback",
+          "lensendpoint",
+          "spi2serial",
+          "controlbus",
+          "secondarycontrolbus",
+          "lensbridge",
+          "fe80control",
+          "inputprocessingcontrol",
+          "inputauxiliarycontrol",
+          "producercontrol",
+          "imageparametercontrol",
+          "imageworkcontrol",
+          "faceanalysiscontrol",
+          "afextractioncontrol",
+          "hdmisink",
+          "hdmistartup",
+          "outputcontrol",
+          "graphicsaccelerator",
+          "displayscanout",
+          "displaytiming",
+          "displayformatter",
+          "rawcapture",
+          "prefilter",
+          "rawstatistics",
+          "stillisp",
+          "imagewarp",
+          "imagetransfer",
+          "avccodec",
+          "jpegencoder",
+          "rawreadback",
+          "imagecombination"
+        ],
+        "devices": [
+          {
+            "kind": "BootControls",
+            "name": "bootcontrols",
+            "refs": {}
+          },
+          {
+            "kind": "KernelInterrupts",
+            "name": "kernelinterrupts",
+            "refs": {}
+          },
+          {
+            "kind": "NandController",
+            "name": "nandcontroller",
+            "refs": {}
+          },
+          {
+            "kind": "FujiDecompressor",
+            "name": "fujidecompressor",
+            "refs": {}
+          },
+          {
+            "boot_entries": [
+              "loader"
             ],
-            "pin": {
-              "port": 0,
-              "pin": 2
+            "kind": "ImageScaler",
+            "name": "imagescaler",
+            "refs": {}
+          },
+          {
+            "kind": "LoaderMemoryDMA",
+            "name": "loadermemorydma",
+            "refs": {}
+          },
+          {
+            "kind": "USBControl",
+            "name": "usbcontrol",
+            "refs": {
+              "power": "powerdevices"
             }
           },
           {
-            "edge": "falling",
-            "outputs": [
-              {
-                "Core": {
-                  "core": 0,
-                  "line": 11
+            "kind": "PowerDevices",
+            "name": "powerdevices",
+            "refs": {}
+          },
+          {
+            "kind": "SerialAudioTransmitSink",
+            "model_choices": {
+              "models": {
+                "declared-silent-stereo-pcm48000": {
+                  "dependencies": [],
+                  "kind": "SerialAudioReceiveSource",
+                  "refs": {}
                 }
-              }
+              },
+              "option": "audio_input_profile"
+            },
+            "name": "audio",
+            "refs": {}
+          },
+          {
+            "kind": "PulseOutputs",
+            "name": "pulseoutputs",
+            "refs": {}
+          },
+          {
+            "kind": "QuadratureCounters",
+            "name": "lensfeedback",
+            "refs": {
+              "pulse_source": "pulseoutputs"
+            }
+          },
+          {
+            "kind": "MixedWidthLensController",
+            "name": "lensendpoint",
+            "refs": {
+              "encoder_source": "lensfeedback",
+              "gpio_source": "bootcontrols",
+              "pulse_source": "pulseoutputs"
+            }
+          },
+          {
+            "kind": "SPI2Serial",
+            "name": "spi2serial",
+            "refs": {
+              "endpoint": "lensendpoint"
+            }
+          },
+          {
+            "kind": "ControlBus",
+            "name": "controlbus",
+            "refs": {}
+          },
+          {
+            "kind": "SecondaryControlBus",
+            "name": "secondarycontrolbus",
+            "refs": {
+              "power": "powerdevices"
+            }
+          },
+          {
+            "kind": "FE80Control",
+            "name": "fe80control",
+            "refs": {}
+          },
+          {
+            "kind": "InputProcessingControl",
+            "name": "inputprocessingcontrol",
+            "refs": {}
+          },
+          {
+            "kind": "InputAuxiliaryControl",
+            "name": "inputauxiliarycontrol",
+            "refs": {}
+          },
+          {
+            "kind": "ProducerControl",
+            "name": "producercontrol",
+            "refs": {}
+          },
+          {
+            "kind": "ImageParameterControl",
+            "name": "imageparametercontrol",
+            "refs": {}
+          },
+          {
+            "kind": "ImageWorkControl",
+            "name": "imageworkcontrol",
+            "refs": {}
+          },
+          {
+            "kind": "FaceAnalysisControl",
+            "name": "faceanalysiscontrol",
+            "refs": {}
+          },
+          {
+            "kind": "AFExtractionControl",
+            "name": "afextractioncontrol",
+            "refs": {}
+          },
+          {
+            "kind": "HDMISink",
+            "name": "hdmisink",
+            "refs": {}
+          },
+          {
+            "kind": "HDMIStartup",
+            "name": "hdmistartup",
+            "refs": {
+              "sink": "hdmisink"
+            }
+          },
+          {
+            "kind": "OutputControl",
+            "name": "outputcontrol",
+            "refs": {}
+          },
+          {
+            "kind": "GraphicsAccelerator",
+            "name": "graphicsaccelerator",
+            "refs": {}
+          },
+          {
+            "kind": "DisplayScanout",
+            "name": "displayscanout",
+            "refs": {}
+          },
+          {
+            "kind": "DisplayTiming",
+            "name": "displaytiming",
+            "refs": {}
+          },
+          {
+            "kind": "DisplayFormatter",
+            "name": "displayformatter",
+            "refs": {}
+          },
+          {
+            "boot_entries": [
+              "loader"
             ],
-            "pin": {
-              "port": 0,
-              "pin": 3
+            "kind": "X70SensorCaptureDMA",
+            "name": "rawcapture",
+            "refs": {
+              "input_controller": "inputprocessingcontrol"
+            }
+          },
+          {
+            "boot_entries": [
+              "rom",
+              "loader"
+            ],
+            "kind": "PrefilterControl",
+            "name": "prefilter",
+            "refs": {}
+          },
+          {
+            "boot_entries": [
+              "loader"
+            ],
+            "kind": "RawStatisticsControl",
+            "name": "rawstatistics",
+            "refs": {}
+          },
+          {
+            "boot_entries": [
+              "loader"
+            ],
+            "kind": "X70StillISPControl",
+            "name": "stillisp",
+            "refs": {}
+          },
+          {
+            "boot_entries": [
+              "loader"
+            ],
+            "kind": "ImageWarpControl",
+            "name": "imagewarp",
+            "refs": {}
+          },
+          {
+            "boot_entries": [
+              "loader"
+            ],
+            "kind": "ImageTransferControl",
+            "name": "imagetransfer",
+            "refs": {}
+          },
+          {
+            "boot_entries": [
+              "loader"
+            ],
+            "kind": "AvcCodecControl",
+            "name": "avccodec",
+            "refs": {}
+          },
+          {
+            "boot_entries": [
+              "loader"
+            ],
+            "kind": "ApproximateJPEGEncodeControl",
+            "name": "jpegencoder",
+            "refs": {
+              "stream_source": "imagewarp"
+            }
+          },
+          {
+            "kind": "PulseTimerControl",
+            "name": "pulsetimer",
+            "refs": {
+              "pulse_source": "pulseoutputs"
+            }
+          },
+          {
+            "kind": "MemoryReadback",
+            "name": "rawreadback",
+            "refs": {
+              "image_output": "imageworkcontrol",
+              "input_controller": "inputprocessingcontrol",
+              "parameters": "imageparametercontrol"
+            }
+          },
+          {
+            "kind": "ImageCombination",
+            "name": "imagecombination",
+            "refs": {}
+          },
+          {
+            "kind": "LensBridge",
+            "name": "lensbridge",
+            "refs": {
+              "bus": "secondarycontrolbus",
+              "pulse_source": "pulseoutputs"
             }
           }
+        ],
+        "optional_devices": [
+          "SDCardController",
+          "JPEGDecodeControl"
         ]
+      },
+      "imaging": {
+        "af_extraction": {
+          "profile": "register-pdaf-packed12-aperture-sad-unmeasured"
+        },
+        "capture_color": {
+          "basis": "X70 X-Trans II capture colour (same sensor), X100T 23 mm projection; reference white and saturation fitted on a grey scene under the X100T firmware white balance, not measured.",
+          "black": 0,
+          "full_scale": 16380,
+          "initial_rgb": [
+            128,
+            128,
+            128
+          ],
+          "processing_cfa": [
+            0,
+            2,
+            1,
+            2,
+            0,
+            1,
+            1,
+            1,
+            0,
+            1,
+            1,
+            2,
+            1,
+            1,
+            2,
+            1,
+            1,
+            0,
+            2,
+            0,
+            1,
+            0,
+            2,
+            1,
+            1,
+            1,
+            2,
+            1,
+            1,
+            0,
+            1,
+            1,
+            0,
+            1,
+            1,
+            2
+          ],
+          "radiometry": {
+            "pixel_clock_hz": 33000000,
+            "projection": {
+              "focal_length_mm": 23.0,
+              "focus": "lens_focus",
+              "relative_illumination": {
+                "radial-polynomial": {
+                  "r2": 0.651,
+                  "r4": 0.492
+                }
+              },
+              "sensor_width_mm": 23.6,
+              "subject_distance_mm": 2000.0
+            },
+            "rolling_references": [
+              {
+                "horizontal": 706,
+                "lines": 857,
+                "mode": 236,
+                "vertical": 9348
+              },
+              {
+                "horizontal": 734,
+                "lines": 1671,
+                "mode": 236,
+                "vertical": 1671
+              },
+              {
+                "horizontal": 737,
+                "lines": 820,
+                "mode": 236,
+                "vertical": 8955
+              },
+              {
+                "horizontal": 750,
+                "lines": 1760,
+                "mode": 236,
+                "vertical": 1760
+              }
+            ],
+            "mode_change_frames": 2,
+            "saturation_lux_seconds": 0.4,
+            "shutter": {
+              "closing_delay_seconds": [
+                [
+                  2.8284271247461903,
+                  0.002822613636363636
+                ],
+                [
+                  3.174802103936399,
+                  0.0028564999999999997
+                ],
+                [
+                  3.5635948725613575,
+                  0.0028807045454545452
+                ],
+                [
+                  4.000000000000001,
+                  0.0028903863636363636
+                ],
+                [
+                  4.489848193237492,
+                  0.002919431818181818
+                ],
+                [
+                  5.039684199579493,
+                  0.0029387954545454543
+                ],
+                [
+                  5.656854249492381,
+                  0.0029484772727272728
+                ],
+                [
+                  6.349604207872798,
+                  0.002967840909090909
+                ],
+                [
+                  7.127189745122715,
+                  0.0029920454545454543
+                ],
+                [
+                  8.000000000000002,
+                  0.0029968863636363635
+                ],
+                [
+                  8.979696386474986,
+                  0.0030017272727272727
+                ],
+                [
+                  10.079368399158986,
+                  0.0030259318181818182
+                ],
+                [
+                  11.313708498984761,
+                  0.0030549772727272726
+                ],
+                [
+                  12.699208415745595,
+                  0.003079181818181818
+                ],
+                [
+                  14.25437949024543,
+                  0.0031227499999999997
+                ],
+                [
+                  16.000000000000004,
+                  0.0031663181818181816
+                ]
+              ]
+            },
+            "shutter_output": 0,
+            "ticks_per_second": 12000000,
+            "white_luminance": 10000.0,
+            "live_view": {
+              "reference_white": [
+                606,
+                302,
+                540
+              ],
+              "saturation_lux_seconds": 1.0
+            }
+          },
+          "reference_white": [
+            612,
+            302,
+            545
+          ],
+          "sensor_cfa": [
+            1,
+            1,
+            2,
+            1,
+            1,
+            0,
+            1,
+            1,
+            0,
+            1,
+            1,
+            2,
+            0,
+            2,
+            1,
+            2,
+            0,
+            1,
+            1,
+            1,
+            0,
+            1,
+            1,
+            2,
+            1,
+            1,
+            2,
+            1,
+            1,
+            0,
+            2,
+            0,
+            1,
+            0,
+            2,
+            1
+          ],
+          "sensor_image_area": [
+            0,
+            62,
+            4992,
+            3300
+          ]
+        },
+        "fe80_processing": {
+          "arithmetic": "thresholded-horizontal-energy-unmeasured",
+          "basis": "Declared catalog input.",
+          "options": {
+            "irq": 88,
+            "pixels_per_tick": 64
+          }
+        },
+        "focus_axis": {
+          "infinity_position": -300,
+          "output": "lens_focus",
+          "steps_per_mm": 267.0
+        },
+        "focus_imaging": {
+          "basis": "The X70 strict focus model, sharp at -51 pulses: where X100T 1.11 rests the focus motor at REC (stock diagnostic overlay FOCUS_PLS -51). For strict REC boots and walkthroughs; the radiometric x100t-rec keeps lens defocus, iris and ND exposure for the browser.",
+          "contrast": {
+            "kind": "squared_horizontal_gradients",
+            "luma_bits": 8
+          },
+          "face_detector": {
+            "mode": "retained_words"
+          },
+          "frame_phase": 0,
+          "input_clock_mode": "input_enable",
+          "input_period_ticks": 200000,
+          "memory_bytes_per_tick": 16,
+          "metering": "rgb_cell_means12",
+          "optics": {
+            "maximum_radius": 32,
+            "pulses_per_radius": 8,
+            "target_position": -51
+          },
+          "raster": {
+            "height": 853,
+            "stride": 4992,
+            "width": 2496
+          },
+          "statistics_pixels_per_tick": 64
+        },
+        "iris_mechanics": {
+          "boundary": "end_stop",
+          "travel_limits": [
+            -109,
+            0
+          ]
+        },
+        "iris_optics": {
+          "actuator": "bridge",
+          "output": "lens_aperture",
+          "positions": [
+            [
+              -102.0,
+              2.0
+            ],
+            [
+              -78.0,
+              2.8284271247461903
+            ],
+            [
+              -66.0,
+              4.0
+            ],
+            [
+              -54.0,
+              5.656854249492381
+            ],
+            [
+              -42.0,
+              8.0
+            ],
+            [
+              -30.0,
+              11.313708498984761
+            ],
+            [
+              -11.0,
+              16.0
+            ]
+          ]
+        },
+        "nd_filter": {
+          "basis": "Built-in 3 EV ND filter, a two-coil actuator on the lens unit output register 0xD400 (idle 0x054; insert coil bit 7 = 0xD4D4, remove coil bit 8 = 0xD554). X100T 1.11 parks it out at power-on and, with ND FILTER ON, swings it in for the exposure only; live view previews the ND digitally. Observed in the emulator; the 3 EV factor is the camera specification.",
+          "factor": 8.0,
+          "insert_mask": 128,
+          "output": "lens_nd",
+          "register": 54272,
+          "remove_mask": 256
+        },
+        "sensor_capture": {
+          "cfa_origin": [
+            0,
+            62
+          ],
+          "dma_ticks": 153600,
+          "height": 3362,
+          "period_ticks": 1200000,
+          "width": 4992
+        }
+      },
+      "limits": [],
+      "pin_interrupts": [
+        {
+          "edge": "falling",
+          "outputs": [
+            {
+              "Core": {
+                "core": 0,
+                "line": 10
+              }
+            }
+          ],
+          "pin": {
+            "port": 0,
+            "pin": 2
+          }
+        },
+        {
+          "edge": "falling",
+          "outputs": [
+            {
+              "Core": {
+                "core": 0,
+                "line": 11
+              }
+            }
+          ],
+          "pin": {
+            "port": 0,
+            "pin": 3
+          }
+        }
+      ]
+    },
+    "reset_inputs": {
+      "autofocus_gate": {
+        "card": {
+          "sd_card_format": {
+            "filesystem": "fat32",
+            "label": "CAMERA",
+            "partition_start": 8192,
+            "sectors_per_cluster": 64
+          },
+          "sd_card_present": true,
+          "sd_card_profile": "declared-blank-sdhc-default-speed-unmeasured",
+          "sd_card_sectors": 16777216
+        },
+        "completion_hold_ticks": 1200000,
+        "control_overrides": {},
+        "firmwares": {
+          "x100t-111": {
+            "code_witnesses": [
+              {
+                "bytes": 96,
+                "address": 17888516,
+                "sha256": "e6f915a1c9fba60ca8132e6114739ee9b8ffb0fcc7cd1b43f3be2511b67034b0"
+              }
+            ],
+            "complete_state": 8,
+            "diagnostics": [
+              {
+                "address": 24619892,
+                "name": "target_position",
+                "size": 2
+              },
+              {
+                "address": 24619920,
+                "name": "target_correction",
+                "size": 2
+              },
+              {
+                "address": 24619922,
+                "name": "direction_correction",
+                "size": 2
+              }
+            ],
+            "primary_states": 23249112,
+            "rec_ui": 3,
+            "sample_slots": [
+              23242404,
+              23242452
+            ],
+            "system": 13254596,
+            "ui": 13336052
+          }
+        },
+        "first_boot_instructions": 100000000,
+        "key_hold_ticks": 2400000,
+        "key_release_ticks": 6000000,
+        "restart_instructions": 120000000,
+        "scan_instructions": 80000000,
+        "scene_settle_ticks": 1200000,
+        "setup_keys": [
+          "EXE_M",
+          "EXE_M"
+        ],
+        "shutter": {
+          "active_level": 0,
+          "pin": 2,
+          "port": 0
+        }
+      },
+      "execution_scope": "offline-boot-development",
+      "inputs": {
+        "gpio": {
+          "gpio_inputs": {
+            "0": 3116,
+            "11": 0,
+            "12": 128,
+            "2": 6656,
+            "3": 841,
+            "4": 32,
+            "5": 2560
+          },
+          "profile_name": "Synthetic X100T: FUNCTION, DRIVE, PLAY, VIEW and EVF/OVF lever contacts released; remaining lines borrowed. AF-S GPIO3.6=1/3.7=0."
+        },
+        "mcu_packet_hex": "00000000d00700ff008000040000aafc",
+        "power": {
+          "additional_panels": [
+            {
+              "basis": "Hybrid viewfinder EVF panel: when VIEW MODE or the eye sensor selects the viewfinder, X100T 1.11 programs SPI1 control 0xe0 / configuration 0x30 with GPIO 11.1 low, as FujiMod's X100S session declares; its scanout is output 0 (1024x768). The second select line, if any, is not established.",
+              "selection": [
+                [
+                  11,
+                  1,
+                  0
+                ]
+              ],
+              "transport": [
+                224,
+                48
+              ]
+            }
+          ],
+          "adc_samples": [
+            0,
+            0,
+            1023,
+            63,
+            534,
+            640,
+            512,
+            825,
+            1023,
+            1023,
+            0,
+            0
+          ],
+          "boot_reply": 0,
+          "panel_contract": [
+            [
+              131296,
+              32
+            ],
+            [
+              11,
+              3,
+              0,
+              12,
+              3,
+              1
+            ],
+            [
+              16,
+              null,
+              null
+            ],
+            1
+          ],
+          "profile_name": "Synthetic boot reason0; ADC8=1023 releases rear keys; ADC9=1023 aperture AUTO; remaining ADC levels borrowed.",
+          "spi0_input_profile": "absent-hot-shoe-flash-fixed-low-miso",
+          "spi_status_registers": [
+            [
+              9,
+              96
+            ]
+          ]
+        }
       }
     }
   },

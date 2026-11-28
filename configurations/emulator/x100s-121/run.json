@@ -5,11 +5,7 @@
   "purpose": "rom_boot",
   "body_id": "x100s",
   "firmware_id": "x100s-121",
-  "start": {
-    "kind": "rom"
-  },
   "execution": null,
-  "inputs": null,
   "scene": null,
   "overlays": []
 }

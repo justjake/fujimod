@@ -575,10 +575,10 @@ pub fn plan(library: &Library, request: &Request) -> Result<Plan, OpenError> {
         preset.factory_options.face_result_profile = Some(profile);
     }
     if path == StartupPath::Exr2 && !request.settings.is_empty() {
-        let configuration = &mut resolved.configuration;
-        let settings = match configuration.inputs.as_mut() {
+        let settings = match resolved.inputs.as_mut() {
             Some(RunInputs::Exr2(inputs)) => inputs.settings.as_mut(),
-            _ => configuration
+            _ => resolved
+                .configuration
                 .preset
                 .as_mut()
                 .and_then(|preset| preset.settings.as_mut()),
@@ -1308,7 +1308,7 @@ pub fn settings_camera(
     library: &Library,
     resolved: &ResolvedConfiguration,
 ) -> Result<Option<PathBuf>, OpenError> {
-    let camera = match resolved.configuration.inputs.as_ref() {
+    let camera = match resolved.inputs.as_ref() {
         Some(RunInputs::Exr2(inputs)) => inputs
             .settings
             .as_ref()

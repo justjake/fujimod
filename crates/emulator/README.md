@@ -101,8 +101,8 @@ Rust callers can open an XP5 board through
 graph, explicit device windows, interrupt state, A-profile setup, command-dial
 encoders, device resources, and initial memory images. The function builds the
 same `board::factory::Graph`, strict device bus and `fujimod_emulator_session::Session` used by
-the rest of the emulator. `xp5_device_windows` converts a selected SoC
-hardware profile to device windows; callers supply any run-specific device
+the rest of the emulator. `xp5_device_windows` converts the SoC's blocks
+and the body's hardware to device windows; callers supply any run-specific device
 options and firmware bytes.
 
 For catalog-backed startup facts, `xp5_startup_from_profile` converts a

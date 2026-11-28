@@ -335,7 +335,7 @@ mod tests {
             fujimod_catalog_resolution::ResolvedConfiguration::with_overlays("xh2s-730", &[])
                 .unwrap();
         assert_eq!(
-            config.configuration.start,
+            config.start,
             fujimod_catalog_configuration::RunStart::Setup
         );
         let handoff = SetupHandoff::for_firmware("xh2s-730").unwrap().unwrap();

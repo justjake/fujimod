@@ -112,11 +112,7 @@
       "frequency_hz": 48000000
     }
   ],
-  "hardware": {
-    "profiles": {
-      "xp5": {}
-    }
-  },
+  "hardware": {},
   "mappings": [
     {
       "id": "companion-map-0",

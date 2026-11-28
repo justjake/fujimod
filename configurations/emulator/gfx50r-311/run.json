@@ -5,19 +5,10 @@
   "purpose": "rom_boot",
   "body_id": "gfx50r",
   "firmware_id": "gfx50r-311",
-  "start": {
-    "kind": "loader"
-  },
   "execution": null,
-  "inputs": null,
   "scene": null,
   "overlays": [],
   "preset": {
-    "factory_options": {},
-    "hardware_selection": {
-      "soc_profile_id": "xpp",
-      "body_profile_id": "gfx50r-discovery"
-    },
-    "hardware_inputs_id": "gfx50r-discovery"
+    "factory_options": {}
   }
 }

@@ -60,7 +60,6 @@ pub struct Catalog {
     ips: Map<String, Value>,
     body: Value,
     firmware: Value,
-    configuration: Value,
     /// The read and standby gates of each image-sensor part the body installs, as
     /// `[register, mask]` pairs or null.
     image_sensors: Vec<Value>,
@@ -70,29 +69,14 @@ pub struct Catalog {
 impl Catalog {
     pub fn new(resolved: &ResolvedConfiguration) -> Result<Self, String> {
         let soc = serde_json::to_value(&resolved.reference.soc).map_err(|e| e.to_string())?;
-        let profile = resolved
-            .configuration
-            .preset
-            .as_ref()
-            .and_then(|preset| preset.hardware_selection.as_ref())
-            .and_then(|machine| {
-                resolved
-                    .reference
-                    .body
-                    .hardware
-                    .as_ref()?
-                    .profiles
-                    .get(&machine.body_profile_id)
-            });
-        let mut board = match profile {
-            Some(profile) => serde_json::to_value(profile).map_err(|e| e.to_string())?,
+        let mut board = match resolved.board() {
+            Some(board) => serde_json::to_value(board).map_err(|e| e.to_string())?,
             None => json!({}),
         };
-        // The run's reset inputs join the body profile, as the Python builder merges them.
-        if let Some(inputs) = resolved.hardware_inputs()? {
+        // The body's reset inputs join its board, as the Python builder merges them.
+        if let Some(inputs) = resolved.hardware_inputs() {
             let inputs = serde_json::to_value(inputs).map_err(|e| e.to_string())?;
-            if let (Some(board), Some(reset)) = (board.as_object_mut(), inputs["reset"].as_object())
-            {
+            if let (Some(board), Some(reset)) = (board.as_object_mut(), inputs.as_object()) {
                 board.extend(reset.clone());
             }
         }
@@ -139,8 +123,6 @@ impl Catalog {
         let body = serde_json::to_value(&resolved.reference.body).map_err(|e| e.to_string())?;
         let firmware =
             serde_json::to_value(&resolved.reference.firmware).map_err(|e| e.to_string())?;
-        let configuration =
-            serde_json::to_value(&resolved.configuration).map_err(|e| e.to_string())?;
         let image_sensors = resolved
             .reference
             .parts
@@ -168,7 +150,6 @@ impl Catalog {
             ips,
             body,
             firmware,
-            configuration,
             image_sensors,
             xp4_lens_link: xp4_lens_link(&resolved.reference)?,
             board,
@@ -293,10 +274,10 @@ impl Catalog {
     pub fn body_fields(&self) -> Result<Map<String, Value>, String> {
         let board = &self.board;
         let mut out = Map::new();
-        let ram = self.configuration["dram_address_space"]["limit_bytes"]
+        let ram = self.firmware["dram_address_space"]["limit_bytes"]
             .as_u64()
             .or_else(|| self.body["dram_bytes"].as_u64())
-            .ok_or("the run declares no DRAM size")?;
+            .ok_or("neither the body nor the firmware declares a DRAM size")?;
         out.insert("ram_size".into(), json!(ram));
         let mut labels = self.firmware["installation"]["entry_labels"]
             .as_object()

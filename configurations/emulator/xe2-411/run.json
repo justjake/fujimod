@@ -5,9 +5,6 @@
   "purpose": "rom_boot",
   "body_id": "xe2",
   "firmware_id": "xe2-411",
-  "start": {
-    "kind": "rom"
-  },
   "execution": {
     "mode": "strict",
     "engine": "unicorn",
@@ -17,19 +14,25 @@
       "denominator": 1
     }
   },
-  "inputs": null,
   "scene": {
     "kind": "exr2",
     "frame_period_ticks": 400000,
     "generated_assets": [
       {
         "id": "live_pixels",
-        "pattern": [64, 64, 128, 128],
+        "pattern": [
+          64,
+          64,
+          128,
+          128
+        ],
         "size": 691200
       },
       {
         "id": "live_statistics_0",
-        "pattern": [0],
+        "pattern": [
+          0
+        ],
         "size": 1024
       }
     ],
@@ -94,342 +97,11 @@
       }
     },
     "firmware_profile_id": "xe2-411",
-    "hardware_inputs_id": "xe2-rec",
-    "hardware_selection": {
-      "body_profile_id": "xe2-411-runtime"
-    },
-    "native_device_inputs": {
-      "acquisition_contacts": {
-        "kind": "contact-actuator",
-        "contacts": [
-          {
-            "pin": 9,
-            "port": 0
-          },
-          {
-            "pin": 6,
-            "port": 0
-          }
-        ],
-        "drive": [
-          {
-            "pin": 1,
-            "port": 1
-          },
-          {
-            "pin": 2,
-            "port": 1
-          }
-        ],
-        "initial_position": 0,
-        "positions": [
-          {
-            "contacts": [true, true],
-            "drive": 0
-          },
-          {
-            "contacts": [false, false],
-            "drive": 1
-          },
-          {
-            "contacts": [true, true],
-            "drive": 3
-          }
-        ],
-        "settle_ticks": 3000
-      },
-      "adc": {
-        "kind": "adc",
-        "conversion_ticks": 4,
-        "samples": [0, 0, 1023, 63, 534, 640, 512, 825, 1023, 1023, 0, 0]
-      },
-      "block98000": {
-        "kind": "block-98000",
-        "boot_source": 1,
-        "selection_reset": 0
-      },
-      "clocks": {
-        "kind": "clocks",
-        "output_settle_ticks": 2,
-        "reset_ready": true
-      },
-      "companion": {
-        "kind": "fe80-processing",
-        "irq": 88,
-        "pixels_per_tick": 64
-      },
-      "control_bus0": {
-        "kind": "i2c",
-        "modes": [1, 9],
-        "transfer_ticks": 4,
-        "profile": "declared-register-status-pair-latched-irq-unmeasured"
-      },
-      "control_bus1": {
-        "kind": "i2c",
-        "modes": [1, 9],
-        "transfer_ticks": 4,
-        "profile": "usbcharge-disconnected-pwic-startup-tagged"
-      },
-      "display_timing": {
-        "kind": "display-timing",
-        "mode": "external",
-        "frame_ticks": 400000,
-        "stop_ticks": 2,
-        "output_hold": true
-      },
-      "dram_controller": {
-        "kind": "dram"
-      },
-      "dram_phy": {
-        "kind": "dram-phy"
-      },
-      "encoder_command_dial": {
-        "kind": "encoder",
-        "phase_ticks": 120000,
-        "pins": [
-          {
-            "port": 3,
-            "pin": 8
-          },
-          {
-            "port": 3,
-            "pin": 9
-          }
-        ],
-        "rest_phase": 3
-      },
-      "graphics": {
-        "kind": "vector-gpu",
-        "ram_bytes": 536870912,
-        "max_fill_bytes": 67108864,
-        "max_copy_bytes": 67108864,
-        "max_clear_bytes": 67108864,
-        "bytes_per_tick": 16,
-        "copy_bytes_per_tick": 25,
-        "gles_base_ticks": 2544,
-        "gles_draw_ticks": 312,
-        "gles_filled_pixel_microticks": 158400,
-        "gles_blended_pixel_microticks": 114000,
-        "max_command_capture_bytes": 524288,
-        "copy_profile": "vg-32bpp-untile-unrotated",
-        "clear_profile": "declared-vg-ui-primitives-unmeasured"
-      },
-      "hdmi": {
-        "kind": "hdmi"
-      },
-      "hdmisink": {
-        "kind": "hdmi-sink",
-        "connected": false,
-        "edid": []
-      },
-      "image_output_0": {
-        "kind": "output-channel",
-        "stop_ticks": 2,
-        "clock": {
-          "kind": "fixed",
-          "ticks": 400000
-        },
-        "geometry": "skip_incomplete",
-        "diagnostic_reads": true
-      },
-      "image_output_1": {
-        "kind": "output-channel",
-        "stop_ticks": 2,
-        "clock": {
-          "kind": "fixed",
-          "ticks": 400000
-        },
-        "geometry": "skip_incomplete",
-        "diagnostic_reads": true
-      },
-      "irq0": {
-        "kind": "exr2-interrupt-controller",
-        "arbitration": "active-bitmap"
-      },
-      "irq1": {
-        "kind": "exr2-interrupt-controller",
-        "arbitration": "active-bitmap"
-      },
-      "live_frames": {
-        "kind": "external-frames",
-        "period_ticks": 400000
-      },
-      "lz": {
-        "kind": "lz",
-        "resize": "declared_packed_pyramid",
-        "resize_ticks": 50000
-      },
-      "memory_dma": {
-        "kind": "memory-dma"
-      },
-      "nand": {
-        "kind": "nand",
-        "erase_ticks": 64
-      },
-      "peripheral_25_displayformatter": {
-        "kind": "formatter",
-        "latch_delay": 2
-      },
-      "power_peripherals": {
-        "kind": "power",
-        "transfer_ticks": 4,
-        "max_program_bytes": 536870912,
-        "spi0": {
-          "required": [192, 48, 0],
-          "selection": {
-            "pin": {
-              "port": 11,
-              "pin": 2
-            },
-            "high": false
-          },
-          "presence": {
-            "pin": {
-              "port": 11,
-              "pin": 2
-            },
-            "high": false
-          }
-        }
-      },
-      "pulse": {
-        "kind": "exr2-pulse",
-        "counter_channels": [0, 4],
-        "timer_channels": [0, 2, 4, 6, 8, 9, 10, 11],
-        "quadrature": false,
-        "initial_phase": 0,
-        "capture_channel": null
-      },
-      "release": {
-        "kind": "core-release",
-        "released": false
-      },
-      "reset_control": {
-        "kind": "reset"
-      },
-      "scanout": {
-        "kind": "scanout",
-        "ram_bytes": 536870912,
-        "packing": "yycbcr",
-        "matrix": "bt601-full",
-        "graphics_profile": "mode1-abgr8888-straight",
-        "backdrop_profile": "declared-black-canvas-unmeasured",
-        "rectangle_profile": "exr2-signed-ycbcr-rectangle-overlay-unmeasured",
-        "max_pixels": 8847360,
-        "reset_ticks": 2
-      },
-      "sd_clocks": {
-        "kind": "sdhci-clocks"
-      },
-      "serial_gpio": {
-        "kind": "gpio",
-        "input_levels": [3692, 0, 4608, 777, 32, 0, 0, 0, 0, 0, 0, 0, 128, 0, 0, 0],
-        "output_levels": [
-          {
-            "pin": {
-              "port": 11,
-              "pin": 3
-            },
-            "high": true
-          },
-          {
-            "pin": {
-              "port": 12,
-              "pin": 3
-            },
-            "high": true
-          },
-          {
-            "pin": {
-              "port": 13,
-              "pin": 9
-            },
-            "high": true
-          }
-        ]
-      },
-      "serial_spi1": {
-        "kind": "spi-controller"
-      },
-      "statistics": {
-        "kind": "statistics",
-        "clock": {
-          "kind": "fixed",
-          "ticks": 400000
-        },
-        "ack_ticks": 2,
-        "stop_ticks": 2,
-        "histogram": true,
-        "external_statistics": false,
-        "diagnostic_reads": true
-      },
-      "timers": {
-        "kind": "exr2-system-timers",
-        "main_targets": [0, 1]
-      },
-      "usb": {
-        "kind": "usb",
-        "endpoints": null
-      },
-      "serial_audio_transmitter": {
-        "kind": "serial-audio-transmitter",
-        "ram_bytes": 536870912,
-        "max_transfer_bytes": 1048576,
-        "ticks_per_byte": 64,
-        "minimum_ticks": 1000
-      },
-      "peripheral_13_image_input": {
-        "kind": "image-input",
-        "reset_ticks": 2,
-        "command_ticks": 2,
-        "phase_ticks": 2,
-        "command": "packed_writes",
-        "command_controls": [0],
-        "phase_ack": "inactive",
-        "clock": {
-          "mode": "input_enable",
-          "source": {
-            "kind": "periodic",
-            "period_ticks": 400000,
-            "first_delay_ticks": null
-          },
-          "secondary": true,
-          "companion_secondary": true
-        },
-        "sensor_period_ticks": null,
-        "raw_dma_ticks": 1000,
-        "readback_ticks": 750000,
-        "cfa": [
-          0, 2, 1, 2, 0, 1, 1, 1, 0, 1, 1, 2, 1, 1, 2, 1, 1, 0, 2, 0, 1, 0, 2, 1, 1, 1, 2, 1, 1, 0,
-          1, 1, 0, 1, 1, 2
-        ]
-      },
-      "peripheral_14_inputauxiliarycontrol": {
-        "kind": "block11000",
-        "control_mode": {
-          "ClearBit0Ack": {
-            "delay_ticks": 2
-          }
-        }
-      },
-      "peripheral_16_parameters": {
-        "kind": "parameters"
-      },
-      "peripheral_21_outputcontrol": {
-        "kind": "block86000"
-      }
-    },
-    "ticks_per_second": 12000000,
     "settings": {
       "requested": {
         "language": "en",
         "setup": "done"
       }
-    },
-    "mcu": {
-      "node": "serial_spi1",
-      "route": 1,
-      "first_register": 80
     },
     "nand_inputs": {
       "nand": {

@@ -5,20 +5,12 @@
   "purpose": "rom_boot",
   "body_id": "xe2s",
   "firmware_id": "xe2s-111",
-  "start": {
-    "kind": "rom"
-  },
   "execution": null,
-  "inputs": null,
   "scene": null,
   "overlays": [],
   "preset": {
     "factory_options": {},
     "execution_scope": "isolated-driver",
-    "hardware_selection": {
-      "body_profile_id": "xe2s"
-    },
-    "hardware_inputs_id": "xe2s",
     "firmware_profile_id": "xe2s-111"
   }
 }

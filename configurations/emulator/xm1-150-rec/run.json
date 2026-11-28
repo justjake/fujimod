@@ -5,20 +5,12 @@
   "purpose": "rom_boot",
   "body_id": "xm1",
   "firmware_id": "xm1-150",
-  "start": {
-    "kind": "rom"
-  },
   "execution": null,
-  "inputs": null,
   "scene": null,
   "overlays": [],
   "preset": {
     "factory_options": {},
     "execution_scope": "offline-boot-development",
-    "hardware_selection": {
-      "body_profile_id": "xm1-rec"
-    },
-    "hardware_inputs_id": "xm1-rec",
     "firmware_profile_id": "xm1-150"
   }
 }

@@ -19,7 +19,7 @@ impl Boot for CatalogBoot {
             &inputs.overlays,
         )?;
         if !inputs.flash_seeds.is_empty()
-            && !matches!(resolved.configuration.inputs, Some(RunInputs::Xp5(_)))
+            && !matches!(resolved.inputs, Some(RunInputs::Xp5(_)))
         {
             return Err("flash seeds require an XP5 run configuration".into());
         }
@@ -91,7 +91,7 @@ impl Boot for CatalogBoot {
             Mode::Strict
         };
         #[cfg(not(target_arch = "wasm32"))]
-        if matches!(resolved.configuration.inputs, Some(RunInputs::Xp5(_))) {
+        if matches!(resolved.inputs, Some(RunInputs::Xp5(_))) {
             if inputs.nand.is_some()
                 || inputs.settings.is_some()
                 || inputs.clock_seconds_2000.is_some()

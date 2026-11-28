@@ -5,18 +5,10 @@
   "purpose": "rom_boot",
   "body_id": "xe2",
   "firmware_id": "xe2-411",
-  "start": {
-    "kind": "rom"
-  },
   "execution": null,
-  "inputs": null,
   "scene": null,
   "overlays": [],
   "preset": {
-    "factory_options": {},
-    "hardware_selection": {
-      "body_profile_id": "xe2-rec"
-    },
-    "hardware_inputs_id": "xe2-rec"
+    "factory_options": {}
   }
 }

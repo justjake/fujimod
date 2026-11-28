@@ -4,6 +4,9 @@
   "id": "xe2s-111",
   "body_id": "xe2s",
   "version": "1.11",
+  "start": {
+    "kind": "rom"
+  },
   "update": {
     "size": 53085184,
     "sha256": "a34859b8e7ad2b915bcb77b337ddca4799cc29141a57de88909ee5746c62d424"

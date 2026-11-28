@@ -1,15 +1,13 @@
 //! Run configurations resolved against the reference catalog.
 //!
 //! A run configuration names a body and firmware; resolution selects their
-//! reference records, applies the named overlays, and checks that every
-//! block, connection, part and profile identity the run uses exists in the
-//! selected hardware.
+//! reference records, takes the hardware from the body and the start from the
+//! firmware, applies the named overlays, and checks that every block,
+//! connection and part identity the run uses exists in the selected hardware.
 
 use fujimod_catalog::{ReferenceCatalog, ResolvedSelection, reference::SocBlockKind};
-use fujimod_catalog_configuration::application_inputs::*;
 use fujimod_catalog_configuration::*;
-use fujimod_catalog_construction::HardwareSelection;
-use fujimod_catalog_run_inputs::*;
+use fujimod_catalog_run_inputs::application::*;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
@@ -28,6 +26,17 @@ pub struct ResolvedConfiguration {
     pub configuration: RunConfiguration,
     /// Resolved SoC, body, firmware and installed parts.
     pub reference: ResolvedSelection,
+    /// The run's entry: the firmware's start, or the one the run or an
+    /// overlay selects.
+    pub start: RunStart,
+    /// The processor's startup inputs: the body's resting inputs with the
+    /// run's cable connection and power-on settings.
+    #[serde(default)]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "RunInputs | null")
+    )]
+    pub inputs: Option<RunInputs>,
 }
 
 impl ResolvedConfiguration {
@@ -62,6 +71,33 @@ impl ResolvedConfiguration {
         Self::resolve_and_apply(configuration, &selected)
     }
 
+    /// Resolve a firmware that has no run configuration from its body and
+    /// firmware records alone: the firmware's start, the body's hardware and
+    /// the processor's execution choices. The identity is the firmware's.
+    pub fn from_records(firmware_id: &str) -> Result<Self, String> {
+        let catalog = ReferenceCatalog::bundled()?;
+        let firmware = catalog
+            .firmware(firmware_id)
+            .ok_or_else(|| format!("firmware {firmware_id} is not in the catalog"))?;
+        let configuration = RunConfiguration {
+            schema_uri: RUN_CONFIGURATION_SCHEMA_URI.into(),
+            schema: 1,
+            id: firmware_id.into(),
+            purpose: RunPurpose::RomBoot,
+            body_id: firmware.body_id.clone(),
+            firmware_id: firmware_id.into(),
+            start: None,
+            execution: None,
+            scene: None,
+            audio_signals: Vec::new(),
+            overlays: Vec::new(),
+            browser_camera: None,
+            preset: None,
+        };
+        configuration.validate(firmware_id)?;
+        Self::resolve_and_apply(configuration, &[])
+    }
+
     /// Apply an explicit engine choice after catalog overlays have resolved.
     pub fn override_engine(&mut self, engine: RunEngine) -> Result<(), String> {
         if self.configuration.execution.is_none()
@@ -90,43 +126,60 @@ impl ResolvedConfiguration {
         Ok(())
     }
 
-    /// Resolve the selected caller-neutral body reset inputs, if the run names one.
-    pub fn hardware_inputs(&self) -> Result<Option<HardwareInputs>, String> {
-        let Some(id) = self
-            .configuration
+    /// The reset inputs the board powers on with: the run's service-entry
+    /// inputs when it declares them, else the body's resting inputs.
+    pub fn hardware_inputs(&self) -> Option<&fujimod_catalog_run_inputs::HardwareReset> {
+        self.configuration
             .preset
             .as_ref()
-            .and_then(|preset| preset.hardware_inputs_id.as_deref())
-        else {
-            return Ok(None);
-        };
-        let inputs = HardwareInputs::bundled(id)?;
-        if inputs.body_id != self.configuration.body_id {
-            return Err(format!(
-                "hardware-input profile {id} belongs to body {}, not {}",
-                inputs.body_id, self.configuration.body_id
-            ));
-        }
-        Ok(Some(inputs))
+            .and_then(|preset| preset.power_on_inputs.as_ref())
+            .or_else(|| {
+                self.reference
+                    .body
+                    .hardware
+                    .as_ref()
+                    .and_then(|hardware| hardware.reset_inputs.as_ref())
+            })
+    }
+
+    /// The body's board: its one hardware description.
+    pub fn board(&self) -> Option<&fujimod_catalog::profiles::BodyBoard> {
+        self.reference
+            .body
+            .hardware
+            .as_ref()
+            .and_then(|hardware| hardware.board.as_ref())
     }
 
     /// Address-space extent used to allocate and map emulated DRAM.
     ///
-    /// An explicit run value describes the software-visible mapping. If the
-    /// run omits it, a known installed capacity supplies the default. Unknown
-    /// physical capacity without an explicit mapping remains unresolved.
+    /// A body's known installed capacity is its extent. Where it is unknown,
+    /// the firmware's memory plan supplies the extent; without either it
+    /// remains unresolved.
     pub fn dram_address_space_limit_bytes(&self) -> Result<u64, String> {
         let limit = self
-            .configuration
+            .reference
+            .firmware
             .dram_address_space
             .as_ref()
             .map(|address_space| address_space.limit_bytes)
             .or(self.reference.body.dram_bytes)
-            .ok_or("run configuration needs an explicit DRAM address-space limit")?;
+            .ok_or_else(|| {
+                format!(
+                    "body {} has unknown installed DRAM capacity and firmware {} declares no \
+                     DRAM address space",
+                    self.reference.body.id, self.reference.firmware.id
+                )
+            })?;
         if limit == 0 || limit % 4096 != 0 {
             return Err("resolved DRAM address-space limit must be page-aligned".into());
         }
         Ok(limit)
+    }
+
+    /// Check that every run-input identity exists in the selected hardware.
+    pub fn validate(&self) -> Result<(), String> {
+        validate_selection(&self.configuration, self.inputs.as_ref(), &self.reference)
     }
 
     fn resolve_and_apply(
@@ -135,10 +188,24 @@ impl ResolvedConfiguration {
     ) -> Result<Self, String> {
         let catalog = ReferenceCatalog::bundled()?;
         let reference = catalog.resolve(&configuration.body_id, &configuration.firmware_id)?;
-        validate_selection(&configuration, &reference)?;
+        let mut start = configuration
+            .start
+            .or(reference.firmware.start)
+            .ok_or_else(|| format!("firmware {} declares no start", reference.firmware.id))?;
+        let mut inputs = reference
+            .body
+            .hardware
+            .as_ref()
+            .and_then(|hardware| hardware.inputs.clone());
+        // An EXR II camera's power-on settings are part of its startup inputs.
+        if let Some(RunInputs::Exr2(inputs)) = &mut inputs
+            && let Some(preset) = &mut configuration.preset
+        {
+            inputs.settings = preset.settings.take();
+        }
+        validate_selection(&configuration, inputs.as_ref(), &reference)?;
         let mut applied = BTreeSet::new();
         let mut changed = BTreeSet::new();
-        let mut selected_hardware = false;
         configuration.overlays.clear();
         for overlay_id in overlay_ids {
             if !applied.insert(overlay_id.as_str()) {
@@ -154,16 +221,9 @@ impl ResolvedConfiguration {
                         return Err("run overlays select a device preset more than once".into());
                     }
                     preset.validate()?;
-                    selected_hardware |= preset.hardware_selection.is_some();
                     if let Some(base) = &configuration.preset {
                         if preset.execution_scope.is_none() {
                             preset.execution_scope = base.execution_scope.clone();
-                        }
-                        if preset.hardware_selection.is_none() {
-                            preset.hardware_selection = base.hardware_selection.clone();
-                        }
-                        if preset.hardware_inputs_id.is_none() {
-                            preset.hardware_inputs_id = base.hardware_inputs_id.clone();
                         }
                         if preset.firmware_profile_id.is_none() {
                             preset.firmware_profile_id = base.firmware_profile_id.clone();
@@ -175,17 +235,17 @@ impl ResolvedConfiguration {
                         }
                         configuration.purpose = purpose;
                     }
-                    if let Some(start) = preset.start {
+                    if let Some(selected) = preset.start {
                         if !changed.insert("start") {
                             return Err("run overlays change the start entry more than once".into());
                         }
-                        configuration.start = start;
+                        start = selected;
                     }
                     if let Some(connected) = preset.usb_connected {
                         if !changed.insert("usb") {
                             return Err("run overlays change USB connection more than once".into());
                         }
-                        if let Some(RunInputs::Exr2(inputs)) = &mut configuration.inputs {
+                        if let Some(RunInputs::Exr2(inputs)) = &mut inputs {
                             inputs.usb.connected = connected;
                         }
                     }
@@ -193,7 +253,7 @@ impl ResolvedConfiguration {
                         if !changed.insert("start") {
                             return Err("run overlays change the start entry more than once".into());
                         }
-                        configuration.start = match entry {
+                        start = match entry {
                             RunEntry::Loader => RunStart::Loader,
                         };
                     }
@@ -215,31 +275,19 @@ impl ResolvedConfiguration {
                     }
                     configuration.preset = Some(preset);
                 }
-                RunOverlayChange::UsbConnection {
-                    connected,
-                    hardware_selection,
-                } => {
+                RunOverlayChange::UsbConnection { connected } => {
                     if !changed.insert("usb") {
                         return Err("run overlays change USB connection more than once".into());
                     }
-                    let Some(RunInputs::Exr2(inputs)) = &mut configuration.inputs else {
+                    let Some(RunInputs::Exr2(inputs)) = &mut inputs else {
                         return Err(format!(
                             "run overlay {overlay_id} requires declared EXR2 USB input state"
                         ));
                     };
                     inputs.usb.connected = connected;
-                    if let Some(selection) = hardware_selection {
-                        let preset = configuration.preset.as_mut().ok_or_else(|| {
-                            format!(
-                                "run overlay {overlay_id} selects hardware for a run without a preset"
-                            )
-                        })?;
-                        preset.hardware_selection = Some(selection);
-                        selected_hardware = true;
-                    }
                 }
                 RunOverlayChange::Settings { requested } => {
-                    let Some(RunInputs::Exr2(inputs)) = &mut configuration.inputs else {
+                    let Some(RunInputs::Exr2(inputs)) = &mut inputs else {
                         return Err(format!(
                             "run overlay {overlay_id} requires declared EXR2 settings"
                         ));
@@ -259,11 +307,11 @@ impl ResolvedConfiguration {
                         }
                     }
                 }
-                RunOverlayChange::Start { start } => {
+                RunOverlayChange::Start { start: selected } => {
                     if !changed.insert("start") {
                         return Err("run overlays change the start entry more than once".into());
                     }
-                    configuration.start = start;
+                    start = selected;
                 }
                 RunOverlayChange::Purpose { purpose } => {
                     if !changed.insert("purpose") {
@@ -295,57 +343,21 @@ impl ResolvedConfiguration {
             }
             configuration.overlays.push(overlay.id);
         }
-        if selected_hardware {
-            check_overlay_hardware(&configuration, &reference)?;
-        }
-        validate_selection(&configuration, &reference)?;
-        Ok(Self {
+        let resolved = Self {
             configuration,
             reference,
-        })
+            start,
+            inputs,
+        };
+        resolved.validate()?;
+        Ok(resolved)
     }
-}
-
-/// A run overlay may replace a hardware fact only when its evidence is a stand-in.
-fn check_overlay_hardware(
-    configuration: &RunConfiguration,
-    selection: &ResolvedSelection,
-) -> Result<(), String> {
-    let Some(machine) = configuration
-        .preset
-        .as_ref()
-        .and_then(|preset| preset.hardware_selection.as_ref())
-    else {
-        return Ok(());
-    };
-    let Some(profile) = selection
-        .body
-        .hardware
-        .as_ref()
-        .and_then(|body| body.profiles.get(&machine.body_profile_id))
-    else {
-        return Ok(());
-    };
-    for override_ in &profile.block_overrides {
-        let block = selection
-            .soc
-            .blocks
-            .iter()
-            .find(|block| block.id == override_.block_id)
-            .ok_or_else(|| {
-                format!(
-                    "run overlay changes missing processor block {}",
-                    override_.block_id
-                )
-            })?;
-        block.require_stand_in_override("device")?;
-    }
-    Ok(())
 }
 
 /// Check that every run-input identity exists in the selected hardware.
-pub fn validate_selection(
+fn validate_selection(
     configuration: &RunConfiguration,
+    inputs: Option<&RunInputs>,
     selection: &ResolvedSelection,
 ) -> Result<(), String> {
     if selection.body.id != configuration.body_id
@@ -364,19 +376,12 @@ pub fn validate_selection(
         return Err("cpu_backend=dynarmic requires a Cortex-A7 processor".into());
     }
 
-    if selection.body.dram_bytes.is_none() && configuration.dram_address_space.is_none() {
+    if selection.body.dram_bytes.is_none() && selection.firmware.dram_address_space.is_none() {
         return Err(format!(
-            "body {} has unknown installed DRAM capacity and the run has no address-space limit",
-            selection.body.id
+            "body {} has unknown installed DRAM capacity and firmware {} declares no DRAM \
+             address space",
+            selection.body.id, selection.firmware.id
         ));
-    }
-
-    if let Some(hardware) = configuration
-        .preset
-        .as_ref()
-        .and_then(|preset| preset.hardware_selection.as_ref())
-    {
-        hardware_profiles(hardware, selection)?;
     }
 
     if let Some(preset) = &configuration.preset {
@@ -391,9 +396,6 @@ pub fn validate_selection(
                 "firmware {} has no layout profile {id}",
                 selection.firmware.id
             ));
-        }
-        if !preset.native_device_inputs.is_empty() && selection.soc.id != "exr2" {
-            return Err("native EXR2 input policies require an EXR2 SoC".into());
         }
         for medium in preset.nand_inputs.values() {
             let RunNandSceneInput::Raw { options, .. } = medium;
@@ -412,7 +414,7 @@ pub fn validate_selection(
         }
     }
 
-    let input_model_matches = match &configuration.inputs {
+    let input_model_matches = match inputs {
         None => true,
         Some(RunInputs::Exr2(_)) => selection.soc.id == "exr2",
         Some(RunInputs::Xp4(_)) => selection.soc.id == "xp4",
@@ -431,7 +433,7 @@ pub fn validate_selection(
         scene_selection(scene, selection)?;
     }
 
-    let inputs = match &configuration.inputs {
+    let inputs = match inputs {
         None => return Ok(()),
         Some(RunInputs::Exr2(inputs)) => inputs,
         Some(RunInputs::Xp4(inputs)) => return application_inputs_selection(inputs, selection),
@@ -685,36 +687,6 @@ pub fn validate_selection(
     Ok(())
 }
 
-/// Resolve the selected hardware profile identities against already selected
-/// reference records. A processor may declare no profiles at all.
-fn hardware_profiles<'a>(
-    choice: &HardwareSelection,
-    selection: &'a ResolvedSelection,
-) -> Result<&'a fujimod_catalog::profiles::BodyProfile, String> {
-    fujimod_catalog_identity::validate_id(&choice.body_profile_id)?;
-    if let Some(id) = &choice.soc_profile_id {
-        fujimod_catalog_identity::validate_id(id)?;
-        selection
-            .soc
-            .hardware
-            .as_ref()
-            .and_then(|hardware| hardware.profiles.get(id))
-            .ok_or_else(|| format!("SoC {} has no hardware profile {id}", selection.soc.id))?;
-    }
-    let body = selection
-        .body
-        .hardware
-        .as_ref()
-        .and_then(|hardware| hardware.profiles.get(&choice.body_profile_id))
-        .ok_or_else(|| {
-            format!(
-                "body {} has no hardware profile {}",
-                selection.body.id, choice.body_profile_id
-            )
-        })?;
-    Ok(body)
-}
-
 fn scene_selection(scene: &RunScene, selection: &ResolvedSelection) -> Result<(), String> {
     match scene {
         RunScene::Exr2(_) => scene.validate(),
@@ -876,82 +848,44 @@ mod tests {
 
     #[test]
     fn run_inputs_resolve_to_typed_blocks_connections_and_parts() {
-        let config = RunConfiguration::bundled("x70-110-rec").unwrap();
-        let catalog = ReferenceCatalog::bundled().unwrap();
-        let selection = catalog.resolve("x70", "x70-110").unwrap();
-        assert!(validate_selection(&config, &selection).is_ok());
-
-        let mut invalid = config.clone();
-        let Some(RunInputs::Exr2(inputs)) = invalid.inputs.as_mut() else {
-            panic!("X70 run inputs must be EXR2 inputs");
+        let resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
+        assert!(resolved.validate().is_ok());
+        let refused = |edit: &dyn Fn(&mut Exr2RunInputs)| {
+            let mut invalid = resolved.clone();
+            let Some(RunInputs::Exr2(inputs)) = invalid.inputs.as_mut() else {
+                panic!("X70 run inputs must be EXR2 inputs");
+            };
+            edit(inputs);
+            assert!(invalid.validate().is_err());
         };
-        inputs.adc.block_id = inputs.gpio.block_id.clone();
-        assert!(validate_selection(&invalid, &selection).is_err());
-
-        let mut invalid = config.clone();
-        let Some(RunInputs::Exr2(inputs)) = invalid.inputs.as_mut() else {
-            panic!("X70 run inputs must be EXR2 inputs");
-        };
-        inputs.usb.connection_id = "hdmi".into();
-        assert!(validate_selection(&invalid, &selection).is_err());
-
-        let mut invalid = config.clone();
-        let Some(RunInputs::Exr2(inputs)) = invalid.inputs.as_mut() else {
-            panic!("X70 run inputs must be EXR2 inputs");
-        };
-        inputs.encoders[0].connection_id = "s1".into();
-        assert!(validate_selection(&invalid, &selection).is_err());
-
-        let mut invalid = config.clone();
-        let Some(RunInputs::Exr2(inputs)) = invalid.inputs.as_mut() else {
-            panic!("X70 run inputs must be EXR2 inputs");
-        };
-        inputs.gpio.outputs[0].signal_index = 2;
-        assert!(validate_selection(&invalid, &selection).is_err());
-
-        let mut invalid = config;
-        let Some(RunInputs::Exr2(inputs)) = invalid.inputs.as_mut() else {
-            panic!("X70 run inputs must be EXR2 inputs");
-        };
-        inputs.mcu.part_id = inputs.power.part_id.clone();
-        assert!(validate_selection(&invalid, &selection).is_err());
+        refused(&|inputs| inputs.adc.block_id = inputs.gpio.block_id.clone());
+        refused(&|inputs| inputs.usb.connection_id = "hdmi".into());
+        refused(&|inputs| inputs.encoders[0].connection_id = "s1".into());
+        refused(&|inputs| inputs.gpio.outputs[0].signal_index = 2);
+        refused(&|inputs| inputs.mcu.part_id = inputs.power.part_id.clone());
     }
 
     #[test]
-    fn usb_overlay_connects_the_cable() {
+    fn the_body_inputs_rest_and_the_run_connects_the_cable_and_sets_power_on_settings() {
+        let base = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
+        let Some(RunInputs::Exr2(inputs)) = base.inputs.as_ref() else {
+            panic!("X70 run inputs must be EXR2 inputs");
+        };
+        assert!(!inputs.usb.connected);
+        assert_eq!(
+            inputs.settings.as_ref().map(|settings| &settings.requested["setup"]),
+            Some(&"done".to_owned())
+        );
+        assert_eq!(base.start, RunStart::Rom);
         let resolved =
             ResolvedConfiguration::with_overlays("x70-110-rec", &["x70-110-rec-usb".into()])
                 .unwrap();
-        let Some(RunInputs::Exr2(inputs)) = resolved.configuration.inputs.as_ref() else {
+        let Some(RunInputs::Exr2(inputs)) = resolved.inputs.as_ref() else {
             panic!("X70 run inputs must be EXR2 inputs");
         };
         assert!(inputs.usb.connected);
         assert_eq!(resolved.configuration.overlays, ["x70-110-rec-usb"]);
-    }
-
-    #[test]
-    fn usb_overlay_selects_the_hardware_that_models_the_attached_port() {
-        let base = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
-        assert_eq!(
-            base.configuration
-                .preset
-                .as_ref()
-                .and_then(|preset| preset.hardware_selection.as_ref())
-                .map(|hardware| hardware.body_profile_id.as_str()),
-            Some("x70")
-        );
-        let resolved =
-            ResolvedConfiguration::with_overlays("x70-110-rec", &["x70-110-rec-usb".into()])
-                .unwrap();
-        assert_eq!(
-            resolved
-                .configuration
-                .preset
-                .as_ref()
-                .and_then(|preset| preset.hardware_selection.as_ref())
-                .map(|hardware| hardware.body_profile_id.as_str()),
-            Some("x70-110-browser-usb")
-        );
+        assert_eq!(resolved.board(), base.board(), "the cable changes no hardware");
     }
 
     #[test]
@@ -1019,9 +953,6 @@ mod tests {
             let resolved = ResolvedConfiguration::bundled(id)
                 .unwrap_or_else(|error| panic!("run configuration {id}: {error}"));
             assert_eq!(resolved.configuration.id, id);
-            resolved
-                .hardware_inputs()
-                .unwrap_or_else(|error| panic!("run configuration {id}: {error}"));
         }
         for id in RunOverlay::bundled_ids() {
             let overlay =
@@ -1034,44 +965,16 @@ mod tests {
     }
 
     #[test]
-    fn overlay_hardware_overrides_need_stand_in_evidence() {
-        let config = RunConfiguration::bundled("xt20-211").unwrap();
-        let catalog = ReferenceCatalog::bundled().unwrap();
-        let mut selection = catalog.resolve("xt20", "xt20-211").unwrap();
-        let overrides = selection.body.hardware.as_ref().unwrap().profiles["xt20-discovery"]
-            .block_overrides
-            .clone();
-        assert!(!overrides.is_empty());
-        let error = check_overlay_hardware(&config, &selection).unwrap_err();
-        assert!(error.contains("not a stand-in"), "{error}");
-        for block in &mut selection.soc.blocks {
-            if overrides
-                .iter()
-                .any(|override_| override_.block_id == block.id)
-            {
-                block.evidence = vec![fujimod_catalog::provenance::Evidence {
-                    kind: fujimod_catalog::provenance::EvidenceKind::StandIn,
-                    firmware_ids: vec![],
-                    addresses: vec![],
-                }];
-            }
-        }
-        check_overlay_hardware(&config, &selection).unwrap();
-    }
-
-    #[test]
     fn run_ladder_inputs_name_body_register_ladders_with_key_free_values() {
-        let config = RunConfiguration::bundled("xt5-431").unwrap();
-        let catalog = ReferenceCatalog::bundled().unwrap();
-        let selection = catalog.resolve("xt5", "xt5-431").unwrap();
-        validate_selection(&config, &selection).unwrap();
+        let resolved = ResolvedConfiguration::bundled("xt5-431").unwrap();
+        resolved.validate().unwrap();
         let refused = |edit: &dyn Fn(&mut Vec<ApplicationLadderInput>), needle: &str| {
-            let mut invalid = config.clone();
+            let mut invalid = resolved.clone();
             let Some(RunInputs::Xp5(inputs)) = invalid.inputs.as_mut() else {
                 panic!("X-T5 run inputs must be XP5 inputs");
             };
             edit(&mut inputs.ladders);
-            let error = validate_selection(&invalid, &selection).unwrap_err();
+            let error = invalid.validate().unwrap_err();
             assert!(error.contains(needle), "{error}");
         };
         let register =
@@ -1098,19 +1001,23 @@ mod tests {
         );
         refused(&|ladders| ladders[0].basis = " ".into(), "needs a basis");
 
-        let mut declared = selection.clone();
-        declared.physical_controls.as_mut().unwrap()["ladders"][3]["released"] = 1000.into();
-        let error = validate_selection(&config, &declared).unwrap_err();
+        let mut declared = resolved.clone();
+        declared
+            .reference
+            .physical_controls
+            .as_mut()
+            .unwrap()["ladders"][3]["released"] = 1000.into();
+        let error = declared.validate().unwrap_err();
         assert!(
             error.contains("already declares its released value"),
             "{error}"
         );
 
-        let mut bare = config.clone();
+        let mut bare = resolved.clone();
         let Some(RunInputs::Xp5(inputs)) = bare.inputs.as_mut() else {
             panic!("X-T5 run inputs must be XP5 inputs");
         };
         inputs.ladders.clear();
-        validate_selection(&bare, &selection).unwrap();
+        bare.validate().unwrap();
     }
 }

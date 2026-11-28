@@ -4,6 +4,9 @@
   "id": "x100vi-131",
   "body_id": "x100vi",
   "version": "1.31",
+  "start": {
+    "kind": "loader"
+  },
   "update": {
     "size": 109251576,
     "sha256": "0d48d2ae26ac7ebab9b0e4cac56324807ec1ea8ae30df06b0b9e79066dc0a14a"

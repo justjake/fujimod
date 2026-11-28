@@ -577,7 +577,7 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
             Board::Shared(session) => session.board.write_memory(0, image.address, &data)?,
         }
     }
-    let ticks_per_second = match resolved.configuration.inputs.as_ref() {
+    let ticks_per_second = match resolved.inputs.as_ref() {
         Some(RunInputs::Xp4(inputs)) => inputs.ticks_per_second,
         _ => 54_000_000,
     };

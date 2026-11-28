@@ -101,11 +101,7 @@
     }
   ],
   "hardware": {
-    "profiles": {
-      "xp4": {
-        "cache_basis": "Declared catalog input."
-      }
-    }
+    "cache_basis": "Declared catalog input."
   },
   "mappings": [
     {

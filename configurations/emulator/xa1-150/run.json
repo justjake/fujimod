@@ -5,11 +5,7 @@
   "purpose": "rom_boot",
   "body_id": "xa1",
   "firmware_id": "xa1-150",
-  "start": {
-    "kind": "rom"
-  },
   "execution": null,
-  "inputs": null,
   "scene": null,
   "overlays": []
 }

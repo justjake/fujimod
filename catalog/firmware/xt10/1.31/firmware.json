@@ -4,6 +4,9 @@
   "id": "xt10-131",
   "body_id": "xt10",
   "version": "1.31",
+  "start": {
+    "kind": "rom"
+  },
   "update": {
     "size": 53085156,
     "sha256": "aa58f0ff3878b5ced79bb53a2e85dea3946be169dbc7416f0c896d4c5d7f4a8b"
