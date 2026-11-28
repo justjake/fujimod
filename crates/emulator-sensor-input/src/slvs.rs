@@ -136,6 +136,10 @@ impl Receiver {
     }
 }
 impl Device for Receiver {
+    fn future_deadline_is_stable(&self) -> bool {
+        // An input mismatch is ready immediately. Armed frames retain their ticks.
+        true
+    }
     fn name(&self) -> &'static str {
         "imaging-receiver"
     }

@@ -166,6 +166,9 @@ impl InputBuffer {
     }
 }
 impl Device for InputBuffer {
+    fn future_deadline_is_stable(&self) -> bool {
+        true
+    }
     fn name(&self) -> &'static str {
         "imaging-input-buffer"
     }

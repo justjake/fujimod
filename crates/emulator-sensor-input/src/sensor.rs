@@ -859,6 +859,9 @@ impl Command {
     }
 }
 impl Device for Command {
+    fn future_deadline_is_stable(&self) -> bool {
+        true
+    }
     fn name(&self) -> &'static str {
         "imaging-sensor"
     }

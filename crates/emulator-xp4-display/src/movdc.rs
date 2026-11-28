@@ -229,6 +229,9 @@ impl Movdc {
 }
 
 impl Device for Movdc {
+    fn future_deadline_is_stable(&self) -> bool {
+        true
+    }
     fn name(&self) -> &'static str {
         if self.base == 0xfff72000 {
             "xp4-movdc0"

@@ -257,6 +257,9 @@ impl Decompressor {
     }
 }
 impl Device for Decompressor {
+    fn future_deadline_is_stable(&self) -> bool {
+        true
+    }
     fn name(&self) -> &'static str {
         "lz-osd-engine"
     }

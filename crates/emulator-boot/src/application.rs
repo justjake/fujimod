@@ -352,9 +352,14 @@ impl Started {
         let stubs = match &self.board {
             Board::Shared(session) => session.board.discovery_callee_stubs(),
         };
-        Ok(
-            json!({"engine":self.engine,"instructions":instructions,"now":now,"state":state,"discovery_callee_stubs":stubs}),
-        )
+        let mut result = json!({
+            "engine": self.engine,
+            "instructions": instructions,
+            "now": now,
+            "discovery_callee_stubs": stubs,
+        });
+        result["state"] = state;
+        Ok(result)
     }
 }
 

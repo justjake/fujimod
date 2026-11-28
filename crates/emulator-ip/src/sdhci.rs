@@ -52,6 +52,9 @@ impl Clocks {
     }
 }
 impl Device for Clocks {
+    fn future_deadline_is_stable(&self) -> bool {
+        true
+    }
     fujimod_emulator_devices::checkpoint_fields!(state:BTreeMap<u64,Clock>);
     fn fingerprint(&self) -> Result<Value, String> {
         Ok(serde_json::json!({"state":self.state,"timing":self.timing}))

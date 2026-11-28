@@ -332,10 +332,20 @@ trait TimerModel: Clone + serde::Serialize + serde::de::DeserializeOwned + Send 
         write: bool,
         value: u32,
     ) -> Result<u32, String>;
+    fn count_expiry(&self, _offset: u64, _size: u8) -> Option<Option<u64>> {
+        None
+    }
+    fn read_count(&self, _offset: u64, _size: u8, _now: u64) -> Option<u64> {
+        None
+    }
     fn tick(&mut self, now: u64) -> Vec<usize>;
     fn next_event_tick(&self, now: u64) -> Option<u64>;
     fn save(&self) -> serde_json::Value;
     fn restore(&mut self, value: &serde_json::Value) -> Result<(), String>;
+}
+fn interval_count_channel(offset: u64, size: u8) -> Option<usize> {
+    (size == 4 && (0x10..0x50).contains(&offset) && offset % 8 == 0)
+        .then(|| ((offset - 0x10) / 8) as usize)
 }
 impl TimerModel for IntervalTimers {
     const NAME: &'static str = "xp4-interval-timers";
@@ -348,6 +358,13 @@ impl TimerModel for IntervalTimers {
         value: u32,
     ) -> Result<u32, String> {
         IntervalTimers::access(self, now, offset, size, write, value)
+    }
+    fn count_expiry(&self, offset: u64, size: u8) -> Option<Option<u64>> {
+        IntervalTimers::count_expiry(self, interval_count_channel(offset, size)?)
+    }
+    fn read_count(&self, offset: u64, size: u8, now: u64) -> Option<u64> {
+        self.count_at(interval_count_channel(offset, size)?, now)
+            .map(u64::from)
     }
     fn tick(&mut self, now: u64) -> Vec<usize> {
         IntervalTimers::tick(self, now)
@@ -428,6 +445,26 @@ impl<M: TimerModel> Timers<M> {
 impl<M: TimerModel> Device for Timers<M> {
     fn name(&self) -> &'static str {
         M::NAME
+    }
+    fn projected_value_until(
+        &self,
+        address: u64,
+        size: u8,
+    ) -> Option<fujimod_emulator_devices::bus::ReadValidity> {
+        let countdown_expiry = self
+            .model
+            .count_expiry(address.checked_sub(self.base)?, size)?;
+        Some(fujimod_emulator_devices::bus::ReadValidity {
+            before: self.scheduled?.min(countdown_expiry.unwrap_or(u64::MAX)),
+            countdown_expiry,
+        })
+    }
+    fn read_without_advance(&self, address: u64, size: u8, now: u64) -> Option<u64> {
+        if self.scheduled.is_none_or(|expiry| now >= expiry) {
+            return None;
+        }
+        self.model
+            .read_count(address.checked_sub(self.base)?, size, now)
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         self.access(cx, address, size, false, 0)
@@ -687,4 +724,42 @@ pub fn turn_countdown_dial(
                 .ok_or("Unwired XP4 countdown dial")?
                 .queue_edges(now, edges)
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fujimod_emulator_devices::test_host::{TestHost, write};
+
+    #[test]
+    fn interval_count_read_without_advance_preserves_state_until_expiry() {
+        let mut timers = Timers {
+            base: 0x1000,
+            model: IntervalTimers::new(&[(0, 48)]),
+            scheduled: None,
+        };
+        let mut host = TestHost::new();
+        let base = timers.base;
+        let count = base + 0x10;
+        assert_eq!(timers.read_without_advance(count, 4, 0), None);
+        write(&mut timers, &mut host, count, 9);
+        write(&mut timers, &mut host, base + 0x14, 9);
+        write(&mut timers, &mut host, base, 0x10001);
+        let expiry = timers.scheduled.unwrap();
+        let validity = timers.projected_value_until(count, 4).unwrap();
+        assert_eq!(validity.before, expiry);
+        assert_eq!(validity.countdown_expiry, Some(expiry));
+        assert!(timers.projected_value_until(count + 4, 4).is_none());
+        let before = timers.checkpoint().unwrap().state();
+        for (now, value) in [(0, 9), (3, 6), (expiry - 1, 0)] {
+            host.now = now;
+            assert_eq!(timers.read_without_advance(count, 4, now), Some(value));
+            assert_eq!(timers.read(&mut host.cx(), count, 4), value);
+            assert_eq!(timers.checkpoint().unwrap().state(), before);
+        }
+        assert_eq!(timers.read_without_advance(count + 4, 4, 0), None);
+        assert_eq!(timers.read_without_advance(count, 2, 0), None);
+        assert_eq!(timers.read_without_advance(count, 4, expiry), None);
+        assert_eq!(timers.read_without_advance(base - 4, 4, 0), None);
+    }
 }

@@ -1650,6 +1650,9 @@ struct Snapshot {
     retained: Vec<u32>,
 }
 impl Device for SdHost {
+    fn future_deadline_is_stable(&self) -> bool {
+        self.clocks.future_deadline_is_stable()
+    }
     fn card_slot(&self) -> Option<&(dyn fujimod_emulator_devices::capability::CardSlot + 'static)> {
         Some(self)
     }

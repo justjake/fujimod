@@ -218,6 +218,10 @@ impl fujimod_emulator_devices::capability::GpioInputs for Gpio {
     }
 }
 impl Device for Gpio {
+    fn future_deadline_is_stable(&self) -> bool {
+        // Pending pin changes are absolute ticks. An already changed pin is due now.
+        true
+    }
     fn name(&self) -> &'static str {
         "masked-gpio"
     }

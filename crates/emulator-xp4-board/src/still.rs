@@ -1181,6 +1181,9 @@ impl Engine {
 }
 
 impl Device for Engine {
+    fn future_deadline_is_stable(&self) -> bool {
+        true
+    }
     fn name(&self) -> &'static str {
         self.contract.name
     }

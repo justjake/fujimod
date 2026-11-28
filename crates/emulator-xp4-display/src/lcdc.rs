@@ -232,6 +232,9 @@ impl Lcdc {
 }
 
 impl Device for Lcdc {
+    fn future_deadline_is_stable(&self) -> bool {
+        true
+    }
     fn name(&self) -> &'static str {
         if self.base == 0xfff7a000 {
             "xp4-lcdc0"

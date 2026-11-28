@@ -322,3 +322,245 @@ fn dynarmic_scheduler_window_matches_instruction_observation() {
     assert_eq!(window.2, [42, 43, 0x8000_0003, 7, 0x10034]);
     assert_eq!(window.3, [(3, 0x8000000), (9, 0), (10, 0x8000000)]);
 }
+
+#[cfg(all(
+    feature = "dynarmic",
+    target_arch = "aarch64",
+    any(target_os = "linux", target_os = "macos")
+))]
+#[test]
+fn projected_device_reads_preserve_fractional_clock_and_deadline() {
+    struct ProjectedCounter {
+        due: Option<u64>,
+        expired: bool,
+    }
+    impl ProjectedCounter {
+        fn at(&self, now: u64) -> u64 {
+            now + u64::from(self.expired) * 100
+        }
+    }
+    impl Device for ProjectedCounter {
+        fn name(&self) -> &'static str {
+            "projected-counter"
+        }
+        fn read(&mut self, cx: &mut Cx<'_>, _: u64, _: u8) -> u64 {
+            self.at(cx.now())
+        }
+        fn read_without_advance(&self, _: u64, size: u8, now: u64) -> Option<u64> {
+            (size == 4 && self.due.is_none_or(|due| now < due)).then(|| self.at(now))
+        }
+        fn write(&mut self, cx: &mut Cx<'_>, _: u64, _: u8, _: u64) {
+            cx.fail("counter is read only");
+        }
+        fn next_deadline(&self, _: u64) -> Option<u64> {
+            self.due
+        }
+        fn advance(&mut self, cx: &mut Cx<'_>) {
+            if self.due.is_some_and(|due| cx.now() >= due) {
+                self.expired = true;
+                self.due = None;
+            }
+        }
+        fn save(&self) -> Value {
+            json!({"due": self.due, "expired": self.expired})
+        }
+    }
+    let run = |observe: bool| {
+        let cpu = Box::new(fujimod_emulator_cpu_dynarmic::Core::new(Model::CortexA7).unwrap());
+        cpu.map_zeroed(0x10000, 0x1000, 7).unwrap();
+        cpu.map_zeroed(0x20000, 0x1000, 7).unwrap();
+        words(
+            &*cpu,
+            0x10000,
+            &[
+                0xe595_0000, // ldr r0, [r5]
+                0xe486_0004, // str r0, [r6], #4
+                0xeaff_fffc, // b back to the load
+            ],
+        );
+        set(&*cpu, Register::Pc, 0x10000);
+        set(&*cpu, arm::CORE[5], 0x8000000);
+        set(&*cpu, arm::CORE[6], 0x20000);
+        set(&*cpu, arm::CPSR, 0xd3);
+        let mut bus = Bus::new(bus::Mode::Strict);
+        bus.register(
+            0x8000000,
+            4,
+            Box::new(ProjectedCounter {
+                due: Some(7),
+                expired: false,
+            }),
+        )
+        .unwrap();
+        let mut board = Board::new(
+            vec![cpu],
+            bus,
+            Ratio::new(3, 2).unwrap(),
+            None,
+            vec![true],
+            memory::Memory::default(),
+        )
+        .unwrap();
+        board.set_execution_policy(ExecutionPolicy::Exact).unwrap();
+        board.map_mmio(0, 0x8000000, 0x1000, 0x8000000).unwrap();
+        board
+            .configure_armv7a(
+                0,
+                armv7a::Config {
+                    mpidr: 0x8000_0000,
+                    configuration_base: 0xffff_0000,
+                    cycles_per_tick: 1,
+                    cache_sizes: None,
+                },
+            )
+            .unwrap();
+        let points = observe.then(|| board.instruction_points_begin(0, vec![0x10100]).unwrap());
+        board.run_for_instructions(30, 16).unwrap();
+        assert!(points.is_none_or(|points| points.event().is_none()));
+        let mut result = [0; 40];
+        board.read_memory(0, 0x20000, &mut result).unwrap();
+        let values = result
+            .chunks_exact(4)
+            .map(|bytes| u32::from_le_bytes(bytes.try_into().unwrap()))
+            .collect::<Vec<_>>();
+        let projected = board.cpu(0).unwrap().exit_counters().unwrap()["projected_mmio_reads"];
+        ((board.instruction_counts(), board.now(), values), projected)
+    };
+    let (batch, projected) = run(false);
+    let (observed, observed_projected) = run(true);
+    assert_eq!(batch, observed);
+    assert_eq!(batch.0, [30]);
+    assert_eq!(batch.2, [0, 2, 4, 6, 108, 110, 112, 114, 116, 118]);
+    assert!(
+        projected >= 5,
+        "expected native projected reads, got {projected}"
+    );
+    assert_eq!(observed_projected, 0);
+}
+
+#[cfg(all(
+    feature = "dynarmic",
+    target_arch = "aarch64",
+    any(target_os = "linux", target_os = "macos")
+))]
+#[test]
+fn repeated_read_window_expires_at_a_deadline_and_a_guest_write() {
+    struct Status {
+        value: u64,
+        deadline: Option<u64>,
+        countdown: bool,
+    }
+    impl Status {
+        fn value_at(&self, at: u64) -> u64 {
+            self.deadline
+                .filter(|&deadline| self.countdown && at < deadline)
+                .map_or(self.value, |deadline| deadline - at - 1)
+        }
+    }
+    impl Device for Status {
+        fn name(&self) -> &'static str {
+            "stable-status"
+        }
+        fn read_without_advance(&self, _: u64, size: u8, at: u64) -> Option<u64> {
+            (size == 4 && self.deadline.is_none_or(|deadline| at < deadline))
+                .then(|| self.value_at(at))
+        }
+        fn projected_value_until(
+            &self,
+            _: u64,
+            size: u8,
+        ) -> Option<fujimod_emulator_devices::bus::ReadValidity> {
+            (size == 4).then_some(fujimod_emulator_devices::bus::ReadValidity {
+                before: self.deadline.unwrap_or(u64::MAX),
+                countdown_expiry: self.deadline.filter(|_| self.countdown),
+            })
+        }
+        fn read(&mut self, cx: &mut Cx<'_>, _: u64, _: u8) -> u64 {
+            self.value_at(cx.now())
+        }
+        fn write(&mut self, _: &mut Cx<'_>, _: u64, _: u8, value: u64) {
+            self.value = value;
+        }
+        fn next_deadline(&self, _: u64) -> Option<u64> {
+            self.deadline
+        }
+        fn advance(&mut self, cx: &mut Cx<'_>) {
+            if self.deadline.is_some_and(|deadline| deadline <= cx.now()) {
+                self.deadline = None;
+                self.value = 9;
+            }
+        }
+    }
+
+    for countdown in [false, true] {
+        let cpu = Box::new(fujimod_emulator_cpu_dynarmic::Core::new(Model::CortexA7).unwrap());
+        cpu.map_zeroed(0x10000, 4096, 7).unwrap();
+        words(
+            &*cpu,
+            0x10000,
+            &[
+                0xe595_0000,
+                0xe595_1000,
+                0xe595_2000,
+                0xeaff_ffff, // end the native block before the deadline
+                0xe595_3000, // read at the deadline
+                0xe3a0_400b,
+                0xe585_4000,
+                0xe595_4000,
+                0xe595_7000,
+                0xeaff_fffe,
+            ],
+        );
+        set(&*cpu, Register::Pc, 0x10000);
+        set(&*cpu, arm::CORE[5], 0x8000000);
+        set(&*cpu, arm::CPSR, 0xd3);
+        let mut bus = Bus::new(bus::Mode::Strict);
+        bus.register(
+            0x8000000,
+            4,
+            Box::new(Status {
+                value: 7,
+                deadline: Some(4),
+                countdown,
+            }),
+        )
+        .unwrap();
+        let mut board = Board::new(
+            vec![cpu],
+            bus,
+            Ratio::new(1, 1).unwrap(),
+            None,
+            vec![true],
+            memory::Memory::default(),
+        )
+        .unwrap();
+        board.set_execution_policy(ExecutionPolicy::Exact).unwrap();
+        board.map_mmio(0, 0x8000000, 4096, 0x8000000).unwrap();
+        board
+            .configure_armv7a(
+                0,
+                armv7a::Config {
+                    mpidr: 0x8000_0000,
+                    configuration_base: 0xffff_0000,
+                    cycles_per_tick: 1,
+                    cache_sizes: None,
+                },
+            )
+            .unwrap();
+        board.run_for_instructions(12, 32).unwrap();
+        let cpu = board.cpu(0).unwrap();
+        let values = [0, 1, 2, 3, 4, 7].map(|r| super::scalar(cpu, arm::CORE[r]).unwrap());
+        let expected = if countdown {
+            [3, 2, 1, 9, 11, 11]
+        } else {
+            [7, 7, 7, 9, 11, 11]
+        };
+        assert_eq!(values, expected);
+        assert!(
+            board
+                .bindings
+                .iter()
+                .any(|binding| binding.projected_window_hits.get() > 0)
+        );
+    }
+}

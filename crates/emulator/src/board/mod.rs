@@ -1436,7 +1436,13 @@ impl Board {
         });
         let data = (&*binding as *const Binding).cast_mut().cast();
         unsafe {
-            cpu.map_mmio_fast(address, bytes, Mmio { read, write, data }, engine_reads)?;
+            cpu.map_mmio_projected(
+                address,
+                bytes,
+                Mmio { read, write, data },
+                engine_reads,
+                project_device_read,
+            )?;
         }
         self.bindings.push(binding);
         self.mmio.push((core, address, bytes, physical));
@@ -1860,6 +1866,10 @@ impl Board {
                     && !state.memory.watching_writes()
             };
             cpu.set_loop_window(stable)?;
+            if cpu.supports_projected_device_reads() {
+                let anchor = self.state.borrow().device_read_anchor(core);
+                cpu.set_device_read_anchor(anchor);
+            }
             let pc = scalar(&**cpu, Register::Pc)?;
             let mut engine_guard =
                 fujimod_perf::engine_run(u8::try_from(core).unwrap_or(u8::MAX), false);
@@ -2083,10 +2093,11 @@ impl Board {
                 || s.mprofile.iter().any(Option::is_some);
             (s.execution_policy != ExecutionPolicy::Exact && concurrent_monitor)
                 || s.memory.watching_writes()
-                || s.exclusive
-                    .lock()
-                    .map_err(|_| "exclusive monitors poisoned")?
-                    .active()
+                || (self.cpus[core].exclusive_domain().is_none()
+                    && s.exclusive
+                        .lock()
+                        .map_err(|_| "exclusive monitors poisoned")?
+                        .active())
         };
         match (wanted, installed) {
             (true, None) => {
@@ -3454,6 +3465,31 @@ impl State {
         }
         Ok(())
     }
+    fn device_read_anchor(&self, core: usize) -> Option<fujimod_emulator_cpu::DeviceReadAnchor> {
+        if self.execution_policy != ExecutionPolicy::Exact
+            || self.parallel.is_some()
+            || self.timeline.lags()[core] != 0
+            || self.aprofile[core].is_some()
+            || self.mprofile[core].is_some()
+            || self.device_guard.is_some()
+            || self.access_histogram.is_some()
+            || self
+                .clock_limit
+                .is_some_and(|limit| limit <= self.timeline.now())
+            || !self.bus.loop_window()
+        {
+            return None;
+        }
+        Some(fujimod_emulator_cpu::DeviceReadAnchor {
+            entries: self.accounted[core],
+            clock: fujimod_emulator_cpu::Clock {
+                now: self.timeline.now(),
+                phase: self.timeline.phase(),
+                ratio: self.timeline.ratio(),
+            },
+        })
+    }
+
     fn access(
         &mut self,
         cpus: &[Rc<dyn Cpu>],
@@ -3537,6 +3573,9 @@ impl State {
             self.poll_round_a64(&*cpus[core], core, pc, address, size, result, poll64)?;
         }
         self.tighten(&*cpus[core], core)?;
+        if cpus[core].supports_projected_device_reads() {
+            cpus[core].set_device_read_anchor(self.device_read_anchor(core));
+        }
         Ok(result)
     }
     /// After a device read of an AArch64 processor: recognise a poll loop
@@ -4736,6 +4775,61 @@ unsafe fn access(data: *mut c_void, offset: u64, size: u32, value: Option<u64>) 
             0
         }
     }
+}
+unsafe fn project_device_read(
+    offset: u64,
+    size: u32,
+    at: u64,
+    data: *mut c_void,
+) -> Option<fujimod_emulator_cpu::ProjectedDeviceRead> {
+    let binding = unsafe { &*data.cast::<Binding>() };
+    let address = binding.base.checked_add(offset)?;
+    let mut state = binding.state.try_borrow_mut().ok()?;
+    let event = state.timeline.next_event().map(|event| event.at);
+    if at < state.timeline.now()
+        || event.is_some_and(|event| event <= at)
+        || state
+            .interrupts
+            .as_ref()
+            .is_some_and(|gic| gic.owns_address(address))
+        || state.host_pause.get()
+        || state.error.is_some()
+    {
+        return None;
+    }
+    let State { bus, deadlines, .. } = &mut *state;
+    let read = bus.project_read(address, u8::try_from(size).ok()?, at, deadlines)?;
+    let before = read.valid_before.min(event.unwrap_or(u64::MAX));
+    count_projected_reads(binding, 1);
+    Some(fujimod_emulator_cpu::ProjectedDeviceRead {
+        value: read.value,
+        window: (before > at).then_some(fujimod_emulator_cpu::ProjectedDeviceWindow {
+            before,
+            countdown_expiry: read
+                .model_validity
+                .and_then(|validity| validity.countdown_expiry),
+            source: read.device,
+            account: account_projected_reads,
+        }),
+    })
+}
+fn count_projected_reads(binding: &Binding, reads: u64) {
+    if let Some(count) = binding
+        .mmio_callback_counts
+        .borrow_mut()
+        .get_mut(binding.core)
+    {
+        *count = count.saturating_add(reads);
+    }
+}
+unsafe fn account_projected_reads(source: usize, reads: u64, data: *mut c_void) {
+    let binding = unsafe { &*data.cast::<Binding>() };
+    binding
+        .state
+        .borrow_mut()
+        .bus
+        .remember_quiet_reads(source, reads);
+    count_projected_reads(binding, reads);
 }
 unsafe fn read(offset: u64, size: u32, data: *mut c_void) -> u64 {
     unsafe { access(data, offset, size, None) }

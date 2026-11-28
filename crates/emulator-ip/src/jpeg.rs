@@ -472,6 +472,9 @@ impl Encoder {
     }
 }
 impl Device for Encoder {
+    fn future_deadline_is_stable(&self) -> bool {
+        true
+    }
     fn name(&self) -> &'static str {
         self.name
     }

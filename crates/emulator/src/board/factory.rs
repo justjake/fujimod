@@ -175,6 +175,12 @@ pub fn validate_engine(
 
 pub(super) struct Engines {
     unicorn: Option<Library>,
+    #[cfg(all(
+        feature = "dynarmic",
+        any(target_arch = "aarch64", target_arch = "x86_64"),
+        any(target_os = "linux", target_os = "macos")
+    ))]
+    dynarmic_code: fujimod_emulator_cpu_dynarmic::CodeVisibility,
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     hypervisor: Option<fujimod_emulator_cpu_hvf::Vm>,
 }
@@ -209,6 +215,12 @@ impl Engines {
         }
         Ok(Self {
             unicorn,
+            #[cfg(all(
+                feature = "dynarmic",
+                any(target_arch = "aarch64", target_arch = "x86_64"),
+                any(target_os = "linux", target_os = "macos")
+            ))]
+            dynarmic_code: Default::default(),
             #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
             hypervisor,
         })
@@ -227,7 +239,12 @@ impl Engines {
                 any(target_arch = "aarch64", target_arch = "x86_64"),
                 any(target_os = "linux", target_os = "macos")
             ))]
-            return Ok(Box::new(fujimod_emulator_cpu_dynarmic::Core::new(model)?));
+            return Ok(Box::new(
+                fujimod_emulator_cpu_dynarmic::Core::new_with_code_visibility(
+                    model,
+                    self.dynarmic_code.clone(),
+                )?,
+            ));
             #[cfg(not(all(
                 feature = "dynarmic",
                 any(target_arch = "aarch64", target_arch = "x86_64"),

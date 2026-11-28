@@ -1133,6 +1133,9 @@ impl Block {
     }
 }
 impl Device for Block {
+    fn future_deadline_is_stable(&self) -> bool {
+        true
+    }
     fn name(&self) -> &'static str {
         "xpp-register-block"
     }

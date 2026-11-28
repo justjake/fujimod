@@ -8,6 +8,7 @@ use fujimod_emulator_cpu::ExecutionPolicy;
 use std::{
     collections::BTreeMap,
     ffi::OsString,
+    io::{self, Write},
     path::PathBuf,
     process::ExitCode,
     time::{Duration, Instant},
@@ -1029,13 +1030,18 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
         state["camera_settings"] = started.camera_settings.clone();
     }
     state["cpu_backend"] = serde_json::json!(cpu_backend);
-    let report = serde_json::to_string_pretty(&state).map_err(|error| error.to_string())?;
     if let Some(output) = output {
+        let report = serde_json::to_string_pretty(&state).map_err(|error| error.to_string())?;
         std::fs::create_dir_all(&output).map_err(|error| error.to_string())?;
         std::fs::write(output.join("board-state.json"), &report)
             .map_err(|error| error.to_string())?;
+        println!("{report}");
+    } else {
+        let mut stdout = io::BufWriter::new(io::stdout().lock());
+        serde_json::to_writer_pretty(&mut stdout, &state).map_err(|error| error.to_string())?;
+        stdout.write_all(b"\n").map_err(|error| error.to_string())?;
+        stdout.flush().map_err(|error| error.to_string())?;
     }
-    println!("{report}");
     Ok(Outcome { success: true })
 }
 

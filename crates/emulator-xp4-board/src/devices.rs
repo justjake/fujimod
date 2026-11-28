@@ -204,6 +204,24 @@ impl<T: Device> Device for Connected<T> {
             None
         }
     }
+    fn read_without_advance(&self, address: u64, size: u8, now: u64) -> Option<u64> {
+        self.0
+            .try_lock()
+            .ok()?
+            .read_without_advance(address, size, now)
+    }
+    fn projected_value_until(
+        &self,
+        address: u64,
+        size: u8,
+    ) -> Option<fujimod_emulator_devices::bus::ReadValidity> {
+        self.0.try_lock().ok()?.projected_value_until(address, size)
+    }
+    fn future_deadline_is_stable(&self) -> bool {
+        self.0
+            .try_lock()
+            .is_ok_and(|device| device.future_deadline_is_stable())
+    }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         self.0.lock().unwrap().read(cx, address, size)
     }
