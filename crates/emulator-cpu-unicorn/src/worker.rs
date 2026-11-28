@@ -12,6 +12,7 @@ use fujimod_emulator_cpu::*;
 use std::any::Any;
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, HashMap};
+use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 use std::rc::Rc;
