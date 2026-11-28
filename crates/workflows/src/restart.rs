@@ -402,6 +402,7 @@ pub async fn request(
 mod tests {
     use super::*;
     use crate::bulk::tests::{limits, opened, read, write};
+    use fujimod_catalog_restart::{AlarmRegisters, PowerOff};
     use futures_lite::future::block_on;
 
     const FLAG: BootFlag = BootFlag {
@@ -559,6 +560,44 @@ mod tests {
             "{result:?}"
         );
         assert_eq!(script.remaining(), 1, "no camera I/O before the refusal");
+    }
+
+    #[test]
+    fn an_x_processor_4_request_with_its_power_off_reaches_the_camera() {
+        let mut restart: FirmwareRestart = serde_json::from_str(include_str!(
+            "../../catalog-restart/tests/fixtures/xp4-wake-deadline.json"
+        ))
+        .unwrap();
+        restart.mechanism.power_off = Some(PowerOff {
+            entry: 0x021a_6508,
+            halt: 0x021a_6598,
+            power_cut: 0x011c_373c,
+            request_deadline_offset: Some(8),
+            alarm: AlarmRegisters {
+                seconds: vec![37],
+                enable: 25,
+                enable_value: 1,
+            },
+            deadline_parameter: None,
+            rollover_parameter: None,
+            fixed_interval: None,
+            boot_flag: None,
+        });
+        restart.validate().unwrap();
+        let (mut session, script) = opened(vec![fujimod_usb::testing::Exchange::Read {
+            maximum: 8,
+            data: vec![0; 8],
+        }]);
+        let result = block_on(request(&mut session, &restart, limits(), false));
+        assert!(
+            !matches!(&result, Err(BulkError::Check(message)) if message.contains("power-off")),
+            "{result:?}"
+        );
+        assert_eq!(
+            script.remaining(),
+            0,
+            "the request asks the camera who it is"
+        );
     }
 
     #[test]
