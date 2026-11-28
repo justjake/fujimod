@@ -1,6 +1,6 @@
 //! Concurrent CPU windows with owner-serviced callbacks.
 use super::*;
-use fujimod_emulator_cpu::{Clock, ExecutionError, Fault, Model, RunStatus, RunToken};
+use fujimod_emulator_cpu::{Clock, ExecutionError, Fault, Model, RunStatus, RunToken, RunWakeup};
 use std::time::Instant;
 
 #[cfg(test)]

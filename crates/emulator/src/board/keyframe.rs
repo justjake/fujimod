@@ -156,6 +156,7 @@ impl State {
             access_histogram: _,
             store_observer: _,
             callback_service_time: _,
+            callback_peers: _,
         } = self;
         Saved {
             execution_policy: *execution_policy,
