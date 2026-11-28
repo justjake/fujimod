@@ -983,7 +983,7 @@ pub fn open_request(resolved: ResolvedConfiguration, request: Request) -> Result
                 camera_settings: Default::default(),
                 flash_seeds: Vec::new(),
             }),
-            _ if resolved.reference.soc.id == "xpp" => {
+            _ if matches!(resolved.reference.soc.id.as_str(), "xp4" | "xpp") => {
                 StartupInputs::Application(application::Startup {
                     update: request.update,
                     plan: request

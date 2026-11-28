@@ -11,6 +11,29 @@ fn reference_camera() -> PathBuf {
 }
 
 #[test]
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+fn xp4_camera_requests_use_the_application_startup_plan() {
+    let resolved = ResolvedConfiguration::bundled("xt3-511").unwrap();
+    let request = Request {
+        update: PathBuf::from("update.dat").into(),
+        boot_rom: None,
+        nand: None,
+        settings: None,
+        camera: None,
+        application_plan: None,
+        card_files: Vec::new(),
+        discovery: false,
+        sd_card_transfer_ticks: None,
+        card_layout: None,
+        card_initialization_fault: None,
+    };
+    let Err(error) = open_request(resolved, request) else {
+        panic!("the application startup plan is required");
+    };
+    assert_eq!(error, "this camera needs its application startup plan");
+}
+
+#[test]
 fn clock_override_updates_the_device_clock_and_requires_one_rtc() {
     let mut plan = json!({"nodes":[{"endpoint":{"clock":{
         "initial_seconds": 0, "maximum_seconds": u32::MAX,
