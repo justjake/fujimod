@@ -33,7 +33,10 @@ boot ROM and reference camera sections come from its source record under
 restores the library's saved boot for the same
 inputs when it holds one, boots to REC otherwise, or restores a checkpoint
 file written by a camera built from the same inputs. `boot_cache: false` boots
-from scratch and saves nothing.
+from scratch and saves nothing. On ARM64 and x86-64 macOS and Linux, exact
+EXR II, XP4, and X-Processor Pro boots use Dynarmic by default. The open report
+includes the selected CPU backend. Named checkpoints reopen with their saved
+backend.
 
 To SD boot an X70 1.10 from its current release card:
 

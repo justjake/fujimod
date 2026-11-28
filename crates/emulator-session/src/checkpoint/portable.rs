@@ -48,6 +48,12 @@ impl Snapshot {
     /// Board and session compatibility is checked when it is imported.
     pub fn inspect(bytes: &[u8]) -> Result<(u64, Vec<u64>), String> {
         let encoded = Encoded::from_bytes(bytes)?;
+        Self::definition(&encoded)?;
+        Keyframe::portable_metadata(&encoded.children()[0])
+    }
+
+    /// Read the saved constructor definition without importing the snapshot.
+    pub fn definition(encoded: &Encoded) -> Result<Value, String> {
         let header: Header<Value, Value> = encoded.decode(KIND)?;
         if !encoded.blobs().is_empty() || encoded.children().len() != 2 {
             return Err("snapshot session child/blob count differs".into());
@@ -56,7 +62,7 @@ impl Snapshot {
         if expected != header.identities {
             return Err("snapshot firmware or device graph identity differs".into());
         }
-        Keyframe::portable_metadata(&encoded.children()[0])
+        Ok(header.definition)
     }
     pub fn export(&self) -> Result<Vec<u8>, String> {
         self.export_checkpoint()?.to_bytes()

@@ -2,13 +2,14 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
 use fujimod_camera::{
-    CardSource, Library, Preset, Request as CameraRequest, Stage, StateDir, open as open_camera,
-    open_unbooted,
+    CardSource, Library, Preset, Request as CameraRequest, RunEngine, Stage, StateDir,
+    open as open_camera, open_unbooted,
 };
 use fujimod_catalog_remote::Facts;
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot as boot;
 use fujimod_emulator_cpu::ExecutionPolicy;
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_session::{Session, checkpoint::Snapshot};
 use fujimod_remote::{BoardRemote, Control, operations};
 use serde_json::{Value, json};
@@ -140,19 +141,61 @@ impl fujimod_emulator_gui::Run for Camera {
     }
 }
 
+/// Keep the catalog engine for a checkpoint written before the JIT default.
+fn checkpoint_engine(
+    library: &Library,
+    request: &CameraRequest,
+    checkpoint: &Checkpoint,
+) -> Result<Option<RunEngine>, String> {
+    let definition = Snapshot::definition(checkpoint)?;
+    let has_dynarmic = definition
+        .pointer("/execution/processors")
+        .and_then(Value::as_array)
+        .is_some_and(|processors| {
+            processors
+                .iter()
+                .any(|processor| processor["cpu_backend"] == "dynarmic")
+        });
+    if has_dynarmic || request.policy != ExecutionPolicy::Exact {
+        return Ok(None);
+    }
+    let mut resolved = library
+        .resolved(&request.firmware)
+        .map_err(|error| error.to_string())?;
+    let engine = resolved
+        .configuration
+        .execution
+        .map_or(RunEngine::Unicorn, |execution| execution.engine);
+    let previous_backend = resolved.configuration.cpu_backend();
+    boot::prefer_dynarmic(&mut resolved)?;
+    Ok((previous_backend != resolved.configuration.cpu_backend()).then_some(engine))
+}
+
 /// The catalog facts `fujimod-remote` needs for a resolved selection.
 impl Camera {
     pub fn open(request: OpenRequest) -> Result<(Self, (Value, Option<Vec<u8>>)), String> {
         let library = Library::from_env().map_err(|error| error.to_string())?;
         let state = StateDir::from_env();
         let started = std::time::Instant::now();
-        let camera_request = request.camera_request()?;
+        let mut camera_request = request.camera_request()?;
         let policy = camera_request.policy;
         let opened = match &request.snapshot {
-            Some(snapshot) => {
+            Some(path) => {
+                let encoded = {
+                    let bytes = std::fs::read(path)
+                        .map_err(|error| format!("{}: {error}", path.display()))?;
+                    Checkpoint::from_bytes(&bytes)
+                        .map_err(|error| format!("{}: {error}", path.display()))?
+                };
+                camera_request.engine = checkpoint_engine(&library, &camera_request, &encoded)
+                    .map_err(|error| format!("{}: {error}", path.display()))?;
                 let mut opened = open_unbooted(&library, &state, camera_request)
                     .map_err(|error| error.to_string())?;
-                boot::load_snapshot(&mut opened.camera.camera.session, snapshot)?;
+                let session = &mut opened.camera.camera.session;
+                session
+                    .import_checkpoint(&encoded)
+                    .and_then(|snapshot| session.restore(&snapshot))
+                    .map_err(|error| format!("{}: {error}", path.display()))?;
                 opened.camera.stage = match boot::status(&opened.camera.camera.session) {
                     Ok(report) if report.status == "rec" => Stage::Rec,
                     _ => Stage::FirmwareLoaded,
@@ -200,6 +243,7 @@ impl Camera {
                 .or(release),
             "snapshot": request.snapshot.as_ref().map(|path| path.display().to_string()),
             "execution_policy": policy.name(),
+            "cpu_backend": camera.resolved.configuration.cpu_backend(),
             "stage": stage.name(),
             "wall_seconds": started.elapsed().as_secs_f64(),
         });
@@ -727,6 +771,13 @@ mod tests {
         assert_eq!(summary["opened"]["boot"], "stock");
         assert_eq!(summary["opened"]["firmware"], "x70-110");
         assert_eq!(summary["opened"]["execution_policy"], "exact");
+        let dynarmic = cfg!(all(
+            feature = "dynarmic",
+            any(target_arch = "aarch64", target_arch = "x86_64"),
+            any(target_os = "linux", target_os = "macos")
+        ));
+        let cpu_backend = if dynarmic { "dynarmic" } else { "unicorn" };
+        assert_eq!(summary["opened"]["cpu_backend"], cpu_backend);
         let directory =
             std::env::temp_dir().join(format!("fujimod-mcp-snapshot-{}", std::process::id()));
         std::fs::create_dir_all(&directory).unwrap();
@@ -741,7 +792,27 @@ mod tests {
         let (restored, (summary, _)) = Camera::open(restored).unwrap();
         assert_eq!(summary["opened"]["stage"], "REC");
         assert_eq!(summary["opened"]["snapshot"], file.display().to_string());
+        assert_eq!(summary["opened"]["cpu_backend"], cpu_backend);
         assert_eq!(boot::status(&restored.session).unwrap().status, "rec");
+        drop(restored);
+
+        if dynarmic {
+            let mut legacy = request(OpenBoot::Stock, None).camera_request().unwrap();
+            legacy.engine = Some(RunEngine::Unicorn);
+            let library = Library::from_env().unwrap();
+            let saved = open_camera(&library, &StateDir::from_env(), legacy).unwrap();
+            let file = directory.join("unicorn.snapshot");
+            boot::save_snapshot(&saved.camera.camera.session, &file).unwrap();
+            drop(saved);
+
+            let mut restored = request(OpenBoot::Stock, None);
+            restored.snapshot = Some(file);
+            let (restored, (summary, _)) = Camera::open(restored).unwrap();
+            assert_eq!(summary["opened"]["cpu_backend"], "unicorn");
+            assert_eq!(summary["opened"]["execution_policy"], "exact");
+            assert_eq!(summary["opened"]["stage"], "REC");
+            assert_eq!(boot::status(&restored.session).unwrap().status, "rec");
+        }
         std::fs::remove_dir_all(&directory).unwrap();
         eprintln!("open and restore in {:?}", started.elapsed());
     }

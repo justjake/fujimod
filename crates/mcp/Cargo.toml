@@ -12,6 +12,10 @@ license.workspace = true
 name = "fujimod-mcp"
 path = "src/main.rs"
 
+[features]
+default = ["dynarmic"]
+dynarmic = ["fujimod-mcp-camera/dynarmic"]
+
 [dependencies]
 fujimod-mcp-core.workspace = true
 fujimod-mcp-camera.workspace = true
