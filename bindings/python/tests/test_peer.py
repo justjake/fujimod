@@ -148,7 +148,8 @@ async def test_read_callback_requires_bytes_and_invalid_reply_uses_core_validati
         (await session(WrongType()))
     peer = Peer()
     native = await session(peer)
-    peer.control = lambda data: None  # ty: ignore[invalid-assignment]  # Replace the callback to test a malformed read reply.
+    # Replace the callback to test a malformed read reply.
+    peer.control = lambda data: None
     peer.pending = b"x"
     with pytest.raises(usb.ProtocolError):
         (await native.ping())
