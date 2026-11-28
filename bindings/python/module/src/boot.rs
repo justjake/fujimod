@@ -23,7 +23,7 @@ impl Boot for CatalogBoot {
         {
             return Err("flash seeds require an XP5 run configuration".into());
         }
-        if let Some(engine) = inputs.engine {
+        if let Some(engine) = &inputs.engine {
             resolved.override_engine(
                 engine
                     .parse()
@@ -32,7 +32,7 @@ impl Boot for CatalogBoot {
         }
         if let Some(backend) = inputs.cpu_backend {
             resolved.override_cpu_backend(backend.parse()?)?;
-        } else if !inputs.discovery {
+        } else if inputs.engine.is_none() && !inputs.discovery {
             #[cfg(not(target_arch = "wasm32"))]
             boot::application::prefer_dynarmic(&mut resolved)?;
         }

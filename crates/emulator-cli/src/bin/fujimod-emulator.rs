@@ -396,7 +396,8 @@ impl Boot {
         }
         if let Some(backend) = self.text("--cpu-backend")? {
             resolved.override_cpu_backend(backend.parse()?)?;
-        } else if !self.discovery
+        } else if engine.is_none()
+            && !self.discovery
             && self
                 .values
                 .get("--execution-policy")
@@ -1616,6 +1617,11 @@ mod tests {
             (
                 "xt20-211",
                 &["boot", "--execution-policy", "interactive"],
+                RunCpuBackend::Unicorn,
+            ),
+            (
+                "xt3-511",
+                &["boot", "--engine", "unicorn"],
                 RunCpuBackend::Unicorn,
             ),
             ("xt3-511", &["boot", "--discovery"], RunCpuBackend::Unicorn),
