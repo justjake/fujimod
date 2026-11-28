@@ -223,6 +223,24 @@ constexpr uint32_t exit_before_instruction = 0x01000000;
 constexpr uint32_t max_block_instructions = 24;
 
 #if defined(__aarch64__)
+static bool CanUseSingleStepPrefix(uint32_t word) {
+    const uint32_t encoding = (word >> 25) & 7;
+    const uint32_t destination = (word >> 12) & 15;
+    if (word >> 28 != 14 || encoding > 1 || (encoding == 0 && (word & 16)) || destination == 15) {
+        return false;
+    }
+    const uint32_t operation = (word >> 21) & 15;
+    if (operation >= 8 && operation <= 11) {
+        // TST, TEQ, CMP and CMN occupy the flag-setting encodings. The
+        // adjacent encodings include system and status instructions.
+        return destination == 0 && (word & (1 << 20));
+    }
+    if (operation == 13 || operation == 15) {
+        return (word & (15 << 16)) == 0; // MOV and MVN have a fixed Rn field.
+    }
+    return true;
+}
+
 std::optional<Dynarmic::IR::A32RestoringDivision> UserCallbacksImpl::MatchRestoringDivision(VAddr pc, uint32_t first) {
     using Dynarmic::IR::A32RestoringDivision;
     constexpr uint32_t bytes = A32RestoringDivision::instruction_count * 4;
@@ -292,6 +310,11 @@ bool UserCallbacksImpl::PreCodeReadHook(bool thumb, VAddr pc, IREmitter& ir) {
         return true;
     };
     uint32_t kind = word ? callbacks.batch_instruction(*word) : 0;
+#if defined(__aarch64__)
+    if (entry && word && kind == 1 && CanUseSingleStepPrefix(*word)) {
+        ir.block.AllowSingleStepPrefix();
+    }
+#endif
     if (kind >= 4 && kind <= 6 && (instance->jit->Cpsr() & 31) == 0x10) kind = 0;
     if (kind == 8) kind = instance->vfp_enabled ? 1 : 0;
     if (kind == 9 || kind == 10) {
