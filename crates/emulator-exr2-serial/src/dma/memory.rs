@@ -11,7 +11,7 @@
 //! depends only on guest registers, memory and wired request lines. Channel 1
 //! and peripheral audio handshakes belong to their separately wired DMA model.
 use fujimod_emulator_devices::exr2::irq_routes::{Irq, IrqRoutes};
-use fujimod_emulator_devices::{Cx, Device, bus::ReadValidity};
+use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
@@ -305,13 +305,6 @@ impl Device for MemoryDma {
         (self.offset(address, size) == Some(STATUS * 4)
             && self.state.pending.as_ref().is_none_or(|p| p.due > now))
         .then(|| u64::from(self.state.registers[STATUS]))
-    }
-
-    fn projected_value_until(&self, address: u64, size: u8) -> Option<ReadValidity> {
-        (self.offset(address, size) == Some(STATUS * 4)).then(|| ReadValidity {
-            before: self.state.pending.as_ref().map_or(u64::MAX, |p| p.due),
-            countdown_expiry: None,
-        })
     }
 
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
