@@ -424,13 +424,15 @@ impl Catalog {
                         power["inputs"],
                         writes,
                         power.get("rtc").cloned().unwrap_or(Value::Null),
-                        power["retained_registers"],
-                        power.get("alarm").map_or(Value::Null, |a| json!({
-                            "enable": a["enable"],
-                            "seconds": a["seconds"]
-                        }))
+                        power["retained_registers"]
                     ]),
                 );
+                if let Some(alarm) = power.get("alarm") {
+                    out.insert(
+                        "checksum_power_alarm".into(),
+                        json!({"enable": alarm["enable"], "seconds": alarm["seconds"]}),
+                    );
+                }
             } else {
                 plain.push(json!([block.base(), high]));
             }
@@ -1018,8 +1020,31 @@ mod tests {
         let resolved = ResolvedConfiguration::bundled("xe4-201-handoff").unwrap();
         let fields = Catalog::new(&resolved).unwrap().body_fields().unwrap();
         let peer = &fields["checksum_power_spi"];
+        assert_eq!(peer.as_array().unwrap().len(), 9);
         assert_eq!(peer[6], json!([]));
-        assert_eq!(peer[9], json!({"enable": 25, "seconds": 37}));
         assert!(peer[8].as_array().unwrap().contains(&json!(37)));
+        assert_eq!(
+            fields["checksum_power_alarm"],
+            json!({"enable": 25, "seconds": 37})
+        );
+    }
+
+    /// A body without a declared alarm keeps the device graph it had before
+    /// alarms existed, so its saved snapshots still match.
+    #[test]
+    fn checksum_power_peers_without_an_alarm_keep_their_definition() {
+        let mut peers = 0;
+        for (id, resolved) in xp4_configurations() {
+            if id == "xe4-201-handoff" {
+                continue;
+            }
+            let fields = Catalog::new(&resolved).unwrap().body_fields().unwrap();
+            if let Some(peer) = fields.get("checksum_power_spi") {
+                peers += 1;
+                assert_eq!(peer.as_array().unwrap().len(), 9, "{id}");
+                assert!(!fields.contains_key("checksum_power_alarm"), "{id}");
+            }
+        }
+        assert!(peers > 0);
     }
 }

@@ -35,9 +35,9 @@ struct State {
     retained_registers: BTreeSet<u8>,
     stored: BTreeMap<u8, u16>,
     retained_written: BTreeSet<u8>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     alarm: Option<AlarmConfig>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     armed_seconds: Option<u16>,
     edge: u64,
     phase: u8,
@@ -670,6 +670,10 @@ mod tests {
         assert_eq!(peer.save()["armed_seconds"], Value::Null);
         frame(&mut peer, packet(0x99, 1)).unwrap();
         assert_eq!(peer.save()["armed_seconds"], 30);
+        let checkpoint = peer.checkpoint().unwrap();
+        frame(&mut peer, packet(0x99, 0)).unwrap();
+        peer.restore_checkpoint(&checkpoint).unwrap();
+        assert_eq!(peer.save()["armed_seconds"], 30);
         assert_eq!(&frame(&mut peer, packet(25, 0)).unwrap()[1..3], &[0, 0x10]);
         let armed = peer.save();
         frame(&mut peer, packet(0x99, 0)).unwrap();
@@ -690,6 +694,10 @@ mod tests {
     #[test]
     fn peer_without_a_declared_alarm_refuses_arming_and_armed_checkpoints() {
         let (mut peer, _) = selected();
+        let saved = peer.save();
+        assert!(saved.get("alarm").is_none() && saved.get("armed_seconds").is_none());
+        let checkpoint = peer.checkpoint().unwrap();
+        peer.restore_checkpoint(&checkpoint).unwrap();
         let mut armed = peer.save();
         armed["armed_seconds"] = 30.into();
         assert!(peer.restore(&armed).is_err());
