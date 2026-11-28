@@ -3449,6 +3449,39 @@ mod tests {
         }
     }
 
+    #[cfg(target_arch = "aarch64")]
+    #[test]
+    fn native_link_stops_before_zero_cycle_replay_when_budget_is_exhausted() {
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+        for (address, word) in [
+            (0x1000, 0xe280_0001u32), // add r0, r0, #1
+            (0x1004, 0xea00_003d),    // b 0x1100
+            (0x1100, 0xe320_f003),    // wfi, an exact replay entry
+        ] {
+            cpu.write_memory(address, &word.to_le_bytes()).unwrap();
+        }
+        cpu.set_loop_window(true).unwrap();
+        let warm = cpu
+            .run(Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(3),
+            })
+            .unwrap();
+        assert!(matches!(warm, Exit::Hint(Hint::WaitForInterrupt)));
+
+        let mut executed = 0;
+        let exit = unsafe {
+            ffi::dynarmic_set_reg(cpu.inst, 15, 0x1000);
+            ffi::dynarmic_run(cpu.inst, 2, &mut executed)
+        };
+        assert!(matches!(exit, ffi::DynarmicExitReason::Timeout));
+        assert_eq!(executed, 2);
+        assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 15) }, 0x1100);
+    }
+
     #[test]
     fn native_run_and_step_discard_cached_code_after_a_host_write() {
         let cpu = Core::new(Model::CortexA7).unwrap();

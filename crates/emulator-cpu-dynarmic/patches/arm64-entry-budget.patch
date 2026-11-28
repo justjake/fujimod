@@ -1,0 +1,67 @@
+diff --git a/src/dynarmic/backend/arm64/a32_address_space.cpp b/src/dynarmic/backend/arm64/a32_address_space.cpp
+index 25b4d541..10e72155 100644
+--- a/src/dynarmic/backend/arm64/a32_address_space.cpp
++++ b/src/dynarmic/backend/arm64/a32_address_space.cpp
+@@ -506,6 +506,7 @@ EmitConfig A32AddressSpace::GetEmitConfig() {
+
+         .wall_clock_cntpct = conf.wall_clock_cntpct,
+         .enable_cycle_counting = conf.enable_cycle_counting,
++        .check_cycle_budget = conf.check_cycle_budget,
+
+         .always_little_endian = conf.always_little_endian,
+
+diff --git a/src/dynarmic/backend/arm64/emit_arm64.cpp b/src/dynarmic/backend/arm64/emit_arm64.cpp
+index 6fee6b89..67ea3d15 100644
+--- a/src/dynarmic/backend/arm64/emit_arm64.cpp
++++ b/src/dynarmic/backend/arm64/emit_arm64.cpp
+@@ -268,9 +268,10 @@ EmittedBlockInfo EmitArm64(oaknut::CodeGenerator& code, IR::Block block, const E
+
+     const A32::LocationDescriptor location{block.Location()};
+     const auto check_budget = [&](u64 cost) {
+-        if (!conf.enable_cycle_counting || location.SingleStepping() || cost == 0) return;
++        if (!conf.enable_cycle_counting || !conf.check_cycle_budget || location.SingleStepping()) return;
+         oaknut::Label fits;
+-        code.CMP(Xticks, cost);
++        // Zero-cost replay entries still need a positive budget before they can exit.
++        code.CMP(Xticks, cost == 0 ? 1 : cost);
+         code.B(GE, fits);
+         code.MOV(Wscratch0, location.PC());
+         code.STR(Wscratch0, Xstate, offsetof(A32JitState, regs) + sizeof(u32) * 15);
+diff --git a/src/dynarmic/backend/arm64/emit_arm64.h b/src/dynarmic/backend/arm64/emit_arm64.h
+index 97b031e5..c582e46e 100644
+--- a/src/dynarmic/backend/arm64/emit_arm64.h
++++ b/src/dynarmic/backend/arm64/emit_arm64.h
+@@ -142,6 +142,7 @@ struct EmitConfig {
+     // Timing
+     bool wall_clock_cntpct;
+     bool enable_cycle_counting;
++    bool check_cycle_budget = false;
+
+     // Endianness
+     bool always_little_endian;
+diff --git a/src/dynarmic/backend/arm64/emit_arm64_a32.cpp b/src/dynarmic/backend/arm64/emit_arm64_a32.cpp
+index d24bf044..0c120602 100644
+--- a/src/dynarmic/backend/arm64/emit_arm64_a32.cpp
++++ b/src/dynarmic/backend/arm64/emit_arm64_a32.cpp
+@@ -80,15 +80,15 @@ void EmitA32Terminal(oaknut::CodeGenerator& code, EmitContext& ctx, IR::Term::Li
+     oaknut::Label fail;
+
+     if (ctx.conf.HasOptimization(OptimizationFlag::BlockLinking) && !is_single_step) {
+-        if (ctx.conf.enable_cycle_counting) {
+-            code.CMP(Xticks, 0);
+-            code.B(LE, fail);
+-            EmitBlockLinkRelocation(code, ctx, terminal.next, BlockRelocationType::Branch);
+-        } else {
++        if (!ctx.conf.enable_cycle_counting) {
+             code.LDAR(Wscratch0, Xhalt);
+             code.CBNZ(Wscratch0, fail);
+-            EmitBlockLinkRelocation(code, ctx, terminal.next, BlockRelocationType::Branch);
++        } else if (!ctx.conf.check_cycle_budget) {
++            code.CMP(Xticks, 0);
++            code.B(LE, fail);
+         }
++        // Exact blocks check the remaining budget at the destination entry.
++        EmitBlockLinkRelocation(code, ctx, terminal.next, BlockRelocationType::Branch);
+     }
+
+     code.l(fail);

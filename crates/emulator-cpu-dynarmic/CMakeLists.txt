@@ -18,7 +18,8 @@ set(DYNARMIC_PATCHES
     "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-a32-branch-flags.patch"
     "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-embedder.patch"
     "${CMAKE_CURRENT_SOURCE_DIR}/patches/x64-exact-budget.patch"
-    "${CMAKE_CURRENT_SOURCE_DIR}/patches/a32-select-nzcv.patch")
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/a32-select-nzcv.patch"
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-entry-budget.patch")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${DYNARMIC_PATCHES})
 file(REMOVE_RECURSE "${DYNARMIC_SOURCE}")
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/vendor/dynarmic/"
