@@ -157,6 +157,7 @@ fn main() -> Result<(), String> {
         let mut concurrent = graph(
             (0..2)
                 .map(|core| Processor {
+                    cpu_backend: Default::default(),
                     model: Model::ArmV8A,
                     released: true,
                     parked_until_sgi: false,
@@ -209,6 +210,7 @@ fn main() -> Result<(), String> {
                     gic.system(0, 0xc230, Some(255))?;
                     gic.system(0, 0xc667, Some(1))?;
                     let mut board = graph(vec![Processor {
+                        cpu_backend: Default::default(),
                         model: Model::ArmV8A,
                         released: true,
                         parked_until_sgi: false,
@@ -299,6 +301,7 @@ fn main() -> Result<(), String> {
                 implementation: None,
             };
             let mut board = graph(vec![Processor {
+                cpu_backend: Default::default(),
                 model: Model::ArmV8A,
                 released: true,
                 parked_until_sgi: false,
@@ -412,6 +415,7 @@ fn main() -> Result<(), String> {
                 let mut board = graph(
                     (0..2)
                         .map(|core| Processor {
+                            cpu_backend: Default::default(),
                             model: Model::ArmV8A,
                             released: true,
                             parked_until_sgi: false,
@@ -1401,6 +1405,7 @@ fn main() -> Result<(), String> {
         let graph = Graph {
             decoders: vec![],
             processors: vec![Processor {
+                cpu_backend: Default::default(),
                 rprofile: None,
                 mprofile: None,
                 model: Model::ArmV8A,
@@ -1544,6 +1549,7 @@ fn main() -> Result<(), String> {
             decoders: vec![],
             processors: vec![
                 Processor {
+                    cpu_backend: Default::default(),
                     model: Model::ArmV8A,
                     rprofile: None,
                     mprofile: None,
@@ -1558,6 +1564,7 @@ fn main() -> Result<(), String> {
                     ],
                 },
                 Processor {
+                    cpu_backend: Default::default(),
                     model: Model::CortexM4,
                     rprofile: None,
                     mprofile: Some(mprofile::Config {
@@ -1718,6 +1725,7 @@ fn main() -> Result<(), String> {
             decoders: vec![],
             processors: vec![
                 Processor {
+                    cpu_backend: Default::default(),
                     model: Model::ArmV8A,
                     rprofile: None,
                     mprofile: None,
@@ -1734,6 +1742,7 @@ fn main() -> Result<(), String> {
                     ],
                 },
                 Processor {
+                    cpu_backend: Default::default(),
                     model: Model::CortexM4,
                     rprofile: None,
                     mprofile: Some(mprofile::Config {
