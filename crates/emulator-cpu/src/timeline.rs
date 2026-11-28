@@ -166,9 +166,30 @@ impl Timeline {
     /// A device access stalls a lagging processor up to the frontier, so
     /// device time never moves backward and its later entries elapse it.
     pub fn synchronize(&mut self, core: usize) -> Result<(), String> {
-        self.lag(core)?;
-        self.lags[core] = 0;
+        self.synchronize_after(core, 0)
+    }
+    /// Remove lag remaining at an MMIO access in an uncommitted prefix.
+    /// The caller must immediately account the prefix and the rest of the
+    /// run in one step, before any other processor or event may be observed.
+    pub fn synchronize_after(&mut self, core: usize, prefix: u64) -> Result<(), String> {
+        let lag = self.lag(core)?;
+        self.lags[core] = lag.min(prefix);
         Ok(())
+    }
+    /// Project the frontier that processor entries would reach, without
+    /// publishing progress or changing the event queue.
+    pub fn projected_tick(
+        &self,
+        core: usize,
+        entries: u64,
+        deferred_sync_at: Option<u64>,
+    ) -> Result<u64, String> {
+        let lag = self.lag(core)?;
+        let beyond = entries.saturating_sub(deferred_sync_at.map_or(lag, |prefix| lag.min(prefix)));
+        let (ticks, _) = self.ratio.advance_phase(self.phase, beyond)?;
+        self.now
+            .checked_add(u64::try_from(ticks).map_err(|_| "guest tick span overflow")?)
+            .ok_or_else(|| "guest timeline exhausted".into())
     }
     /// One processor's own position, for its architectural counters.
     pub fn processor_clock(&self, core: usize) -> Result<crate::Clock, String> {
@@ -549,6 +570,25 @@ mod tests {
         assert!(t.now() >= due);
         assert_eq!(t.lags(), [0, 140]);
         assert!(t.synchronize(2).is_err());
+    }
+    #[test]
+    fn projected_mmio_prefix_matches_split_settlement_with_fractional_time() {
+        let runnable = |_| true;
+        let mut eager = Timeline::new(Ratio::new(7, 2).unwrap(), 2).unwrap();
+        let mut deferred = Timeline::new(Ratio::new(7, 2).unwrap(), 2).unwrap();
+        for timeline in [&mut eager, &mut deferred] {
+            timeline.advance_processor(1, 17, runnable).unwrap();
+        }
+        eager.advance_processor(0, 5, runnable).unwrap();
+        assert_eq!(deferred.projected_tick(0, 5, None).unwrap(), eager.now());
+        eager.synchronize(0).unwrap();
+        eager.advance_processor(0, 9, runnable).unwrap();
+        assert_eq!(deferred.projected_tick(0, 14, Some(5)).unwrap(), eager.now());
+        deferred.synchronize_after(0, 5).unwrap();
+        deferred.advance_processor(0, 14, runnable).unwrap();
+        assert_eq!(deferred.now(), eager.now());
+        assert_eq!(deferred.phase(), eager.phase());
+        assert_eq!(deferred.lags(), eager.lags());
     }
     #[test]
     fn processor_budgets_stop_the_frontier_at_deadlines_and_caps() {

@@ -143,16 +143,24 @@ impl InterruptMap {
     }
     /// Identity-mapped MMIO windows this map serves, as (address, size).
     pub fn windows(&self) -> Vec<(u64, u64)> {
+        self.window_ranges().to_vec()
+    }
+    pub(super) fn contains_register(&self, address: u64) -> bool {
+        self.window_ranges()
+            .into_iter()
+            .any(|(base, size)| (base..base + size).contains(&address))
+    }
+    fn window_ranges(&self) -> [(u64, u64); 2] {
         match self.registers {
             InterruptRegisters::GicV2 {
                 distributor,
                 cpu_interface,
-            } => vec![(distributor, 0x1000), (cpu_interface, 0x1000)],
+            } => [(distributor, 0x1000), (cpu_interface, 0x1000)],
             InterruptRegisters::GicV3 {
                 distributor,
                 redistributor,
                 stride,
-            } => vec![
+            } => [
                 (distributor, 0x10000),
                 (redistributor, stride * self.cores as u64),
             ],

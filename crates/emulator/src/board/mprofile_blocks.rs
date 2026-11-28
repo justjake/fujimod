@@ -37,6 +37,9 @@ pub(super) struct Blocks {
     /// The admitted block now executing: address, bytes, entries, and the
     /// address of its last instruction.
     pub pending: Option<(u64, u32, u64, u64)>,
+    /// First local MMIO access whose ordinary dispatch would have removed
+    /// any processor lag still present after these unaccounted entries.
+    pub deferred_sync_at: Option<u64>,
     /// The board store hook sees only watched pages (code pages) and device
     /// pages; other stores keep the engine's inline path and no longer end
     /// their block. Temporarily disabled while an exclusive reservation needs

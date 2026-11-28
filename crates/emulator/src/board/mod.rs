@@ -381,6 +381,8 @@ struct Settled {
     private_interrupt_access: bool,
     local_mmio: bool,
     local_mmio_accesses: u64,
+    defer_local_mmio: bool,
+    deferred_local_mmio_accesses: u64,
 }
 impl Settled {
     fn new() -> Self {
@@ -402,6 +404,9 @@ impl Settled {
                 .is_some_and(|value| value == "1"),
             local_mmio: std::env::var_os("FUJIMOD_LOCAL_MMIO").is_some_and(|value| value == "1"),
             local_mmio_accesses: 0,
+            defer_local_mmio: std::env::var_os("FUJIMOD_DEFER_LOCAL_MMIO")
+                .is_some_and(|value| value == "1"),
+            deferred_local_mmio_accesses: 0,
         }
     }
     #[inline]
@@ -2371,6 +2376,9 @@ impl Board {
         let inline =
             fast && s.execution_policy == ExecutionPolicy::Interactive && s.settled.verify == 0;
         let blocks = s.blocks[core].as_mut().unwrap();
+        if blocks.deferred_sync_at.is_some() {
+            return Err("ordered run started with an uncommitted local MMIO prefix".into());
+        }
         blocks.active = wanted;
         blocks.store_hook = self.store_hooks[core];
         blocks.fast_stores = fast;
@@ -2829,6 +2837,12 @@ impl State {
         blocks.room += admitted - observed;
         blocks.room = blocks.room.checked_sub(inline).ok_or("Thumb block exceeded run budget")?;
         let entered = observed + inline;
+        if let Some(prefix) = blocks.deferred_sync_at.take() {
+            if entered < prefix {
+                return Err("Thumb restart precedes a completed local MMIO access".into());
+            }
+            self.timeline.synchronize_after(core, prefix)?;
+        }
         if entered == 0 {
             return Ok(());
         }
@@ -3537,6 +3551,44 @@ impl State {
         }
         Ok(())
     }
+    /// Use the charged Thumb prefix to time a register access without
+    /// publishing the prefix or disarming the translated block allowance.
+    fn deferred_local_mmio_tick(
+        &self,
+        core: usize,
+        address: u64,
+    ) -> Result<Option<(u64, u64)>, String> {
+        if !self.settled.local_mmio
+            || !self.settled.defer_local_mmio
+            || self.execution_policy != ExecutionPolicy::Interactive
+            || self.parallel.is_some()
+            || self.release_state_changed
+            || !self.settled.armed
+            || !self.code_run.is_running(core)
+            || (0xe0000000..0xe0100000).contains(&address)
+            || self.interrupts.as_ref().is_some_and(|gic| gic.contains_register(address))
+            || !self.bus.loop_window()
+            || self.bus.needs_frontier_pcs()
+            || continuation::fired(&self.continuation)
+        {
+            return Ok(None);
+        }
+        let Some(blocks) = self.blocks[core].as_ref().filter(|blocks| blocks.active) else {
+            return Ok(None);
+        };
+        // Block mode disables the engine's separate instruction counter.
+        let entered = blocks
+            .pending
+            .map_or(0, |(_, _, entries, _)| entries)
+            .checked_add(blocks.inline.debited()?)
+            .ok_or("Thumb entry count overflow")?;
+        let tick = self.timeline.projected_tick(core, entered, blocks.deferred_sync_at)?;
+        let until = self.settled.until.min(self.clock_limit.unwrap_or(u64::MAX));
+        Ok((tick < until
+            && self.timeline.next_event().is_none_or(|event| tick < event.at))
+            .then_some((tick, entered)))
+    }
+
     fn access(
         &mut self,
         cpus: &[Rc<dyn Cpu>],
@@ -3549,6 +3601,34 @@ impl State {
         let core = binding.core;
         if self.decoders.pending() {
             return Err("MMIO requires committed memory decoding".into());
+        }
+        if let Some((tick, entered)) = self.deferred_local_mmio_tick(core, address)? {
+            if let Some(sample) = sample.as_deref_mut() {
+                sample.begin_dispatch();
+            }
+            let local = self.bus.try_local_access(address, size, value, tick);
+            if let Some(sample) = sample.as_deref_mut() {
+                sample.end_dispatch();
+            }
+            if let Some(result) = local {
+                let _access_sample = if let Some(histogram) = &self.access_histogram {
+                    let pc = scalar(&*cpus[core], Register::Pc)?;
+                    access_histogram::count(histogram, core, address, pc, value.is_some())
+                } else {
+                    None
+                };
+                let blocks = self.blocks[core].as_mut().unwrap();
+                blocks.poll = None;
+                let dropped_lag = self.timeline.lags()[core].saturating_sub(entered);
+                if dropped_lag != 0 && blocks.deferred_sync_at.is_none() {
+                    blocks.deferred_sync_at = Some(entered);
+                    blocks.inline.remove_lag(dropped_lag);
+                }
+                self.polls.last[core] = None;
+                self.settled.local_mmio_accesses += 1;
+                self.settled.deferred_local_mmio_accesses += 1;
+                return Ok(result);
+            }
         }
         // Block execution: a device access is the last instruction of its
         // block, so the whole block has been entered.

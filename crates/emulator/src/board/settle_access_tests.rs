@@ -24,7 +24,19 @@ struct Probe {
     /// All reads; not part of the saved state.
     count: u64,
     publish: bool,
+    local_reads: bool,
     read_ticks: Vec<u64>,
+}
+impl Probe {
+    fn read_at(&mut self, now: u64) -> u64 {
+        let status = self.status;
+        self.count += 1;
+        self.read_ticks.push(now);
+        if self.reads.last().is_none_or(|&(value, _)| value != status) {
+            self.reads.push((status, now));
+        }
+        status
+    }
 }
 /// A write starts a transfer that ends 300 to 302 ticks later; the status register
 /// then reads one more. Reads have no effect.
@@ -34,15 +46,14 @@ impl Device for Transfer {
         "test-transfer"
     }
     fn read(&mut self, cx: &mut Cx<'_>, _: u64, _: u8) -> u64 {
+        self.0.lock().unwrap().read_at(cx.now())
+    }
+    fn try_local_access(&mut self, _: u64, size: u8, value: Option<u64>, now: u64) -> Option<u64> {
         let mut p = self.0.lock().unwrap();
-        let status = p.status;
-        let now = cx.now();
-        p.count += 1;
-        p.read_ticks.push(now);
-        if p.reads.last().is_none_or(|&(value, _)| value != status) {
-            p.reads.push((status, now));
+        if !p.local_reads || size != 4 || value.is_some() || p.due.is_some_and(|at| at <= now) {
+            return None;
         }
-        status
+        Some(p.read_at(now))
     }
     fn write(&mut self, cx: &mut Cx<'_>, _: u64, _: u8, _: u64) {
         // The length varies so that the end falls on every phase of a
@@ -133,6 +144,7 @@ struct Outcome {
     /// Exact board access histogram calls and the published subset.
     register_access_calls: u64,
     published_fast_read_hits: u64,
+    deferred_accesses: u64,
 }
 
 fn run(quantum: usize, blocks: bool, windows: &[u64]) -> Outcome {
@@ -165,6 +177,7 @@ fn run_with(
         policy,
         publish,
         false,
+        None,
     )
 }
 
@@ -177,10 +190,11 @@ fn run_with_diagnostic(
     policy: ExecutionPolicy,
     publish: bool,
     access_histogram: bool,
+    defer_local_mmio: Option<bool>,
 ) -> Outcome {
     use factory::*;
     let arm32 = |r| Register::Arm32(fujimod_emulator_cpu::arm::Register::R(r));
-    let graph = Graph {
+    let mut graph = Graph {
         decoders: vec![],
         processors: vec![Processor {
             model: Model::CortexM4,
@@ -214,8 +228,27 @@ fn run_with_diagnostic(
         }],
         instructions_per_tick: Ratio::new(1, 1).unwrap(),
     };
+    if defer_local_mmio.is_some() {
+        graph.instructions_per_tick = Ratio::new(3, 2).unwrap();
+        graph.processors.push(Processor {
+            model: Model::CortexR5F,
+            registers: vec![(Register::Pc, 0x14000)],
+            released: true,
+            parked_until_sgi: false,
+            rprofile: Some(Default::default()),
+            mprofile: None,
+        });
+        graph.mappings.push(MemoryMap {
+            core: 1,
+            address: 0x10000,
+            physical: 0x10000,
+            size: 0x8000,
+            permissions: 7,
+        });
+    }
     let probe = Arc::new(Mutex::new(Probe {
         publish,
+        local_reads: defer_local_mmio.is_some(),
         ..Probe::default()
     }));
     let mut bus = Bus::new(bus::Mode::Strict);
@@ -236,6 +269,16 @@ fn run_with_diagnostic(
     board.set_execution_policy(policy).unwrap();
     board.set_block_execution(blocks);
     board.set_poll_loops(fast_forward);
+    if let Some(defer) = defer_local_mmio {
+        let mut state = board.state.borrow_mut();
+        state.settled.local_mmio = true;
+        state.settled.defer_local_mmio = defer;
+        state.settled.verify = 0;
+    }
+    if defer_local_mmio.is_some() {
+        // The runnable peer alternates turns with the transfer program.
+        board.write_physical(0x14000, &0xeaff_fffeu32.to_le_bytes()).unwrap();
+    }
     let words = |words: &[u32]| {
         words
             .iter()
@@ -295,6 +338,7 @@ fn run_with_diagnostic(
         checkpoint,
         register_access_calls,
         published_fast_read_hits,
+        deferred_accesses: s.settled.deferred_local_mmio_accesses,
     }
 }
 
@@ -438,6 +482,32 @@ fn m4_published_reads_observe_the_same_bus_ticks_across_transfer_deadlines() {
 }
 
 #[test]
+fn deferred_local_mmio_preserves_guest_ticks_and_checkpoint() {
+    let run = |defer| {
+        run_with_diagnostic(
+            63,
+            true,
+            &[300, 301, 625, 2111, 5000],
+            false,
+            false,
+            ExecutionPolicy::Interactive,
+            false,
+            true,
+            Some(defer),
+        )
+    };
+    let reference = run(false);
+    let candidate = run(true);
+    assert_eq!(reference.deferred_accesses, 0);
+    assert!(candidate.deferred_accesses > 0);
+    assert!(candidate.deferred_accesses < candidate.accesses);
+    assert_eq!(candidate.register_access_calls, candidate.accesses);
+    assert_eq!(candidate.read_ticks, reference.read_ticks);
+    assert_eq!(candidate.registers, reference.registers);
+    assert_eq!(candidate.checkpoint, reference.checkpoint);
+}
+
+#[test]
 fn access_histogram_calls_match_board_callbacks_and_published_subset() {
     let windows = &[300, 301, 625, 2111, 5000];
     let reference = run_with_diagnostic(
@@ -449,6 +519,7 @@ fn access_histogram_calls_match_board_callbacks_and_published_subset() {
         ExecutionPolicy::Interactive,
         false,
         true,
+        None,
     );
     let published = run_with_diagnostic(
         63,
@@ -459,6 +530,7 @@ fn access_histogram_calls_match_board_callbacks_and_published_subset() {
         ExecutionPolicy::Interactive,
         true,
         true,
+        None,
     );
     assert_eq!(reference.register_access_calls, reference.accesses);
     assert_eq!(published.register_access_calls, published.accesses);
@@ -477,6 +549,7 @@ fn access_histogram_calls_match_board_callbacks_and_published_subset() {
         ExecutionPolicy::Exact,
         false,
         true,
+        None,
     );
     assert_eq!(
         fast_forwarded.register_access_calls + fast_forwarded.left_out,
@@ -673,6 +746,7 @@ fn run_a64(quantum: usize, windows: &[u64], stable: bool, fast_forward: bool) ->
         checkpoint,
         register_access_calls: 0,
         published_fast_read_hits: 0,
+        deferred_accesses: 0,
     }
 }
 

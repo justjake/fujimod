@@ -155,6 +155,31 @@ impl Window {
         Ok((self.granted - remaining) as u64)
     }
 
+    /// An access caught the processor up to the frontier. Entries that could
+    /// have run in that old lag can no longer use the native allowance.
+    pub fn remove_lag(&mut self, lag: u64) {
+        if self.granted == 0 {
+            return;
+        }
+        let record = unsafe { self.record.as_mut().unwrap().as_mut() };
+        let old = record.accounting.budget;
+        let removed = (old as u64).min(lag) as i64;
+        record.accounting.budget -= removed;
+        self.granted -= removed;
+        if removed == 0 {
+            return;
+        }
+        if let Some(mut recovery) = self.recovery {
+            let recovery = unsafe { recovery.as_mut() };
+            if recovery.last_block_remaining_budget == old {
+                recovery.last_block_remaining_budget -= removed;
+            }
+        }
+        if let Some(mut status) = self.exception_status {
+            unsafe { *status.as_mut() &= !THUMB_GRANT_ENDS_RUN };
+        }
+    }
+
     #[inline]
     pub fn take(&mut self) -> Result<u64, String> {
         if let Some(mut status) = self.exception_status {
@@ -203,6 +228,33 @@ mod tests {
             thumb_page_bitmap: [0; 16],
             thumb_handler_mode: 0,
         }
+    }
+
+    #[test]
+    fn dropping_processor_lag_preserves_debited_entries_and_recovery() {
+        let mut raw = zeroed_recovery();
+        let recovery = NonNull::from(&mut raw);
+        let mut flags = 0;
+        let mut window = Window {
+            record: Some(recovery.cast()),
+            recovery: Some(recovery),
+            exception_status: Some(NonNull::from(&mut flags)),
+            ..Window::default()
+        };
+        window.arm(0x100, 24, 0, false, true);
+        let record = unsafe { window.recovery.as_mut().unwrap().as_mut() };
+        record.thumb_accounting.accounting.budget = 19;
+        record.last_block_remaining_budget = 19;
+        record.last_block_start = 0x100;
+        record.last_block_bytes = 10;
+        record.last_block_icount = 5;
+        assert_eq!(window.debited().unwrap(), 5);
+        window.remove_lag(7);
+        assert_eq!(window.debited().unwrap(), 5);
+        assert_eq!(window.charged_block(), Some((0x100, 10, 5)));
+        assert_eq!(raw.thumb_accounting.accounting.budget, 12);
+        assert_eq!(flags & THUMB_GRANT_ENDS_RUN, 0);
+        assert_eq!(window.take().unwrap(), 5);
     }
 
     #[test]
