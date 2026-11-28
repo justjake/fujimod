@@ -4486,6 +4486,13 @@ impl ReferenceCatalog {
                         "serial attachment",
                     )?;
                 }
+                for slot in &hardware.card_slots {
+                    block_kind(
+                        &slot.controller_id,
+                        SocBlockKind::SdCardController,
+                        "card slot",
+                    )?;
+                }
             }
             for chip in &body.control_bus_chips {
                 block_kind(

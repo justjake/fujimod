@@ -44,6 +44,26 @@ pub struct BodyHardware {
     /// Addresses the firmware reads to drain the bus past this body's DRAM map.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub bus_drain: Vec<BusDrain>,
+    /// Removable-card slots wired to SoC card hosts and their contacts.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub card_slots: Vec<CardSlotWiring>,
+}
+
+/// A removable-card slot on one SoC card host: the contacts the host's slot drives.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct CardSlotWiring {
+    /// SoC card-host block the slot belongs to.
+    pub controller_id: String,
+    /// Connection whose one GPIO pad is at its active level while a card is inserted.
+    pub detect_connection_id: String,
 }
 
 /// One discarded read the firmware issues to drain its write buffers: the
@@ -86,6 +106,14 @@ pub struct SerialAttachment {
     /// Connection selecting the endpoint, when declared.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub select_connection_id: Option<String>,
+    /// Connection whose one GPIO pad, at its active level, switches the endpoint from its
+    /// register protocol to programming its own flash, when the endpoint has that mode.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub programming_mode_connection_id: Option<String>,
+    /// Size in bytes of the endpoint's own flash that programming mode erases and writes;
+    /// declared exactly when `programming_mode_connection_id` is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub programming_flash_bytes: Option<u64>,
 }
 
 /// An interchangeable-lens mount: its serial controller and connector pads.
@@ -197,6 +225,31 @@ impl BodyHardware {
             if let Some(id) = &attachment.select_connection_id {
                 connection(id)?;
             }
+            match (
+                &attachment.programming_mode_connection_id,
+                attachment.programming_flash_bytes,
+            ) {
+                (None, None) => {}
+                (Some(id), Some(bytes)) if bytes > 0 => connection(id)?,
+                _ => {
+                    return Err(format!(
+                        "body {} serial attachment {} declares programming mode without both a \
+                         mode connection and a nonzero flash size",
+                        body.id, attachment.part_id
+                    ));
+                }
+            }
+        }
+        let mut slot_controllers = std::collections::BTreeSet::new();
+        for slot in &self.card_slots {
+            fujimod_catalog_identity::validate_id(&slot.controller_id)?;
+            if !slot_controllers.insert(slot.controller_id.as_str()) {
+                return Err(format!(
+                    "body {} declares two card slots on {}",
+                    body.id, slot.controller_id
+                ));
+            }
+            connection(&slot.detect_connection_id)?;
         }
         if let Some(mount) = &self.lens_mount {
             for id in std::iter::once(&mount.detect_connection_id)

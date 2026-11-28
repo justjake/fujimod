@@ -1128,6 +1128,26 @@ fn serial_endpoints(
                         ),
                     );
                 }
+                if let (Some(mode), Some(flash_bytes)) = (
+                    &attachment.programming_mode_connection_id,
+                    attachment.programming_flash_bytes,
+                ) {
+                    let mut programmer = toml::Table::new();
+                    programmer.insert("mode".into(), gpio_line(selection, mode)?);
+                    programmer.insert(
+                        "flash_bytes".into(),
+                        integer(i64::try_from(flash_bytes).map_err(|_| {
+                            format!("part {}: programming flash size overflows", part.id)
+                        })?),
+                    );
+                    row.insert("programmer".into(), toml::Value::Table(programmer));
+                }
+            }
+            _ if attachment.programming_mode_connection_id.is_some() => {
+                return Err(format!(
+                    "part {}: only a power controller has a programming mode",
+                    part.id
+                ));
             }
             PeripheralPart::SerialCalibrationRegisters => {
                 kind(&mut row, "serial-calibration-registers");
@@ -1234,6 +1254,31 @@ fn serial_endpoints(
         endpoints.push(toml::Value::Table(endpoint));
     }
     Ok(endpoints)
+}
+
+/// The `{port, pin, active_high}` table of a body connection that is exactly one GPIO line.
+fn gpio_line(selection: &ResolvedSelection, id: &str) -> Result<toml::Value, String> {
+    let connection = selection
+        .body
+        .connections
+        .iter()
+        .find(|connection| connection.id == id)
+        .ok_or_else(|| format!("body {}: no connection {id}", selection.body.id))?;
+    let [
+        ConnectionSignal::Gpio {
+            port,
+            pin,
+            active_level,
+        },
+    ] = connection.signals.as_slice()
+    else {
+        return Err(format!("connection {id} is not one GPIO line"));
+    };
+    let mut line = toml::Table::new();
+    line.insert("port".into(), toml::Value::Integer(i64::from(*port)));
+    line.insert("pin".into(), toml::Value::Integer(i64::from(*pin)));
+    line.insert("active_high".into(), toml::Value::Boolean(*active_level));
+    Ok(toml::Value::Table(line))
 }
 
 fn block_window(
@@ -1953,6 +1998,18 @@ fn block_window(
                 controller.insert("speed_dividers".into(), toml::Value::Table(dividers));
             }
             options.insert("controller".into(), toml::Value::Table(controller));
+            if let Some(slot) = selection
+                .body
+                .hardware
+                .iter()
+                .flat_map(|hardware| &hardware.card_slots)
+                .find(|slot| slot.controller_id == block.id)
+            {
+                options.insert(
+                    "detect_gpio".into(),
+                    gpio_line(selection, &slot.detect_connection_id)?,
+                );
+            }
             "sdhci"
         }
         BlockDevice::Decompressor { .. } => "lz",
@@ -2627,6 +2684,102 @@ mod gpio_feedback_tests {
         }];
         let error = feedback(&analog).err().unwrap();
         assert!(error.contains("exactly one GPIO pin"), "{error}");
+    }
+
+    fn sd_detect(resolved: &ResolvedConfiguration) -> Result<serde_json::Value, String> {
+        let windows = device_windows(resolved, None)?;
+        let host = windows
+            .iter()
+            .find(|window| window.kind == "sdhci" && window.base == 0xff9b_0000)
+            .unwrap();
+        Ok(serde_json::to_value(host.options.get("detect_gpio")).unwrap())
+    }
+
+    fn power_programmer(resolved: &ResolvedConfiguration) -> Result<serde_json::Value, String> {
+        let windows = device_windows(resolved, None)?;
+        let endpoints = windows.iter().flat_map(|window| {
+            let wire = window.options.get("wire").and_then(toml::Value::as_table);
+            window
+                .options
+                .get("endpoints")
+                .or_else(|| wire?.get("endpoints"))
+                .and_then(toml::Value::as_array)
+                .into_iter()
+                .flatten()
+        });
+        let programmers: Vec<_> = endpoints
+            .filter_map(|endpoint| endpoint.get("part")?.get("programmer"))
+            .collect();
+        Ok(serde_json::to_value(programmers).unwrap())
+    }
+
+    #[test]
+    fn a_body_card_slot_wires_its_hosts_card_detect_pad() {
+        assert_eq!(
+            sd_detect(&resolved("xe5-112")).unwrap(),
+            serde_json::json!({"port": 11, "pin": 12, "active_high": false})
+        );
+        // A body that declares no slot leaves the host without a detect pad.
+        assert_eq!(
+            sd_detect(&resolved("xt5-431")).unwrap(),
+            serde_json::Value::Null
+        );
+        let mut analog = resolved("xe5-112");
+        analog
+            .reference
+            .body
+            .connections
+            .iter_mut()
+            .find(|connection| connection.id == "sd-card-detect")
+            .unwrap()
+            .signals = vec![ConnectionSignal::Adc {
+            channel: 0,
+            threshold: None,
+        }];
+        let error = sd_detect(&analog).unwrap_err();
+        assert!(error.contains("not one GPIO line"), "{error}");
+    }
+
+    #[test]
+    fn a_power_controller_attachment_with_a_mode_pad_gets_a_programmer() {
+        assert_eq!(
+            power_programmer(&resolved("xe5-112")).unwrap(),
+            serde_json::json!([{
+                "mode": {"port": 8, "pin": 1, "active_high": true},
+                "flash_bytes": 0x1_0000,
+            }])
+        );
+        assert_eq!(
+            power_programmer(&resolved("xt5-431")).unwrap(),
+            serde_json::json!([])
+        );
+        // Only a power controller has a programming mode.
+        let mut misplaced = resolved("xe5-112");
+        let attachments = &mut misplaced
+            .reference
+            .body
+            .hardware
+            .as_mut()
+            .unwrap()
+            .serial_attachments;
+        let (mode, bytes) = attachments
+            .iter_mut()
+            .find(|attachment| attachment.part_id == "power-controller")
+            .map(|attachment| {
+                (
+                    attachment.programming_mode_connection_id.take(),
+                    attachment.programming_flash_bytes.take(),
+                )
+            })
+            .unwrap();
+        let other = attachments
+            .iter_mut()
+            .find(|attachment| attachment.part_id == "serial-command-8")
+            .unwrap();
+        other.programming_mode_connection_id = mode;
+        other.programming_flash_bytes = bytes;
+        let error = power_programmer(&misplaced).unwrap_err();
+        assert!(error.contains("only a power controller"), "{error}");
     }
 }
 

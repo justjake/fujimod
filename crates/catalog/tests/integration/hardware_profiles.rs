@@ -114,6 +114,39 @@ fn bus_drain_must_be_aligned_and_name_processors() {
 }
 
 #[test]
+fn card_slots_and_programming_modes_name_declared_connections() {
+    body("xe5").validate("xe5").unwrap();
+    let mut body = self::body("xe5");
+    let slots = &mut body.hardware.as_mut().unwrap().card_slots;
+    slots[0].detect_connection_id = "missing".into();
+    assert!(body.validate("xe5").unwrap_err().contains("missing"));
+    let mut body = self::body("xe5");
+    let slots = &mut body.hardware.as_mut().unwrap().card_slots;
+    slots.push(slots[0].clone());
+    assert!(body.validate("xe5").unwrap_err().contains("two card slots"));
+    let mode = Some("power-controller-programming-mode".to_string());
+    for (mode, bytes) in [
+        (mode.clone(), None),
+        (None, Some(0x1_0000)),
+        (mode, Some(0)),
+        (Some("missing".to_string()), Some(0x1_0000)),
+    ] {
+        let mut body = self::body("xe5");
+        let attachment = body
+            .hardware
+            .as_mut()
+            .unwrap()
+            .serial_attachments
+            .iter_mut()
+            .find(|attachment| attachment.programming_mode_connection_id.is_some())
+            .unwrap();
+        attachment.programming_mode_connection_id = mode;
+        attachment.programming_flash_bytes = bytes;
+        assert!(body.validate("xe5").is_err());
+    }
+}
+
+#[test]
 fn xp4_display_channels_declare_the_same_plane_layouts() {
     let catalog = ReferenceCatalog::bundled().expect("bundled catalog loads");
     let soc: &Soc = catalog.soc("xp4").expect("xp4 record");
