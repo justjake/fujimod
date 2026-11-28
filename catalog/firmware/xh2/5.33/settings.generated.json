@@ -1,0 +1,23 @@
+{
+  "$schema": "https://fujimod.com/schemas/settings.generated.schema.json",
+  "schema": 1,
+  "id": "xh2-533-settings",
+  "firmware_id": "xh2-533",
+  "source": {
+    "flash_offset": 3145728,
+    "address": 17829888,
+    "size": 12033968,
+    "sha256": "4cf46a8ba6af3881e998e3eb89d3c584b0a28777bd4ec1a790ce294189901f0a"
+  },
+  "configuration": {
+    "flash_offset": 786432,
+    "bytes": 814080,
+    "sha256": "5e14efa198ffafedf42527ce8a5285c1518515418cb94e989be43b16cd41ffbe",
+    "basis": "At startup the stock configuration initializer zero-fills the configuration store when its stored signature is invalid and, when the firmware image enables it, copies these installed flash bytes to store offset 0."
+  },
+  "defaults": null,
+  "fields": [],
+  "profile": null,
+  "settings": {},
+  "sections": []
+}
