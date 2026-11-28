@@ -1,4 +1,4 @@
-//! Declared X-mount power/reset, serial pads and ready interrupt connection.
+//! Declared X-mount power/reset, serial pads and ready interrupt connection. The reset pad is optional.
 //!
 //! Pad mux/direction/enable registers and interrupt sense registers are the
 //! only control inputs. Startup duration and electrical interpretation remain
@@ -43,7 +43,10 @@ impl Pad {
 #[serde(deny_unknown_fields)]
 pub struct Options {
     pub supplies: [Pad; 2],
-    pub reset: Pad,
+    /// The lens reset pad. `None` declares a board whose lens has no separate reset line: it leaves reset whenever
+    /// both supplies are driven high (a declared board input, like every pad role here).
+    #[serde(default)]
+    pub reset: Option<Pad>,
     pub ready: Pad,
     pub ready_line: u32,
     pub clock: Pad,
@@ -52,18 +55,22 @@ pub struct Options {
 }
 impl Options {
     fn validate(&self) -> Result<(), String> {
-        let pads = [
-            self.supplies[0],
-            self.supplies[1],
-            self.reset,
-            self.ready,
-            self.clock,
-            self.transmit,
-            self.receive,
-        ];
-        for (i, pad) in pads.iter().copied().enumerate() {
-            pad.validate(i == 3 || i == 6)?;
-            if pads[..i].iter().any(|other| other.pin == pad.pin) {
+        // (pad, input): ready and receive are inputs, every other pad an output.
+        let pads: Vec<(Pad, bool)> = [
+            Some((self.supplies[0], false)),
+            Some((self.supplies[1], false)),
+            self.reset.map(|pad| (pad, false)),
+            Some((self.ready, true)),
+            Some((self.clock, false)),
+            Some((self.transmit, false)),
+            Some((self.receive, true)),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        for (i, (pad, input)) in pads.iter().copied().enumerate() {
+            pad.validate(input)?;
+            if pads[..i].iter().any(|(other, _)| other.pin == pad.pin) {
                 return Err("X-mount connector requires distinct physical pads".into());
             }
         }
@@ -147,7 +154,10 @@ impl XMountLens {
                 self.options.supplies[0].driven(&self.gpio)?,
                 self.options.supplies[1].driven(&self.gpio)?,
             ],
-            reset_released: self.options.reset.driven(&self.gpio)?,
+            reset_released: match self.options.reset {
+                Some(pad) => pad.driven(&self.gpio)?,
+                None => Some(true),
+            },
         })
     }
     fn transport_configured(&self) -> Result<bool, String> {

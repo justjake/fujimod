@@ -10,7 +10,7 @@ fn pad(port: u8, pin: u8, mux: u32) -> Pad {
 fn options() -> Options {
     Options {
         supplies: [pad(2, 14, 0), pad(2, 15, 0)],
-        reset: pad(2, 12, 0),
+        reset: Some(pad(2, 12, 0)),
         ready: pad(0, 7, 1),
         ready_line: 15,
         clock: pad(13, 8, 1),
@@ -19,6 +19,9 @@ fn options() -> Options {
     }
 }
 fn setup() -> (XMountLens, gpio::Gpio, irq::InterruptController, TestHost) {
+    setup_with(options())
+}
+fn setup_with(options: Options) -> (XMountLens, gpio::Gpio, irq::InterruptController, TestHost) {
     let mut levels = [0; 16];
     levels[0] = 0x80;
     let gpio = gpio::Gpio::new(
@@ -74,7 +77,7 @@ fn setup() -> (XMountLens, gpio::Gpio, irq::InterruptController, TestHost) {
             busy_ticks: None,
             operation_ticks: None,
         },
-        options(),
+        options,
         gpio.pads(),
         vec![(0, inputs)],
     )
@@ -168,6 +171,37 @@ fn known_pads_start_one_deadline_and_ready_edge_replays_after_partial_restore() 
     assert_eq!(lens.next_deadline(101), None);
 }
 #[test]
+fn without_a_reset_pad_the_supplies_alone_start_the_lens_and_the_old_reset_pin_is_free() {
+    // Port 2 pin 12 stays wired and driven as an ordinary output (a board's sync line, say); it no longer gates power.
+    let (mut lens, mut gpio, mut controller, mut host) = setup_with(Options {
+        reset: None,
+        ..options()
+    });
+    configure(&mut gpio, &mut host);
+    source(&mut controller, &mut host, true, 2);
+    advance(&mut lens, &mut host, 0);
+    assert_eq!(lens.next_deadline(0), Some(100));
+    advance(&mut lens, &mut host, 100);
+    assert!(!gpio.pads().input_level(options().ready.pin).unwrap());
+    host.now = 101;
+    write(&mut gpio, &mut host, gpio::BASE + 2 * 64, 0x10000000);
+    advance(&mut lens, &mut host, 101);
+    assert!(!gpio.pads().input_level(options().ready.pin).unwrap());
+    assert_eq!(lens.next_deadline(101), None);
+    host.now = 102;
+    write(&mut gpio, &mut host, gpio::BASE + 2 * 64, 0x40000000);
+    advance(&mut lens, &mut host, 102);
+    assert!(gpio.pads().input_level(options().ready.pin).unwrap());
+}
+#[test]
+fn a_declared_reset_pad_must_differ_from_the_supplies() {
+    let options = Options {
+        reset: Some(options().supplies[1]),
+        ..options()
+    };
+    assert!(options.validate().is_err());
+}
+#[test]
 fn physical_level_survives_clear_and_eoi_and_withdraws_when_input_is_disabled() {
     let (mut lens, mut gpio, mut controller, mut host) = setup();
     configure(&mut gpio, &mut host);
@@ -234,7 +268,7 @@ fn serial_pad_loss_refuses_and_checkpoint_wiring_validation_is_atomic() {
         lens.name(),
         &Saved {
             options: Options {
-                reset: options().supplies[0],
+                reset: Some(options().supplies[0]),
                 ..options()
             },
             ..lens.saved()

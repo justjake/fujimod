@@ -4,6 +4,10 @@
 //! `read = (retained & !clear) | set` for the word at `offset + n * stride` (n < count). A rule therefore
 //! states a hardware response the firmware waits for (a self-clearing start bit, an idle state field),
 //! visibly in the board definition, instead of patching firmware. It is not a measured device model.
+//!
+//! A write trigger raises an interrupt a declared delay after a write sets its bits. It may require bits in another
+//! retained word at the time of the write (a channel enable, say), and may latch bits into retained words when it
+//! fires (a completion status the handler then clears by writing), so a declared job start can complete.
 use crate::bus::InterruptLine;
 use crate::{Cx, Device};
 use serde::{Deserialize, Serialize};
@@ -48,13 +52,27 @@ pub struct Options {
     pub triggers: Vec<WriteTrigger>,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WriteTrigger {
     pub offset: u32,
     pub mask: u32,
     pub line: InterruptLine,
     pub delay_ticks: u64,
+    /// Fire only when the retained word at this offset has one of these bits set at the time of the write.
+    #[serde(default)]
+    pub require: Option<Bits>,
+    /// Bits set in retained words when the trigger fires, before its interrupt.
+    #[serde(default)]
+    pub latch: Vec<Bits>,
+}
+
+/// Bits of the retained word at `offset`.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct Bits {
+    pub offset: u32,
+    pub bits: u32,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize)]
@@ -100,6 +118,14 @@ impl RegisterStub {
             {
                 return Err("register stub rule lies outside its window".into());
             }
+        }
+        let inside = |offset: u32| offset & 3 == 0 && u64::from(offset) + 4 <= options.size;
+        if options.triggers.iter().any(|t| {
+            !inside(t.offset)
+                || t.require.is_some_and(|r| !inside(r.offset) || r.bits == 0)
+                || t.latch.iter().any(|l| !inside(l.offset) || l.bits == 0)
+        }) {
+            return Err("register stub trigger words lie outside its window".into());
         }
         if options
             .irqs
@@ -182,7 +208,10 @@ impl Device for RegisterStub {
         let new = (old & !mask) | ((value << shift) & mask);
         self.state.words.insert(offset, new as u32);
         for (i, t) in self.options.triggers.iter().enumerate() {
-            if t.offset == offset && (new as u32) & t.mask != 0 {
+            let required = t.require.is_none_or(|r| {
+                self.state.words.get(&r.offset).copied().unwrap_or(0) & r.bits != 0
+            });
+            if t.offset == offset && (new as u32) & t.mask != 0 && required {
                 self.state.triggered.push((cx.now() + t.delay_ticks, i));
             }
         }
@@ -214,6 +243,9 @@ impl Device for RegisterStub {
             .partition(|&(at, _)| at <= now);
         self.state.triggered = later;
         for (_, i) in due {
+            for latch in &self.options.triggers[i].latch {
+                *self.state.words.entry(latch.offset).or_insert(0) |= latch.bits;
+            }
             let result = match self.options.triggers[i].line {
                 InterruptLine::Core { core, line } => cx.raise_irq(core, line),
                 InterruptLine::Shared(line) => {
@@ -329,5 +361,65 @@ mod tests {
             triggers: vec![],
         };
         assert!(RegisterStub::new(half).is_err());
+    }
+
+    fn completing(channel: u32) -> WriteTrigger {
+        WriteTrigger {
+            offset: 0,
+            mask: 0x1000,
+            line: InterruptLine::Core { core: 0, line: 48 },
+            delay_ticks: 10,
+            require: Some(Bits {
+                offset: 0x88,
+                bits: 1 << channel,
+            }),
+            latch: vec![Bits {
+                offset: 0x84,
+                bits: 1 << channel,
+            }],
+        }
+    }
+
+    #[test]
+    fn a_start_completes_the_enabled_channel_by_latching_its_status_then_interrupting() {
+        use crate::test_host::{TestHost, advance, read, write};
+        let mut s = RegisterStub::new(Options {
+            base: 0x1000,
+            size: 0x100,
+            rules: vec![],
+            irqs: vec![],
+            triggers: vec![completing(0), completing(1)],
+        })
+        .unwrap();
+        let mut h = TestHost::new();
+        // A start with no channel enabled schedules nothing.
+        write(&mut s, &mut h, 0x1000, 0x1000);
+        assert_eq!(s.next_deadline(0), None);
+        write(&mut s, &mut h, 0x1088, 2);
+        write(&mut s, &mut h, 0x1000, 0x1011000);
+        assert_eq!(s.next_deadline(0), Some(10));
+        advance(&mut s, &mut h, 9);
+        assert_eq!((read(&mut s, &mut h, 0x1084), h.irqs.len()), (0, 0));
+        advance(&mut s, &mut h, 10);
+        assert_eq!(read(&mut s, &mut h, 0x1084), 2);
+        assert_eq!(h.irqs, vec![(0, 48)]);
+        // The handler clears the status by writing; the latch does not reassert it.
+        write(&mut s, &mut h, 0x1084, 0);
+        advance(&mut s, &mut h, 20);
+        assert_eq!(read(&mut s, &mut h, 0x1084), 0);
+    }
+
+    #[test]
+    fn trigger_words_outside_the_window_refuse() {
+        let mut far = completing(0);
+        far.latch[0].offset = 0x100;
+        let options = Options {
+            base: 0x1000,
+            size: 0x100,
+            rules: vec![],
+            irqs: vec![],
+            triggers: vec![far],
+        };
+        assert!(RegisterStub::new(options).is_err());
     }
 }

@@ -796,6 +796,11 @@ fn producer_windows_and_completion_line_are_options() {
         (0xfff34008, 0x03ff03ff),
         (0xfff34048, 0x022b012e),
         (0xfff3404c, 0x020e012e),
+        (0xfff34018, 0),
+        (0xfff34018, 0x07ff07ff),
+        (0xfff3401c, 0x10100),
+        (0xfff34200, 0xffffffff),
+        (0xfff343fc, 0xffff),
         (0xfff34000, 0x01030001),
     ] {
         write(&mut d, &mut m, address, value);

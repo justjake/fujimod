@@ -29,6 +29,24 @@ const BLEND: u32 = 0x80;
 /// icons); they blend source-over whatever 0x400 bit 7 says, so a label keeps the row background behind its text.
 const IMAGE: u32 = 0x140;
 const IMAGE_VARIANT: u32 = 0x10;
+/// Surface format word of a YCbCr 4:2:2 source: two bytes per pixel, each pixel pair stored Y0 Y1 Cb Cr. The pair
+/// layout and the full-range BT.601 conversion are the ones the camera software uses for its own YCbCr buffers;
+/// that the GPU reads this format the same way is inferred, not measured.
+const YCBCR_422: u32 = 0x424;
+
+/// One full-range BT.601 YCbCr sample as an opaque destination pixel (bytes B, G, R, A), in the camera software's
+/// fixed-point arithmetic (scaled by 100000, truncated, clamped).
+fn ycbcr_pixel(y: u8, cb: u8, cr: u8) -> [u8; 4] {
+    let y = i32::from(y) * 100_000;
+    let (cb, cr) = (i32::from(cb) - 128, i32::from(cr) - 128);
+    let clamp = |v: i32| (v / 100_000).clamp(0, 255) as u8;
+    [
+        clamp(y + cb * 177_200),
+        clamp(y - cb * 34_414 - cr * 71_414),
+        clamp(y + cr * 140_200),
+        0xff,
+    ]
+}
 /// 0x604 bits 15 and 13: linear-gradient paint (flat paint is 0x50040, gradients 0x5a040). Bits 31:26 hold the
 /// index of the last color-ramp stop; the flat color 0x548 then carries only a black placeholder.
 const GRADIENT: u32 = 0xa000;
@@ -407,6 +425,17 @@ impl Renderer {
         if blend && !image && flat[3] == 0 && self.reg(0x604) & GRADIENT != GRADIENT {
             return Ok(());
         }
+        let ycbcr = image && self.reg(0x220 + 6) == YCBCR_422;
+        let bytes_per_pixel = if ycbcr { 2 } else { 4 };
+        if image && src.stride < src.width as u64 * bytes_per_pixel {
+            // Image paint reads 4-byte pixels unless the source is YCbCr; a narrower row is another format.
+            return Err(format!(
+                "unmodeled image paint source format {:#x} ({} pixels in a {}-byte row)",
+                self.reg(0x220 + 6),
+                src.width,
+                src.stride
+            ));
+        }
         let gradient = (!image).then(|| self.gradient()).flatten();
         let mut src_row = vec![0u8; if image { src.stride as usize } else { 0 }];
         for &(row, x0, x1) in spans {
@@ -430,8 +459,17 @@ impl Renderer {
                         cx.ram_read(src.address + v as u64 * src.stride, &mut src_row)?;
                         loaded_row = v;
                     }
-                    let o = u as usize * 4;
-                    [src_row[o], src_row[o + 1], src_row[o + 2], src_row[o + 3]]
+                    if ycbcr {
+                        let pair = (u as usize & !1) * 2;
+                        ycbcr_pixel(
+                            src_row[pair + (u as usize & 1)],
+                            src_row[pair + 2],
+                            src_row[pair + 3],
+                        )
+                    } else {
+                        let o = u as usize * 4;
+                        [src_row[o], src_row[o + 1], src_row[o + 2], src_row[o + 3]]
+                    }
                 } else if let Some(g) = &gradient {
                     g.at((x0 + k as i64) as f32 + 0.5, vy)
                 } else {
@@ -518,6 +556,72 @@ mod tests {
             assert!(host.ram[bottom + 4..bottom + 16].iter().all(|b| *b == 0x80));
             assert!(host.ram[SURFACE..bottom].iter().all(|b| *b == 0x80));
         }
+    }
+
+    #[test]
+    fn image_paint_refuses_a_source_row_too_narrow_for_four_byte_pixels() {
+        let mut renderer = Renderer::default();
+        renderer
+            .seed(&[
+                (0x200, SURFACE as u32),
+                (0x204, 16),
+                (0x205, 3 | 3 << 16),
+                (0x220, 0x3000),
+                // Four pixels in an 8-byte row: a two-byte format.
+                (0x224, 8),
+                (0x225, 3 | 3 << 16),
+                (0x226, 0x5),
+                (0x550, 1f32.to_bits()),
+                (0x554, 1f32.to_bits()),
+                (0x558, 1f32.to_bits()),
+                (0x604, IMAGE),
+            ])
+            .unwrap();
+        let mut host = TestHost::new();
+        let words = [
+            0x0400_0000,
+            0,
+            0x0412_0001,
+            0,
+            4 | 4 << 16,
+            0x0410_0000,
+            0xe,
+            0xf000_0000,
+        ];
+        let mut cx = host.cx();
+        let error = renderer.execute(&mut cx, &words).unwrap_err();
+        assert!(error.contains("source format 0x5"), "{error}");
+    }
+
+    #[test]
+    fn image_paint_converts_a_ycbcr_422_source_per_pixel_pair() {
+        const IMAGE_SURFACE: usize = 0x3000;
+        let mut renderer = Renderer::default();
+        renderer
+            .seed(&[
+                (0x200, SURFACE as u32),
+                (0x204, 16),
+                (0x205, 3 | 3 << 16),
+                (0x220, IMAGE_SURFACE as u32),
+                (0x224, 8),
+                (0x225, 3 | 3 << 16),
+                (0x226, YCBCR_422),
+                (0x550, 1f32.to_bits()),
+                (0x554, 1f32.to_bits()),
+                (0x558, 1f32.to_bits()),
+                (0x604, IMAGE),
+            ])
+            .unwrap();
+        let mut host = TestHost::new();
+        // Row 0: a white then a black pixel sharing neutral chroma, then a pure-red pair (Y 76, Cb 85, Cr 255).
+        host.ram[IMAGE_SURFACE..IMAGE_SURFACE + 8]
+            .copy_from_slice(&[255, 0, 128, 128, 76, 76, 85, 255]);
+        rectangle(&mut renderer, &mut host, 0, 0xff);
+        let bottom = SURFACE + 3 * 16;
+        assert_eq!(&host.ram[bottom..bottom + 4], &[255, 255, 255, 255]);
+        assert_eq!(&host.ram[bottom + 4..bottom + 8], &[0, 0, 0, 255]);
+        assert_eq!(&host.ram[bottom + 8..bottom + 12], &[0, 0, 254, 255]);
+        assert_eq!(ycbcr_pixel(128, 128, 128), [128, 128, 128, 255]);
     }
 
     #[test]
