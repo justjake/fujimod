@@ -5,6 +5,12 @@ load_firmware = true
 # waits in delay loops, so it runs in block execution. The guest state is the same either way.
 mprofile_block_execution = true
 
+# The loader start reaches its first aperture read (0xcc, 20 dummy cycles) with no write to the
+# part's volatile dummy-cycle register, which an earlier boot stage leaves selecting 20 cycles, as
+# on the X-H2 5.30. INFERRED for the X-E5 from that read; the setup start programs it itself.
+[flash]
+volatile_dummy_cycles = 20
+
 # The XP5 device tree maps Linux DRAM and shared arenas below 0x67f00000, but the application also
 # uses DRAM up to 0x80000000: CPU1 writes 0x7ec00000 (a memset from 0x3271124, as on the X-T5, whose
 # still subject-detection arena is 0x7ec00000 + 0x1400000), and the drain routine reads 0x68000000
@@ -71,3 +77,10 @@ max_dirty_sectors = 65536
 partition_start = 8192
 sectors_per_cluster = 64
 label = "NO NAME"
+
+# Boot control: source_straps = 0 is the value of the setup handoff (setup-handoff.toml). With
+# bit 0 set, boot setup takes the serial-NAND path (0xff811bbc) and issues NAND get-feature 0xf to
+# the serial NOR. UNVERIFIED as the physical strap level of the X-E5, as there.
+[[window_options]]
+base = 0xff90e000
+set = { source_straps = 0 }
