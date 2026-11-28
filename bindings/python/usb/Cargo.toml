@@ -18,6 +18,7 @@ doctest = false
 fujimod-python-usb-base = { path = "../usb-base" }
 fujimod-catalog-workflows.workspace = true
 fujimod-catalog-restart.workspace = true
+fujimod-catalog-bulk.workspace = true
 fujimod-catalog-firmware-identity.workspace = true
 fujimod-firmware.workspace = true
 fujimod-recovery.workspace = true

@@ -97,6 +97,7 @@ fn fixture() -> (FirmwareBulk, FirmwareFlash, Payload, Vec<u8>) {
             symbol: "flash_read".into(),
             alignment: 64,
             nand: None,
+            scratch: None,
         }),
         transport: Some("xp5-cmd-callback".into()),
         code_ranges: vec![FlashCodeRange {

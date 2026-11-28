@@ -57,6 +57,7 @@ fn fixture() -> (FirmwareBulk, FirmwareFlash, Payload, Vec<u8>) {
             symbol: "flash_read".into(),
             alignment: 32,
             nand: None,
+            scratch: None,
         }),
         transport: Some("xp4-camera-code".into()),
         code_ranges: vec![FlashCodeRange {

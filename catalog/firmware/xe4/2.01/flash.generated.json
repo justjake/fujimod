@@ -18,7 +18,19 @@
     "dat_offset": 628,
     "xor": 255
   },
-  "transport": null,
+  "reader": {
+    "symbol": "stock flash reader",
+    "alignment": 128,
+    "scratch": {
+      "state": {
+        "address": 24189468,
+        "size": 96
+      },
+      "pointer": 24189524,
+      "size": 24189488
+    }
+  },
+  "transport": "xp4-stock-query",
   "code_ranges": [
     {
       "name": "flash command routine",
@@ -44,6 +56,11 @@
       "name": "flash read preparation",
       "address": 18648000,
       "size": 88
+    },
+    {
+      "name": "flash scratch copy",
+      "address": 18640548,
+      "size": 144
     }
   ],
   "state_checks": [
@@ -52,6 +69,18 @@
       "address": 24189468,
       "size": 4,
       "value": 2003199317
+    },
+    {
+      "name": "flash part descriptor",
+      "address": 24189556,
+      "size": 4,
+      "value": 23794700
+    },
+    {
+      "name": "flash read mode",
+      "address": 24189560,
+      "size": 1,
+      "value": 0
     }
   ],
   "control": {

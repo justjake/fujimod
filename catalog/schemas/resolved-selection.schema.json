@@ -14448,6 +14448,17 @@
           ],
           "description": "Parallel NAND page ABI, absent for memory-window readers."
         },
+        "scratch": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FlashReaderScratch"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Driver RAM the stock reader uses beside the caller's destination,\nabsent when the contract does not establish it."
+        },
         "symbol": {
           "description": "Symbol used to link the payload.",
           "type": "string"
@@ -14456,6 +14467,34 @@
       "required": [
         "symbol",
         "alignment"
+      ],
+      "type": "object"
+    },
+    "FlashReaderScratch": {
+      "additionalProperties": false,
+      "description": "Driver RAM a stock reader reads, writes and stages data in. The staging\nbuffer is located at run time through two words of the driver state.",
+      "properties": {
+        "pointer": {
+          "description": "Word in `state` holding the staging buffer's CPU address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Word in `state` holding the staging buffer's size in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "state": {
+          "$ref": "#/$defs/FlashRange",
+          "description": "Driver state the reader path uses."
+        }
+      },
+      "required": [
+        "state",
+        "pointer",
+        "size"
       ],
       "type": "object"
     },

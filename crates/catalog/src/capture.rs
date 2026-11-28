@@ -140,6 +140,29 @@ pub struct FlashReader {
     /// Parallel NAND page ABI, absent for memory-window readers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nand: Option<NandPageReader>,
+    /// Driver RAM the stock reader uses beside the caller's destination,
+    /// absent when the contract does not establish it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scratch: Option<FlashReaderScratch>,
+}
+
+/// Driver RAM a stock reader reads, writes and stages data in. The staging
+/// buffer is located at run time through two words of the driver state.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct FlashReaderScratch {
+    /// Driver state the reader path uses.
+    pub state: FlashRange,
+    /// Word in `state` holding the staging buffer's CPU address.
+    pub pointer: u64,
+    /// Word in `state` holding the staging buffer's size in bytes.
+    pub size: u64,
 }
 
 /// Stock instruction range.
@@ -287,10 +310,15 @@ impl FirmwareFlash {
         let raw_nand = self.device.kind == "raw-nand";
         let mapped_only =
             self.e1_window.is_some() && self.reader.is_none() && self.transport.is_none();
-        let xpp_identity_unresolved = self.device.kind == "serial-nor"
+        // Stock-reader transports read through the firmware driver, which
+        // needs no part identity from the contract.
+        let identity_unresolved = self.device.kind == "serial-nor"
             && self.device.jedec_id.is_none()
             && self.device.part.is_none()
-            && self.transport.as_deref() == Some("xpp-cmd-callback");
+            && matches!(
+                self.transport.as_deref(),
+                Some("xpp-cmd-callback" | "xp4-stock-query")
+            );
         if !matches!(
             self.device.kind.as_str(),
             "serial-nand" | "serial-nor" | "raw-nand"
@@ -306,7 +334,7 @@ impl FirmwareFlash {
             .is_some_and(|part| part.is_empty())
             || (!raw_nand
                 && !mapped_only
-                && !xpp_identity_unresolved
+                && !identity_unresolved
                 && (self.device.jedec_id.is_none() || self.device.part.is_none()))
             || self.reader.as_ref().is_some_and(|reader| {
                 reader.symbol.is_empty() || !reader.alignment.is_power_of_two()
@@ -384,6 +412,21 @@ impl FirmwareFlash {
             .is_some_and(|reader| !names.contains(&reader.symbol))
         {
             return Err("stock reader is not checked".into());
+        }
+        if let Some(scratch) = self
+            .reader
+            .as_ref()
+            .and_then(|reader| reader.scratch.as_ref())
+        {
+            extent(scratch.state.address, scratch.state.size)?;
+            let state_end = scratch.state.address + scratch.state.size;
+            if [scratch.pointer, scratch.size].iter().any(|word| {
+                !word.is_multiple_of(4) || *word < scratch.state.address || word + 4 > state_end
+            }) || scratch.pointer == scratch.size
+                || state_end > 1 << 32
+            {
+                return Err("invalid stock reader scratch".into());
+            }
         }
         for check in &self.state_checks {
             extent(check.address, u64::from(check.size))?;
