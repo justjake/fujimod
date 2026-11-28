@@ -276,7 +276,7 @@ impl Engines {
                     if let Some(cache) = &config.data_cache {
                         core.set_cache_ids([cache.geometry().ccsidr(), 0, 0]);
                     }
-                    let monitors = memory.exclusive_domain();
+                    let monitors = memory.shared().exclusive_domain();
                     let owner = monitors
                         .lock()
                         .map_err(|_| "exclusive monitors poisoned")?
