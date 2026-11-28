@@ -25033,7 +25033,7 @@
       "type": "string"
     },
     "RunCpuBackend": {
-      "description": "Execution backend for Cortex-A7 processors.",
+      "description": "Execution backend for Cortex-A7 and Cortex-M4 processors.",
       "enum": [
         "unicorn",
         "dynarmic"
@@ -25310,7 +25310,7 @@
               "type": "null"
             }
           ],
-          "description": "CPU backend for Cortex-A7 processors. Absence selects Unicorn."
+          "description": "CPU backend for Cortex-A7 and Cortex-M4 processors. Absence selects Unicorn."
         },
         "display_frame_ticks": {
           "description": "Selected display frame ticks. Absence preserves the base selection.",

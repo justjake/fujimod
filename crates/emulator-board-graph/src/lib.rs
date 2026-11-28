@@ -110,6 +110,10 @@ fn register(register: ProcessorRegister) -> Register {
     }
 }
 
+fn supports_dynarmic(model: ProcessorModel) -> bool {
+    matches!(model, ProcessorModel::CortexA7 | ProcessorModel::CortexM4)
+}
+
 fn build_processor(
     processor: &ProcessorCore,
     registers: &[(Register, u64)],
@@ -162,7 +166,7 @@ fn build_processor(
         .transpose()?;
     Ok(factory::Processor {
         model,
-        cpu_backend: if model == Model::CortexA7 {
+        cpu_backend: if supports_dynarmic(processor.model) {
             cpu_backend
         } else {
             RunCpuBackend::Unicorn
@@ -268,12 +272,9 @@ pub fn assemble_with_starts(
     let soc = &selection.soc;
     let body = &selection.body;
     if cpu_backend == RunCpuBackend::Dynarmic
-        && !soc
-            .processors
-            .iter()
-            .any(|p| p.model == ProcessorModel::CortexA7)
+        && !soc.processors.iter().any(|p| supports_dynarmic(p.model))
     {
-        return Err("cpu_backend=dynarmic requires a Cortex-A7 processor".into());
+        return Err("cpu_backend=dynarmic requires a Cortex-A7 or Cortex-M4 processor".into());
     }
     if dram_address_space_limit_bytes == 0 || !dram_address_space_limit_bytes.is_multiple_of(4096) {
         return Err("DRAM address-space limit must be positive and page-aligned".into());
@@ -951,6 +952,32 @@ mod tests {
         assert_eq!(decoder.choices.len(), 2);
         assert_eq!(decoder.choices[0].processors[0].physical, 0x8000_0000);
         assert_eq!(decoder.choices[1].processors[0].physical, 0);
+    }
+
+    #[test]
+    fn xp5_selects_dynarmic_for_the_m4_companion() {
+        let selection = fujimod_catalog::ReferenceCatalog::bundled()
+            .unwrap()
+            .resolve("xt5", "xt5-431")
+            .unwrap();
+        for processor in &selection.soc.processors {
+            let core = build_processor(
+                processor,
+                &[],
+                false,
+                false,
+                None,
+                selection.soc.architecture.clone(),
+                RunCpuBackend::Dynarmic,
+            )
+            .unwrap();
+            let expected = match core.model {
+                Model::CortexM4 => RunCpuBackend::Dynarmic,
+                Model::ArmV8A => RunCpuBackend::Unicorn,
+                model => panic!("unexpected XP5 processor model: {model:?}"),
+            };
+            assert_eq!(core.cpu_backend, expected, "{}", processor.id);
+        }
     }
 
     #[test]

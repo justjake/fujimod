@@ -175,9 +175,7 @@ pub fn validate_engine(
             .into_iter()
             .any(|model| !matches!(model, Model::ArmV8A | Model::CortexM4))
     {
-        return Err(
-            "Hypervisor boards support AArch64 cores and Unicorn M-profile companions".into(),
-        );
+        return Err("Hypervisor boards support AArch64 cores and Cortex-M4 companions".into());
     }
     Ok(())
 }

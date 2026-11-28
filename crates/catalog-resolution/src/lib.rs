@@ -5,7 +5,10 @@
 //! block, connection, part and profile identity the run uses exists in the
 //! selected hardware.
 
-use fujimod_catalog::{ReferenceCatalog, ResolvedSelection, reference::SocBlockKind};
+use fujimod_catalog::{
+    ReferenceCatalog, ResolvedSelection,
+    reference::{ProcessorModel, SocBlockKind},
+};
 use fujimod_catalog_configuration::application_inputs::*;
 use fujimod_catalog_configuration::*;
 use fujimod_catalog_construction::HardwareSelection;
@@ -358,10 +361,13 @@ pub fn validate_selection(
 
     if configuration.cpu_backend() == RunCpuBackend::Dynarmic
         && !selection.soc.processors.iter().any(|processor| {
-            processor.model == fujimod_catalog::reference::ProcessorModel::CortexA7
+            matches!(
+                processor.model,
+                ProcessorModel::CortexA7 | ProcessorModel::CortexM4
+            )
         })
     {
-        return Err("cpu_backend=dynarmic requires a Cortex-A7 processor".into());
+        return Err("cpu_backend=dynarmic requires a Cortex-A7 or Cortex-M4 processor".into());
     }
 
     if selection.body.dram_bytes.is_none() && configuration.dram_address_space.is_none() {
