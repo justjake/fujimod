@@ -1067,6 +1067,16 @@ impl CoreShared {
             return;
         }
         let within = (address & 4095) as usize;
+        // A watched backing can never gain inline write access. Preserve its
+        // existing read entry when the checked store uses the same bytes.
+        if access == Access::Write
+            && (!cfg!(target_arch = "aarch64")
+                || (!previous.is_null()
+                    && previous.map_addr(|p| p & !1).wrapping_add(within) == pointer))
+            && self.code_visibility.watched(pointer)
+        {
+            return;
+        }
         let Ok(Ok(physical)) = self.walk_native_page(address, Access::Read, |p, _| {
             self.watch_code_backing(p.cast())
         }) else {
