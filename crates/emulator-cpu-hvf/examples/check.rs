@@ -59,7 +59,8 @@ fn main() -> Result<(), String> {
         tracker.watch_bytes(watched, &[0; 16]);
         set(&cpu, Register::X(1), 0x23fe8);
         set(&cpu, Register::X(0), 1);
-        run(&cpu, 0x10000, 1).map_err(|e| e.to_string())?;
+        let exit = run(&cpu, 0x10000, 1).map_err(|e| e.to_string())?;
+        assert!(matches!(exit, Exit::Stopped), "{exit:?}");
         assert_eq!(tracker.revision(), 0);
         assert_eq!(get(&cpu, Register::X(1)), 0x23ff0);
 
