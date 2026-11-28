@@ -143,6 +143,18 @@ impl Window {
         Ok(())
     }
 
+    /// Only valid at a whole-block boundary, before the owner settles the grant.
+    pub fn debited(&self) -> Result<u64, String> {
+        if self.granted == 0 {
+            return Ok(0);
+        }
+        let remaining = unsafe { self.record.unwrap().as_ref() }.accounting.budget;
+        if !(0..=self.granted).contains(&remaining) {
+            return Err("invalid remaining translated Thumb instruction budget".into());
+        }
+        Ok((self.granted - remaining) as u64)
+    }
+
     #[inline]
     pub fn take(&mut self) -> Result<u64, String> {
         if let Some(mut status) = self.exception_status {

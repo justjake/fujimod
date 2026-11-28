@@ -940,6 +940,8 @@ fn inline_thumb_cohort_observes_peer_store_before_the_device_deadline() {
     thumb_code(&board, 0x1000, &[0x6808, 0x2800, 0xd0fc, 0x6010, 0xbf30]); // poll; str; wfi
     board.run_until(1024, 64).unwrap();
     assert!(board.inline_cohort_runs > 0);
+    assert!(board.inline_cohort_dispatches > 0);
+    assert!(board.inline_cohort_entries_before_park > 0);
     assert_eq!(samples(&board, device), [(200, 0x5a)]);
     let mut answer = [0; 4];
     board.read_physical(0x3004, &mut answer).unwrap();

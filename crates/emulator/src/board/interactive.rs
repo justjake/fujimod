@@ -137,27 +137,112 @@ struct Entry {
     exit: Option<Exit>,
 }
 
+impl Entry {
+    fn start(cpus: &[Rc<dyn Cpu>], grant: Grant) -> Result<Self, ExecutionError> {
+        let Grant { core, pc, start_instructions, instruction_limit, boundary, request } = grant;
+        let engine_run = fujimod_perf::engine_run(u8::try_from(core).unwrap_or(u8::MAX), true);
+        let token = match cpus[core].start_run(request) {
+            Ok(token) => token,
+            Err(error) => {
+                engine_run.cancel();
+                return Err(error);
+            }
+        };
+        Ok(Self {
+            core,
+            pc,
+            token,
+            start_instructions,
+            instruction_limit,
+            boundary,
+            engine_run,
+            done: false,
+            pending: false,
+            watch_or_observer_stop: false,
+            interrupted_by_scheduler: false,
+            failed: false,
+            data_fault: false,
+            thumb_settled: false,
+            exit: None,
+        })
+    }
+}
+
 pub(super) struct InlinePeers {
-    runs: Vec<(usize, RunToken)>,
+    owner: usize,
+    start: u64,
+    staged: Vec<Grant>,
+    runs: Vec<Entry>,
     wakeup: fujimod_emulator_cpu::RunWakeup,
+    parked: bool,
+    parked_at_callback: bool,
+    entries_before_park: u64,
 }
 
 impl State {
-    pub(super) fn park_inline_peers(&mut self, cpus: &[Rc<dyn Cpu>]) -> Result<(), String> {
-        let Some(peers) = self.inline_peers.take() else {
+    pub(super) fn start_admitted_peers(
+        &mut self,
+        cpus: &[Rc<dyn Cpu>],
+        core: usize,
+        window_room: u64,
+    ) -> Result<(), String> {
+        let Some(peers) = &mut self.inline_peers else { return Ok(()); };
+        if peers.owner != core || peers.staged.is_empty() {
             return Ok(());
-        };
-        for &(core, token) in &peers.runs {
-            cpus[core]
-                .request_pause(token)
-                .map_err(|error| error.to_string())?;
+        }
+        // A later admission cannot use grants anchored before this CPU made progress.
+        let staged = std::mem::take(&mut peers.staged);
+        if self.instructions[core] != peers.start {
+            return Ok(());
+        }
+        let epoch = self.parallel.as_ref().ok_or("inline grant requires a cohort")?;
+        for mut grant in staged {
+            let peer = grant.core;
+            let room = epoch.room(peer).min(grant.instruction_limit).min(window_room);
+            if room == 0 || !self.released[peer] || self.waiting[peer] {
+                continue;
+            }
+            grant.instruction_limit = room;
+            grant.request.instructions = Some(room as usize);
+            if cpus[peer].features().guest_clock {
+                cpus[peer].set_guest_clock(epoch.clock(peer)?)?;
+            }
+            peers.runs.push(Entry::start(cpus, grant).map_err(|error| error.to_string())?);
+        }
+        Ok(())
+    }
+
+    pub(super) fn park_inline_peers(
+        &mut self,
+        cpus: &[Rc<dyn Cpu>],
+        callback: bool,
+        block_boundary: bool,
+    ) -> Result<(), String> {
+        let Some(peers) = &mut self.inline_peers else { return Ok(()); };
+        // A first block observer may still admit the staged grants. Any other
+        // owner callback disqualifies the original grant before it has run.
+        if !callback || !block_boundary {
+            peers.staged.clear();
+        }
+        if peers.parked || peers.runs.is_empty() {
+            return Ok(());
+        }
+        if block_boundary {
+            let blocks = self.blocks[peers.owner].as_ref().ok_or("inline accounting missing")?;
+            peers.entries_before_park = blocks.pending.map_or(0, |(_, _, count, _)| count)
+                + blocks.inline.debited()?;
+        }
+        peers.parked_at_callback = callback;
+        for entry in &mut peers.runs {
+            entry.interrupted_by_scheduler = true;
+            cpus[entry.core].request_pause(entry.token).map_err(|error| error.to_string())?;
         }
         loop {
             let generation = peers.wakeup.generation();
             let mut running = false;
-            for &(core, token) in &peers.runs {
+            for entry in &peers.runs {
                 running |= matches!(
-                    cpus[core].poll_run(token).map_err(|error| error.to_string())?,
+                    cpus[entry.core].poll_run(entry.token).map_err(|error| error.to_string())?,
                     RunStatus::Running
                 );
             }
@@ -166,10 +251,11 @@ impl State {
             }
             peers.wakeup.wait_for_change(generation);
         }
-        for (core, _) in peers.runs {
-            self.sync(&*cpus[core], core)?;
-        }
-        Ok(())
+        peers.parked = true;
+        let peers = self.inline_peers.take().unwrap();
+        let settled = peers.runs.iter().try_for_each(|entry| self.sync(&*cpus[entry.core], entry.core));
+        self.inline_peers = Some(peers);
+        settled
     }
 
     pub(super) fn account_interactive(&mut self, core: usize, delta: u64) -> Result<(), String> {
@@ -412,7 +498,7 @@ impl Board {
         if !interrupt_ready {
             state.settled.idle = Some(core);
             let pc = scalar(cpu, Register::Pc)? & !1;
-            if !state.enter_code(cpu, core, pc, 4)?
+            if cpu.features().asynchronous_runs && !state.enter_code(cpu, core, pc, 4)?
                 && state.code_shadow[core]
                     .as_ref()
                     .and_then(|shadow| shadow.fetch(pc))
@@ -440,58 +526,25 @@ impl Board {
     ) -> Result<(), String> {
         let mut entries = Vec::with_capacity(prepared.len());
         let mut error = None;
-        let mut inline = None;
-        if mprofile.is_some_and(|core| !self.cpus[core].features().asynchronous_runs) {
-            self.run_wakeup
-                .interrupt_flag()
-                .store(0, std::sync::atomic::Ordering::Release);
-        }
-        for grant in prepared {
-            let core = grant.core;
-            if mprofile == Some(core) && !self.cpus[core].features().asynchronous_runs {
-                inline = Some(grant);
-                continue;
+        let mut prepared = prepared;
+        let inline = prepared.iter().position(|grant| {
+            mprofile == Some(grant.core) && !self.cpus[grant.core].features().asynchronous_runs
+        });
+        if let Some(index) = inline {
+            let grant = prepared.remove(index);
+            if let Err(err) = self.run_inline_mprofile(grant, quantum, prepared, &mut entries) {
+                error = Some(err);
             }
-            let Grant {
-                pc,
-                start_instructions,
-                instruction_limit,
-                boundary,
-                request,
-                ..
-            } = grant;
-            let cpu = &self.cpus[core];
-            let engine_run = fujimod_perf::engine_run(u8::try_from(core).unwrap_or(u8::MAX), true);
-            match cpu.start_run(request) {
-                Ok(token) => entries.push(Entry {
-                    core,
-                    pc,
-                    token,
-                    start_instructions,
-                    instruction_limit,
-                    boundary,
-                    engine_run,
-                    done: false,
-                    pending: false,
-                    watch_or_observer_stop: false,
-                    interrupted_by_scheduler: false,
-                    failed: false,
-                    data_fault: false,
-                    thumb_settled: false,
-                    exit: None,
-                }),
-                Err(e) => {
-                    engine_run.cancel();
-                    error = Some(e.to_string());
-                    break;
+        } else {
+            for grant in prepared {
+                match Entry::start(&self.cpus, grant) {
+                    Ok(entry) => entries.push(entry),
+                    Err(err) => {
+                        error = Some(err.to_string());
+                        break;
+                    }
                 }
             }
-        }
-        if error.is_none()
-            && let Some(grant) = inline
-            && let Err(err) = self.run_inline_mprofile(grant, quantum, &mut entries)
-        {
-            error = Some(err);
         }
         let mut barrier = false;
         loop {
@@ -665,7 +718,8 @@ impl Board {
         &mut self,
         grant: Grant,
         quantum: usize,
-        peers: &mut [Entry],
+        staged: Vec<Grant>,
+        entries: &mut Vec<Entry>,
     ) -> Result<(), String> {
         let Grant {
             core,
@@ -684,12 +738,19 @@ impl Board {
             let mut state = self.state.borrow_mut();
             state.active_slice = Some(slice);
             state.inline_peers = Some(InlinePeers {
-                runs: peers.iter().map(|entry| (entry.core, entry.token)).collect(),
+                owner: core,
+                start: start_instructions,
+                runs: Vec::with_capacity(staged.len()),
+                staged,
                 wakeup: self.run_wakeup.clone(),
+                parked: false,
+                parked_at_callback: false,
+                entries_before_park: 0,
             });
         }
         // The stopped owner lends the peer wakeup flag for this synchronous
         // run. The wakeup outlives the C access, and only the flag is shared.
+        self.run_wakeup.interrupt_flag().store(0, std::sync::atomic::Ordering::Release);
         let pointer = std::ptr::from_ref(self.run_wakeup.interrupt_flag());
         let previous = std::mem::replace(
             &mut unsafe { accounting.as_mut() }.thumb_accounting.accounting.pause_requested,
@@ -703,11 +764,12 @@ impl Board {
         unsafe { accounting.as_mut() }.thumb_accounting.accounting.pause_requested = previous;
         self.inline_cohort_runs += 1;
         let mut state = self.state.borrow_mut();
-        self.inline_cohort_callbacks += u64::from(state.inline_peers.is_none());
-        for entry in peers {
-            entry.interrupted_by_scheduler = true;
-        }
-        let parked = state.park_inline_peers(&self.cpus);
+        let parked = state.park_inline_peers(&self.cpus, false, matches!(outcome, Ok(Exit::Stopped)));
+        let mut peers = state.inline_peers.take().unwrap();
+        self.inline_cohort_callbacks += u64::from(peers.parked_at_callback);
+        self.inline_cohort_dispatches += u64::from(!peers.runs.is_empty());
+        self.inline_cohort_entries_before_park += peers.entries_before_park;
+        entries.append(&mut peers.runs);
         if matches!(
             outcome,
             Err(ExecutionError::Memory {

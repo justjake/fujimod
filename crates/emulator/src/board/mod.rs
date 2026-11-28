@@ -428,12 +428,12 @@ struct Binding {
 impl Binding {
     /// An inline callback runs on the owner thread. Park and account peers
     /// before it can publish an effect or make a device deadline due.
-    fn park_inline_peers(&self, cpus: &[Rc<dyn Cpu>]) -> bool {
+    fn park_inline_peers(&self, cpus: &[Rc<dyn Cpu>], block_boundary: bool) -> bool {
         if self.inline_core.get() != Some(self.core) {
             return true;
         }
         let mut state = self.state.borrow_mut();
-        match state.park_inline_peers(cpus) {
+        match state.park_inline_peers(cpus, true, block_boundary) {
             Ok(()) => true,
             Err(error) => {
                 state.fail(error);
@@ -490,6 +490,8 @@ pub struct Board {
     inline_cohort_runs: u64,
     inline_cohort_callbacks: u64,
     inline_cohort_instructions: u64,
+    inline_cohort_dispatches: u64,
+    inline_cohort_entries_before_park: u64,
     // Native hooks hold raw pointers into each box; boxing keeps them stable as the Vec grows.
     #[allow(clippy::vec_box)]
     bindings: Vec<Box<Binding>>,
@@ -804,6 +806,8 @@ impl Board {
             inline_cohort_runs: 0,
             inline_cohort_callbacks: 0,
             inline_cohort_instructions: 0,
+            inline_cohort_dispatches: 0,
+            inline_cohort_entries_before_park: 0,
             host_pause,
             progress_observer: None,
             guest_profile_active: Cell::new(false),
@@ -4185,7 +4189,7 @@ unsafe fn before(pc: u64, _: u32, data: *mut c_void) {
     let Some(cpus) = b.cpus.upgrade() else {
         return;
     };
-    if !b.park_inline_peers(&cpus) {
+    if !b.park_inline_peers(&cpus, false) {
         return;
     }
     let result = (|| {
@@ -4383,7 +4387,7 @@ unsafe fn code_stored(data: *mut c_void, address: u64, size: usize) {
     let Some(cpus) = b.cpus.upgrade() else {
         return;
     };
-    if !b.park_inline_peers(&cpus) {
+    if !b.park_inline_peers(&cpus, false) {
         return;
     }
     let core = b.core;
@@ -4411,7 +4415,7 @@ unsafe fn block_restarted(data: *mut c_void, pc: u64) {
     let Some(cpus) = b.cpus.upgrade() else {
         return;
     };
-    if !b.park_inline_peers(&cpus) {
+    if !b.park_inline_peers(&cpus, false) {
         return;
     }
     let result = {
@@ -4434,7 +4438,7 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
     let Some(cpus) = b.cpus.upgrade() else {
         return;
     };
-    if !b.park_inline_peers(&cpus) {
+    if !b.park_inline_peers(&cpus, true) {
         return;
     }
     let _callback_sample = callback_service_sample(b, &cpus, callback_timing::CallbackKind::Block);
@@ -4656,6 +4660,7 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
                 blocks.code_stores_notified,
                 window_room == room,
             );
+            s.start_admitted_peers(&cpus, core, window_room)?;
         }
         Ok::<(), String>(())
     })();
@@ -4700,7 +4705,7 @@ unsafe fn written(
     let Some(cpus) = b.cpus.upgrade() else {
         return;
     };
-    if !b.park_inline_peers(&cpus) {
+    if !b.park_inline_peers(&cpus, false) {
         return;
     }
     let _callback_sample = callback_service_sample(b, &cpus, callback_timing::CallbackKind::Store);
@@ -4866,7 +4871,7 @@ unsafe fn access(data: *mut c_void, offset: u64, size: u32, value: Option<u64>) 
     let Some(cpus) = b.cpus.upgrade() else {
         return 0;
     };
-    if !b.park_inline_peers(&cpus) {
+    if !b.park_inline_peers(&cpus, false) {
         return 0;
     }
     let mut sample = callback_service_sample(b, &cpus, callback_timing::CallbackKind::Mmio);

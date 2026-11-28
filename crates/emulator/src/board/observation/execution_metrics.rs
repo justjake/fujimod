@@ -82,6 +82,8 @@ impl Board {
             "inline_cohort_runs": self.inline_cohort_runs,
             "inline_cohort_callbacks": self.inline_cohort_callbacks,
             "inline_cohort_instructions": self.inline_cohort_instructions,
+            "inline_cohort_dispatches": self.inline_cohort_dispatches,
+            "inline_cohort_entries_before_park": self.inline_cohort_entries_before_park,
             "withheld_lane_grants": self.withheld_lane_grants,
             "segments_reported_over_lead": self.segments_over_lead,
             "cortex_m4_by_core": cortex_m4_by_core,
