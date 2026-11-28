@@ -26,6 +26,11 @@ X-Processor Pro runs. Pass `cpu_backend="unicorn"` to select Unicorn, or
 `cpu_backend="dynarmic"` to explicitly select the JIT for Cortex-A7 and
 Cortex-R5F. Use `python_extension.py --no-dynarmic` to build with Unicorn only.
 
+Strict XP4 and X-Processor Pro sessions built from `Xp4Definition` also choose
+Dynarmic when available. Discovery and definitions that declare Unicorn
+coherence ranges choose Unicorn. Set `cpu_backend` in the definition options
+to select a backend explicitly.
+
 ## Native execution
 
 The native extension also exposes `fujimod.emulator`. For a resolved graph, build a

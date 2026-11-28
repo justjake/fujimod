@@ -350,6 +350,15 @@ fn dynarmic_unavailable() -> String {
         .into()
 }
 
+/// Whether this build can construct a native Dynarmic processor.
+pub const fn dynarmic_available() -> bool {
+    cfg!(all(
+        feature = "dynarmic",
+        any(target_arch = "aarch64", target_arch = "x86_64"),
+        any(target_os = "linux", target_os = "macos")
+    ))
+}
+
 impl Graph {
     fn coherence_domain(&self, options: &Options) -> Result<Option<CoherenceDomain>, String> {
         let Some(config) = &options.coherence else {

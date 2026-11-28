@@ -53,11 +53,8 @@ use std::{
 /// Select the exact native JIT for strict EXR II, XP4, and X-Processor Pro startup.
 /// The caller applies this preference only when the run can use exact scheduling.
 pub fn prefer_dynarmic(resolved: &mut ResolvedConfiguration) -> Result<(), String> {
-    if cfg!(all(
-        feature = "dynarmic",
-        any(target_arch = "aarch64", target_arch = "x86_64"),
-        any(target_os = "linux", target_os = "macos")
-    )) && matches!(resolved.reference.soc.id.as_str(), "exr2" | "xp4" | "xpp")
+    if factory::dynarmic_available()
+        && matches!(resolved.reference.soc.id.as_str(), "exr2" | "xp4" | "xpp")
         && resolved
             .configuration
             .preset

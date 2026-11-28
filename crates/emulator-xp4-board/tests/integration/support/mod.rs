@@ -38,6 +38,31 @@ pub fn board(value: Value) -> Result<Board, String> {
     open(serde_json::from_value(value).map_err(|e| e.to_string())?)
 }
 
+#[test]
+fn strict_definitions_choose_the_native_backend_and_allow_an_override() {
+    let available = fujimod_emulator::board::factory::dynarmic_available();
+    let strict = serde_json::json!({
+        "ram_size": 0x10000,
+        "cores": 1,
+        "discovery": false,
+        "cbar": 0x20000
+    });
+    let mut explicit_unicorn = strict.clone();
+    explicit_unicorn["cpu_backend"] = "unicorn".into();
+    let mut discovery = strict.clone();
+    discovery["discovery"] = true.into();
+    for (definition, uses_dynarmic) in [
+        (strict, available),
+        (explicit_unicorn, false),
+        (discovery, false),
+    ] {
+        let machine = board(definition).unwrap();
+        let session = machine.0.borrow();
+        let counters = session.board.exit_counters().pop().unwrap().unwrap();
+        assert_eq!(counters.contains_key("projected_mmio_reads"), uses_dynarmic);
+    }
+}
+
 /// GIC distributor pending words, one per 32 lines.
 pub struct Interrupts {
     pub pending: Vec<u32>,

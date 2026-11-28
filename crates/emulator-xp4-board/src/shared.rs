@@ -2,7 +2,7 @@
 //! memory windows and maps), a GICv2 at the processors' configuration base,
 //! and every device the definition selects.
 use super::{Definition, definition::TimerLayout, device_build, devices::Connected, memory};
-use fujimod_catalog_configuration::RunEngine;
+use fujimod_catalog_configuration::{RunCpuBackend, RunEngine};
 use fujimod_emulator::board::{
     InterruptMap, InterruptRegisters, armv7a,
     bus::{Bus, Mode},
@@ -257,10 +257,21 @@ pub fn from_definition(
             .iter()
             .map(|r| (r.base, r.size, r.permissions)),
     );
+    let cpu_backend = definition.cpu_backend.unwrap_or_else(|| {
+        if factory::dynarmic_available()
+            && engine == RunEngine::Unicorn
+            && !definition.discovery
+            && definition.coherent_ranges.is_none()
+        {
+            RunCpuBackend::Dynarmic
+        } else {
+            RunCpuBackend::Unicorn
+        }
+    });
     let graph = factory::Graph {
         processors: (0..cores)
             .map(|core| factory::Processor {
-                cpu_backend: Default::default(),
+                cpu_backend,
                 model: fujimod_emulator_cpu::Model::CortexA7,
                 registers: definition
                     .initial_registers
