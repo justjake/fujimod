@@ -1,0 +1,47 @@
+diff --git a/src/dynarmic/backend/arm64/a32_interface.cpp b/src/dynarmic/backend/arm64/a32_interface.cpp
+--- a/src/dynarmic/backend/arm64/a32_interface.cpp
++++ b/src/dynarmic/backend/arm64/a32_interface.cpp
+@@ -128,24 +128,24 @@
+
+ private:
+     void PerformRequestedCacheInvalidation(HaltReason hr) {
+-        if (Has(hr, HaltReason::CacheInvalidation)) {
+-            std::unique_lock lock{invalidation_mutex};
+-
+-            ClearHalt(HaltReason::CacheInvalidation);
+-
+-            if (invalidate_entire_cache) {
+-                current_address_space.ClearCache();
+-
+-                invalidate_entire_cache = false;
+-                invalid_cache_ranges.clear();
+-                return;
+-            }
+-
+-            if (!invalid_cache_ranges.empty()) {
+-                current_address_space.InvalidateCacheRanges(invalid_cache_ranges);
+-
+-                invalid_cache_ranges.clear();
+-                return;
+-            }
++        if (Has(hr, HaltReason::CacheInvalidation)) [[unlikely]] {
++            ApplyRequestedCacheInvalidation();
++        }
++    }
++
++    [[gnu::cold, gnu::noinline]] void ApplyRequestedCacheInvalidation() {
++        std::unique_lock lock{invalidation_mutex};
++        ClearHalt(HaltReason::CacheInvalidation);
++
++        if (invalidate_entire_cache) {
++            current_address_space.ClearCache();
++            invalidate_entire_cache = false;
++            invalid_cache_ranges.clear();
++            return;
++        }
++
++        if (!invalid_cache_ranges.empty()) {
++            current_address_space.InvalidateCacheRanges(invalid_cache_ranges);
++            invalid_cache_ranges.clear();
+         }
+     }
