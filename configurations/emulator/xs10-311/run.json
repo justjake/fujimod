@@ -73,10 +73,6 @@
           {
             "register": 16,
             "value": 0
-          },
-          {
-            "register": 25,
-            "value": 16
           }
         ],
         "rtc_ticks_per_second": 54000000
