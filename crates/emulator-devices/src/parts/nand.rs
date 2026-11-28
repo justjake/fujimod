@@ -236,6 +236,46 @@ impl Nand {
         tags.extend(spare);
         Self::new(self.options.clone(), self.base.clone(), all, tags)
     }
+    /// Overlay initial main-area bytes, retaining the portions of earlier inputs
+    /// outside the new extent. Programmed media is refused.
+    pub fn overlay_input(&self, overlay: Overlay) -> Result<Self, String> {
+        if !self.pages.is_empty() || !self.written_spare.is_empty() {
+            return Err("Initial NAND inputs require an unprogrammed medium".into());
+        }
+        let start = overlay.offset;
+        let end = start
+            .checked_add(overlay.bytes.len() as u64)
+            .filter(|&end| end > start && end <= self.options.bytes)
+            .ok_or("NAND overlay exceeds medium or is empty")?;
+        let mut inputs = Vec::new();
+        for prior in &self.overlays {
+            let prior_end = prior.offset + prior.bytes.len() as u64;
+            if prior_end <= start || prior.offset >= end {
+                inputs.push(prior.clone());
+                continue;
+            }
+            if prior.offset < start {
+                inputs.push(Overlay {
+                    offset: prior.offset,
+                    bytes: Arc::from(&prior.bytes[..(start - prior.offset) as usize]),
+                });
+            }
+            if prior_end > end {
+                inputs.push(Overlay {
+                    offset: end,
+                    bytes: Arc::from(&prior.bytes[(end - prior.offset) as usize..]),
+                });
+            }
+        }
+        inputs.push(overlay);
+        Self::new(
+            self.options.clone(),
+            self.base.clone(),
+            inputs,
+            self.spare.clone(),
+        )
+    }
+
     /// Replace a checked external initialization window. Programmed media is
     /// refused; the controller's separate cold-retain boundary enforces time.
     pub fn replace_input(

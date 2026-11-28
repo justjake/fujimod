@@ -211,7 +211,7 @@ def test_board_from_inputs_validates_configuration_and_paths_first() -> None:
         )
 
 
-def test_board_from_inputs_forwards_ordered_overlay_ids(
+def test_board_from_inputs_forwards_overlay_ids_and_flash_seeds(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[dict[str, object]] = []
@@ -230,15 +230,16 @@ def test_board_from_inputs_forwards_ordered_overlay_ids(
 
     monkeypatch.setattr(board_module, "_native", SimpleNamespace(Board=NativeBoard))
     board = Board.from_inputs(
-        configuration_id="x70-110-rec",
-        overlays=("x70-110-rec-usb",),
+        configuration_id="xt5-431-rec",
+        overlays=("xt5-431-rec-usb",),
         update="update.dat",
         boot_rom="boot.rom",
+        flash_seeds=((0x4000, "seed.dat"),),
     )
     assert calls == [
         {
-            "configuration_id": "x70-110-rec",
-            "overlays": ("x70-110-rec-usb",),
+            "configuration_id": "xt5-431-rec",
+            "overlays": ("xt5-431-rec-usb",),
             "update": "update.dat",
             "boot_rom": "boot.rom",
             "card_image": None,
@@ -254,6 +255,7 @@ def test_board_from_inputs_forwards_ordered_overlay_ids(
             "access_point": None,
             "capability_reply": None,
             "camera_settings": {},
+            "flash_seeds": [(0x4000, "seed.dat")],
             "engine": None,
             "manifest": None,
             "application_plan": None,
