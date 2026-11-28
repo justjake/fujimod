@@ -13,7 +13,10 @@ pub(super) struct Epoch {
     limit: u64,
     boundary: fujimod_perf::EngineEndReason,
     progress: Vec<u64>,
-    advanced: u64,
+    /// Entries each core is behind the shared frontier, mirrored from the
+    /// timeline so a lagging core is granted its window plus its lag.
+    lag: Vec<u64>,
+    quantum: u64,
 }
 impl Epoch {
     fn new(
@@ -21,13 +24,16 @@ impl Epoch {
         clock: Clock,
         limit: u64,
         boundary: fujimod_perf::EngineEndReason,
+        lag: Vec<u64>,
+        quantum: u64,
     ) -> Self {
         Self {
             clock,
             limit,
             boundary,
             progress: vec![0; cores],
-            advanced: 0,
+            lag,
+            quantum,
         }
     }
     pub(super) fn constrain(
@@ -67,7 +73,17 @@ impl Epoch {
         Ok(())
     }
     pub(super) fn room(&self, core: usize) -> u64 {
-        self.limit.saturating_sub(self.progress[core])
+        // A lagging core needs one window of its own instructions plus the
+        // guest time it has not executed yet.
+        self.limit
+            .saturating_sub(self.progress[core])
+            .saturating_add(self.lag[core])
+    }
+    /// The most a core may run in one segment. Running further than this drags
+    /// every peer's lag past one quantum, so a device access on a peer would
+    /// be served later than its own instruction stream reached.
+    pub(super) fn segment(&self, core: usize) -> u64 {
+        self.room(core).min(self.quantum)
     }
     /// Whether the cohort runs another segment. It ends when its first core
     /// reaches the limit: a peer that executed less does not run on alone,
@@ -80,17 +96,13 @@ impl Epoch {
     pub(super) fn open(&self, cores: &[usize]) -> bool {
         cores.iter().all(|&core| self.room(core) > 0)
     }
-    fn clock(&self, core: usize) -> Result<Clock, String> {
-        self.clock.after(self.progress[core])
-    }
-    pub(super) fn advance(&mut self, core: usize, delta: u64) -> Result<u64, String> {
+    /// Record what a core executed against this epoch's budget. Guest time is
+    /// the timeline's; this only tracks the window's remaining room.
+    pub(super) fn observe(&mut self, core: usize, delta: u64) -> Result<(), String> {
         self.progress[core] = self.progress[core]
             .checked_add(delta)
             .ok_or("concurrent processor progress overflow")?;
-        let furthest = self.progress.iter().copied().max().unwrap_or(0);
-        let delta = furthest.saturating_sub(self.advanced);
-        self.advanced = furthest;
-        Ok(delta)
+        Ok(())
     }
 }
 
@@ -148,18 +160,29 @@ impl State {
         Ok(())
     }
     pub(super) fn account_interactive(&mut self, core: usize, delta: u64) -> Result<(), String> {
-        let epoch = self
-            .parallel
+        let (released, waiting) = (&self.released, &self.waiting);
+        self.parallel
             .as_mut()
-            .ok_or("no concurrent execution epoch")?;
-        let elapsed = epoch.advance(core, delta)?;
+            .ok_or("no concurrent execution epoch")?
+            .observe(core, delta)?;
+        // Advance guest time through the timeline's per-core lag, as the
+        // serialized path does: entries within this core's lag catch it up,
+        // only the excess moves the frontier, and every other runnable core
+        // falls behind by it. Advancing by the furthest core put a peer's
+        // device reads in the future of its own instruction stream.
+        let pending_lag = self.parallel.as_ref().unwrap().lag[core];
+        let frontier_entries = delta.saturating_sub(pending_lag);
         let boundary = self.timeline.ratio().budget(
             self.timeline.now(),
             self.timeline.phase(),
             self.clock_limit.unwrap_or(u64::MAX),
         )?;
-        let elapsed = self.timeline.budget(elapsed.min(boundary))?;
-        self.timeline.advance_instructions(elapsed)
+        let allowed = self.timeline.budget(frontier_entries.min(boundary))?;
+        self.timeline
+            .advance_processor(core, pending_lag.saturating_add(allowed), |c| released[c] && !waiting[c])?;
+        let lag = self.timeline.lags().to_vec();
+        self.parallel.as_mut().unwrap().lag = lag;
+        Ok(())
     }
 }
 
@@ -176,8 +199,10 @@ impl Board {
         let started = Instant::now();
         {
             let mut state = self.state.borrow_mut();
-            // Window processors start together at the frontier.
-            state.timeline.park(|_| false);
+            // A new window keeps every core's lag. Zeroing it would let a
+            // core skip guest time it never executed, so its clock and its
+            // device reads would jump ahead of its own instruction stream.
+            let lag = state.timeline.lags().to_vec();
             state.parallel = Some(Epoch::new(
                 self.cpus.len(),
                 Clock {
@@ -187,6 +212,8 @@ impl Board {
                 },
                 budget as u64,
                 boundary,
+                lag,
+                quantum as u64,
             ));
             state.code_run = RunCode::Unknown;
         }
@@ -238,7 +265,7 @@ impl Board {
                 }
             }
             let (blocks, _thumb_slice) = if let Some(core) = mprofile {
-                let room = self.state.borrow().parallel.as_ref().unwrap().room(core);
+                let room = self.state.borrow().parallel.as_ref().unwrap().segment(core);
                 self.prepare_mprofile_segment(core, room)?
             } else {
                 (false, None)
@@ -247,10 +274,10 @@ impl Board {
                 let mut state = self.state.borrow_mut();
                 for &core in cores {
                     let epoch = state.parallel.as_ref().unwrap();
-                    let room = epoch.room(core);
+                    let room = epoch.segment(core);
                     let cpu = &self.cpus[core];
                     if cpu.features().guest_clock {
-                        cpu.set_guest_clock(epoch.clock(core)?)?;
+                        cpu.set_guest_clock(state.timeline.processor_clock(core)?)?;
                     }
                     cpu.set_loop_window(false)?;
                     let pc = scalar(&**cpu, Register::Pc)?;
