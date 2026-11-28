@@ -211,6 +211,43 @@ def test_stub_and_patch_identities_and_full_width_stub_return() -> None:
         )
 
 
+def test_floating_point_stub_returns_in_d0_and_records_vector_arguments() -> None:
+    code = words(
+        0xAA1E03F1,  # MOV X17,X30.
+        0x94000004,  # BL CODE+20.
+        0x9E660000,  # FMOV X0,D0.
+        0xAA1103FE,  # MOV X30,X17.
+        0xD65F03C0,  # RET.
+        0xD4200000,  # BRK: the substituted callee.
+    )
+    two_and_a_half = 0x4004_0000_0000_0000
+    with harness(code) as h:
+        h.stub(
+            CODE + 20,
+            returns=two_and_a_half,
+            label="float callee",
+            return_register="d0",
+        )
+        result = h.call(CODE, args=(0x55,), registers={"d1": 0x3FF0_0000_0000_0000})
+        assert result["returned"], result["failure"]
+        assert result["return_value"] == two_and_a_half
+        hit = result["stub_hits"][0]
+        assert hit["arguments"][0] == 0x55
+        assert hit["vector_arguments"][1] == 0x3FF0_0000_0000_0000
+        assert result["registers"]["d0"] == two_and_a_half
+        assert result["stubs"][0]["return_register"] == "d0"
+
+
+def test_stub_return_register_and_initial_d_registers_are_validated() -> None:
+    with harness(words(0x9E660040, 0xD65F03C0)) as h:  # FMOV X0,D2; RET.
+        with pytest.raises(ValueError, match="x0 or d0"):
+            h.stub(CODE + 4, returns=0, label="callee", return_register="s0")
+        with pytest.raises(ValueError, match="d0..d31"):
+            h.call(CODE, registers={"q2": 1})
+        result = h.call(CODE, registers={"d2": 0x4000_0000})
+        assert result["returned"] and result["return_value"] == 0x4000_0000
+
+
 def test_callee_saved_pair_roundtrip_and_stack_store_log() -> None:
     code = words(0xA9BF7BFD, 0x910003FD, 0xA8C17BFD, 0xD65F03C0)
     with harness(code) as h:

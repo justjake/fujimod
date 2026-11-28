@@ -24,6 +24,10 @@ class Observation(TypedDict):
 
 
 class StubHit(TypedDict):
+    address: int
+    arguments: list[int]
+    vector_arguments: list[int]
+    returns: int
     reads: list[dict[str, int]]
     writes: list[dict[str, int]]
 
@@ -411,7 +415,13 @@ class Aarch64DriverHarness:
         returns: int | Callable[[StubContext], int] = 0,
         label: str = "",
         reads: Iterable[tuple[int, int | str | dict[str, int]]] = (),
+        return_register: str = "x0",
     ) -> None:
+        """Substitute a callee. ``return_register`` "d0" places the 64-bit return
+        bits in D0 (the low half of V0) for a floating-point return; a float
+        travels in the low 32 bits."""
+        if return_register not in ("x0", "d0"):
+            raise ValueError("Stub return register must be x0 or d0")
         if (
             type(target) is not int
             or target & 3
@@ -455,6 +465,7 @@ class Aarch64DriverHarness:
             "label": label,
             "reads": reads,
             "dynamic": dynamic,
+            "return_register": return_register,
         })
 
     def stop_at(self, address: int, *, label: str = "") -> None:
@@ -553,11 +564,14 @@ class Aarch64DriverHarness:
             )
             if self.read(a, b - a) != expected[a - base : b - base]:
                 raise ValueError("Code image differs from declared bytes and patches")
-        reg_values = []
+        reg_values, vector_values = [], []
         for name, value in (registers or {}).items():
-            if name not in {f"x{n}" for n in range(31)}:
-                raise ValueError("Initial registers must name x0..x30")
-            reg_values.append((int(name[1:]), _word(value)))
+            if name in {f"x{n}" for n in range(31)}:
+                reg_values.append((int(name[1:]), _word(value)))
+            elif name in {f"d{n}" for n in range(32)}:
+                vector_values.append((int(name[1:]), _word(value)))
+            else:
+                raise ValueError("Initial registers must name x0..x30 or d0..d31")
         readable = _merge(
             self._image_ranges
             + [(a, a + len(d)) for a, d in self._fixture + self._allocations]
@@ -601,6 +615,7 @@ class Aarch64DriverHarness:
             "store_limit": store_limit,
             "stubs": self._stubs,
             "registers": reg_values,
+            "vector_registers": vector_values,
             "fragment_exit": dict(fragment_exit or {}),
         }
         result = _json_object(
@@ -637,7 +652,10 @@ class Aarch64DriverHarness:
             },
             runtime="shared",
             architecture="aarch64",
-            vector_initial_state="v0-v31, FPCR and FPSR initialized to zero for each call",
+            vector_initial_state=(
+                "v0-v31, FPCR and FPSR initialized to zero for each call; "
+                "declared d registers set the low 64 bits of their V register"
+            ),
             limits=(
                 "Isolated synthetic caller state; device behavior is only the declared native models; "
                 "no MMU, cache, reset, boot, timing or hardware success established"
