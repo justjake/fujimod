@@ -3450,6 +3450,43 @@ mod tests {
     }
 
     #[test]
+    fn native_run_and_step_discard_cached_code_after_a_host_write() {
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+        let set_increment = |increment| {
+            let add = 0xe280_0000u32 | increment;
+            cpu.write_memory(0x1000, &add.to_le_bytes()).unwrap();
+        };
+        // add r0, r0, #2
+        cpu.write_memory(0x1004, &0xe280_0002u32.to_le_bytes())
+            .unwrap();
+        // b .
+        cpu.write_memory(0x1008, &0xeaff_fffeu32.to_le_bytes())
+            .unwrap();
+        let run = |count, expected| {
+            cpu.set_loop_window(true).unwrap();
+            cpu.run(Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(count),
+            })
+            .unwrap();
+            assert_eq!(cpu.instruction_progress(), Some(count as u64));
+            assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 0) }, expected);
+        };
+
+        set_increment(1);
+        run(2, 3);
+        run(1, 4);
+        run(2, 7);
+        run(1, 8);
+        set_increment(4);
+        run(1, 12);
+        run(2, 18);
+    }
+
+    #[test]
     fn native_conditional_block_stops_at_the_instruction_budget() {
         for (cpsr, expected) in [(0x4000_00d3u32, 2), (0x0000_00d3, 0)] {
             let core = Core::new(Model::CortexA7).unwrap();
