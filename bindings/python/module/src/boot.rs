@@ -30,6 +30,9 @@ impl Boot for CatalogBoot {
                     .map_err(|error| format!("invalid CPU engine: {error}"))?,
             )?;
         }
+        if let Some(backend) = inputs.cpu_backend {
+            resolved.override_cpu_backend(backend.parse()?)?;
+        }
         if let Some((numerator, denominator)) = inputs.instruction_rate {
             let rate = RunInstructionRate {
                 numerator,

@@ -248,6 +248,7 @@ class Board:
         camera_settings: Mapping[str, str] | None = None,
         flash_seeds: Sequence[tuple[int, str | PathLike[str]]] = (),
         engine: str | None = None,
+        cpu_backend: Literal["unicorn", "dynarmic"] | None = None,
         manifest: str | PathLike[str] | None = None,
         application_plan: str | PathLike[str] | None = None,
         discovery: bool = False,
@@ -269,6 +270,7 @@ class Board:
         ``second_card_image`` and ``second_card_files`` supply the card in SD
         slot 2 of an XP5 loader start on a body with two slots.
         ``scene`` loads the selected board's scene document.
+        ``cpu_backend`` overrides the selected Cortex-A7 or Cortex-R5F engine.
         ``nand`` and
         ``settings`` supply optional persistent storage inputs. No file path
         is inferred from the selected configuration.
@@ -392,6 +394,7 @@ class Board:
             camera_settings=selected_settings,
             flash_seeds=list(flash_seeds),
             engine=engine,
+            cpu_backend=cpu_backend,
             manifest=manifest,
             application_plan=application_plan,
             discovery=discovery,

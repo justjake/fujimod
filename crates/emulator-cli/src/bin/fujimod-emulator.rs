@@ -395,22 +395,7 @@ impl Boot {
             resolved.override_engine(engine)?;
         }
         if let Some(backend) = self.text("--cpu-backend")? {
-            let backend = match backend.as_str() {
-                "unicorn" => RunCpuBackend::Unicorn,
-                "dynarmic" => RunCpuBackend::Dynarmic,
-                _ => return Err("--cpu-backend must be unicorn or dynarmic".into()),
-            };
-            resolved
-                .configuration
-                .preset
-                .as_mut()
-                .ok_or("--cpu-backend requires a run configuration with factory options")?
-                .factory_options
-                .cpu_backend = Some(backend);
-            fujimod_catalog_resolution::validate_selection(
-                &resolved.configuration,
-                &resolved.reference,
-            )?;
+            resolved.override_cpu_backend(backend.parse()?)?;
         }
         Ok(resolved)
     }

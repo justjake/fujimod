@@ -21,9 +21,9 @@ environment's path. Rerun it after Rust changes.
 
 On ARM64 or x86-64 macOS and Linux, pass `--dynarmic` to include the Dynarmic
 CPU backend. Initialize the recursive submodules and install CMake, Ninja,
-and Boost headers before building. Cortex-A7 configurations can select the
-backend with `preset.factory_options.cpu_backend` set to `dynarmic` and use
-the exact execution policy.
+and Boost headers before building. For Cortex-A7 and Cortex-R5F, pass
+`cpu_backend="dynarmic"` to `Board.from_inputs` to select it with exact
+execution.
 
 ## Native execution
 

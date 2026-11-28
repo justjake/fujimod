@@ -18,6 +18,7 @@ pub struct Inputs {
     pub second_card_files: Vec<(String, PathBuf)>,
     pub scene: Option<PathBuf>,
     pub engine: Option<String>,
+    pub cpu_backend: Option<String>,
     pub manifest: Option<PathBuf>,
     pub application_plan: Option<PathBuf>,
     pub discovery: bool,
