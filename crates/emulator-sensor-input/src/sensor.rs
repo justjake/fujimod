@@ -36,19 +36,12 @@ pub struct SensorState {
     /// The still channel's destination was programmed and no frame has used it yet.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub still_programmed: bool,
-    /// Emulator-only option: stream without the register-0 standby gate (see `streaming`).
-    #[serde(default)]
-    pub no_standby_gate: bool,
-    /// Emulator-only option: sensor reads are not gated on register 0x59 (see `set_no_read_gate`).
-    #[serde(default)]
-    pub no_read_gate: bool,
 }
 impl Default for SensorState {
+    /// A sensor with no register written; [`Sensor::new`] sets its standby bits.
     fn default() -> Self {
-        // Functional reset assumption: standby until stock programming clears
-        // register0 bit0. Stock sleep path330a6e0 sets this bit; wake clears it.
         Self {
-            registers: BTreeMap::from([(0, 1)]),
+            registers: BTreeMap::new(),
             commands: 0,
             writes: 0,
             reads: 0,
@@ -59,8 +52,6 @@ impl Default for SensorState {
             still_raw: None,
             earlier_still_raws: Vec::new(),
             still_programmed: false,
-            no_standby_gate: false,
-            no_read_gate: false,
         }
     }
 }
@@ -222,21 +213,36 @@ pub struct FrameTiming {
     /// The length of one line of that readout in ticks (nanoseconds).
     pub line_ticks: u64,
 }
+/// The sensor chip's register gates, facts of the chip (the catalog's image-sensor part).
+/// Each is `(register, mask)`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Gates {
+    /// A register read packet needs these bits set; otherwise the read fails. Absent, reads
+    /// are not gated.
+    pub read: Option<(u16, u8)>,
+    /// These bits are set at reset and hold the sensor in standby: it streams once it has been
+    /// programmed and they are clear. Absent, it streams once programmed.
+    pub standby: Option<(u16, u8)>,
+}
 #[derive(Clone)]
 pub struct Sensor(
     pub Arc<Mutex<SensorState>>,
     Option<ImageRoutes>,
-    (u16, u8),
+    Gates,
     Option<StillChannel>,
     ExposureHandle,
     Option<FrameTiming>,
 );
 impl Sensor {
-    pub fn new(routes: Option<ImageRoutes>, read_gate: (u16, u8)) -> Self {
+    pub fn new(routes: Option<ImageRoutes>, gates: Gates) -> Self {
+        let mut state = SensorState::default();
+        if let Some((register, mask)) = gates.standby {
+            state.registers.insert(register, mask);
+        }
         Self(
-            Arc::default(),
+            Arc::new(Mutex::new(state)),
             routes,
-            read_gate,
+            gates,
             None,
             ExposureHandle::default(),
             None,
@@ -559,22 +565,13 @@ impl Sensor {
         self.1
             .is_some_and(|r| matches!(offset, 0x4..=0x34 | 0x140 | 0x144) || r.dma.is_some())
     }
-    /// X-H2S option: the X100VI-derived register-0 standby bit is not a modeled gate here. The
-    /// X-H2S never writes sensor register 0 (observed on the stock boot), so the receiver streams
-    /// once the sensor has been programmed (`writes != 0`). Labelled assumption, not a measurement.
-    pub fn set_no_standby_gate(&self, on: bool) {
-        self.0.lock().unwrap().no_standby_gate = on;
-    }
-    /// X-H2S option: the X100VI's register-0x59 read gate is not a modeled gate here. The X-H2S
-    /// reads sensor registers without having written 0x59 bit 2 (observed: the strict run refuses
-    /// the first read). Reads then return the stored register value, zero if never written.
-    /// Labelled assumption, not a measurement.
-    pub fn set_no_read_gate(&self, on: bool) {
-        self.0.lock().unwrap().no_read_gate = on;
-    }
+    /// The sensor has been programmed and its standby bits ([`Gates::standby`]) are clear.
     pub fn streaming(&self) -> bool {
         let s = self.0.lock().unwrap();
-        s.writes != 0 && (s.no_standby_gate || s.registers.get(&0).copied().unwrap_or(1) & 1 == 0)
+        s.writes != 0
+            && self.2.standby.is_none_or(|(register, mask)| {
+                s.registers.get(&register).copied().unwrap_or(mask) & mask == 0
+            })
     }
 }
 #[derive(Default, Serialize, Deserialize)]
@@ -1029,8 +1026,7 @@ impl Device for Command {
                 sensor.writes += 1;
                 wrote = true;
             } else {
-                let (gate, mask) = self.sensor.2;
-                if !sensor.no_read_gate
+                if let Some((gate, mask)) = self.sensor.2.read
                     && sensor.registers.get(&gate).copied().unwrap_or(0) & mask == 0
                 {
                     cx.fail(format!(
@@ -1104,6 +1100,13 @@ impl Device for Command {
 mod tests {
     use super::*;
     use fujimod_emulator_devices::test_host::recording::RecordingHost;
+    /// The register-0 bit-0 standby gate and a read gate on `read`.
+    fn gates(read: (u16, u8)) -> super::super::sensor::Gates {
+        super::super::sensor::Gates {
+            read: Some(read),
+            standby: Some((0, 1)),
+        }
+    }
 
     /// Three exposures in three buffers (the X-T5 4.31 HDR): a reader finds the picture its
     /// input is in; an unknown input or another pitch gets the last picture. A new picture
@@ -1118,7 +1121,7 @@ mod tests {
             packed12: false,
             ..Default::default()
         };
-        let sensor = Sensor::new(None, (0, 0));
+        let sensor = Sensor::new(None, gates((0, 0)));
         for address in [0xbb00f6b0, 0x1_fb00f690, 0xb600f6a0] {
             sensor.0.lock().unwrap().record_still_raw(picture(address));
         }
@@ -1170,7 +1173,7 @@ mod tests {
     /// a snapshot restore recomputes it from the registers.
     #[test]
     fn gain_writes_set_the_sensor_exposure() {
-        let sensor = Sensor::new(None, (0x59, 4));
+        let sensor = Sensor::new(None, gates((0x59, 4)));
         let mut command = Command::new(0xff948000, sensor.clone(), 10).unwrap();
         // Code 0x800 on both pairs: 4095 / 2047 = 2.0005.
         let packets: Vec<u8> = [(0x38u16, 0x00u8), (0x39, 0x08), (0x3a, 0x00), (0x3b, 0x08)]
@@ -1224,7 +1227,7 @@ mod tests {
                 line_stride: true,
                 frame_start_pulse: None,
             }),
-            (0x59, 4),
+            gates((0x59, 4)),
         )
         .with_still_channel(StillChannel {
             channel: 1,
@@ -1295,7 +1298,7 @@ mod tests {
                 line_stride: false,
                 frame_start_pulse: None,
             }),
-            (0x51, 8),
+            gates((0x51, 8)),
         );
         let mut command = Command::new(0xfff6c000, sensor.clone(), 17).unwrap();
         let mut host = RecordingHost::default();
@@ -1332,7 +1335,7 @@ mod tests {
                 line_stride: false,
                 frame_start_pulse: Some(165),
             }),
-            (0x59, 4),
+            gates((0x59, 4)),
         );
         let mut host = RecordingHost::default();
         for _ in 0..2 {
@@ -1364,7 +1367,7 @@ mod tests {
                 line_stride: false,
                 frame_start_pulse: None,
             }),
-            (0x59, 4),
+            gates((0x59, 4)),
         );
         let mut host = RecordingHost {
             ram: vec![0x55; 0x10],
@@ -1450,7 +1453,7 @@ mod tests {
                 line_stride: false,
                 frame_start_pulse: None,
             }),
-            (0x59, 4),
+            gates((0x59, 4)),
         )
         .with_still_channel(StillChannel {
             channel: 1,
@@ -1589,7 +1592,7 @@ mod tests {
                 line_stride: true,
                 frame_start_pulse: None,
             }),
-            (0x59, 4),
+            gates((0x59, 4)),
         );
         let mut host = RecordingHost {
             ram: vec![0x55; 0x40],
@@ -1628,7 +1631,7 @@ mod tests {
     #[test]
     fn packet_lists_read_gate_cancel_and_exact_deadline_are_program_independent() {
         fn experiment(cpu: usize, pc: u64, late: bool) -> Value {
-            let sensor = Sensor::new(None, (0x51, 8));
+            let sensor = Sensor::new(None, gates((0x51, 8)));
             let mut command = Command::new(0xfff6c000, sensor.clone(), 17).unwrap();
             let mut host = RecordingHost {
                 ram_base: 0x1000,
@@ -1685,10 +1688,15 @@ mod tests {
         assert_eq!(experiment(3, 0xabad, true), expected);
     }
     #[test]
-    fn no_read_gate_option_lets_a_read_packet_run_with_register_0x59_unwritten() {
-        for (option, closed) in [(false, true), (true, false)] {
-            let sensor = Sensor::new(None, (0x59, 4));
-            sensor.set_no_read_gate(option);
+    fn a_sensor_without_a_read_gate_answers_a_read_with_no_register_written() {
+        for (read, closed) in [(Some((0x59, 4)), true), (None, false)] {
+            let sensor = Sensor::new(
+                None,
+                Gates {
+                    read,
+                    standby: Some((0, 1)),
+                },
+            );
             let mut command = Command::new(0xfff6c000, sensor, 17_000).unwrap();
             let mut host = RecordingHost {
                 ram_base: 0x1000,
@@ -1706,14 +1714,14 @@ mod tests {
             host.now = 17_000;
             let mut cx = Cx::new(&mut host, 0, 0, 0);
             command.advance(&mut cx);
-            assert_eq!(cx.refusal().is_some(), closed, "option {option}");
+            assert_eq!(cx.refusal().is_some(), closed, "read gate {read:?}");
         }
     }
     #[test]
     fn command_window_words_the_submit_never_reads_accept_writes_while_busy() {
         // X-T3 5.11: one core sets the one-bit field at +0x188 while another
         // polls the busy bit at +0x204, as an emulated SD card boot did.
-        let sensor = Sensor::new(None, (0x59, 4));
+        let sensor = Sensor::new(None, gates((0x59, 4)));
         let mut command = Command::new(0xfff6c000, sensor, 100_000).unwrap();
         let mut host = RecordingHost {
             ram_base: 0x1000,
@@ -1732,7 +1740,7 @@ mod tests {
     }
     #[test]
     fn dma_command_waits_for_guest_time_and_restores_pending_transport() {
-        let sensor = Sensor::new(None, (0x59, 4));
+        let sensor = Sensor::new(None, gates((0x59, 4)));
         let mut command = Command::new(0xff948000, sensor.clone(), 100_000).unwrap();
         let mut host = RecordingHost {
             ram_base: 0x1000,
@@ -1773,7 +1781,7 @@ mod tests {
         // programs the descriptor words through 0x1352510 (+0x21c first),
         // starts with +0x204 = 1 (0x1356750) and polls +0x204 bit 0
         // (0x1356788). The poll only ends when guest time passes the latency.
-        let sensor = Sensor::new(None, (0x59, 4));
+        let sensor = Sensor::new(None, gates((0x59, 4)));
         let mut command = Command::new(0xff948000, sensor.clone(), 1000).unwrap();
         let mut host = RecordingHost {
             ram_base: 0x1000,
@@ -1816,7 +1824,7 @@ mod tests {
     }
     #[test]
     fn trigger_channel_start_bit_clears_after_the_command_latency() {
-        let sensor = Sensor::new(None, (0x51, 8));
+        let sensor = Sensor::new(None, gates((0x51, 8)));
         let mut command = Command::new(0xfff6c000, sensor, 17).unwrap();
         let mut host = RecordingHost::default();
         let base = 0xfff6c000 + 0x2c0;
@@ -1853,7 +1861,7 @@ mod tests {
     fn input_buffer_words_store_their_fields_and_refuse_other_bits() {
         // X-T5 4.31: 0x1354dd8 writes 0x440 = 0x100101 (enable, mode 1, value
         // 0x10) then the seven 9-bit pairs; 0x1355760 reads them back.
-        let sensor = Sensor::new(None, (0x59, 4));
+        let sensor = Sensor::new(None, gates((0x59, 4)));
         let mut command = Command::new(0xff948000, sensor, 1000).unwrap();
         let mut host = RecordingHost::default();
         let mut cx = Cx::new(&mut host, 1, 0, 0);
@@ -1885,7 +1893,7 @@ mod tests {
     fn input_buffer_size_and_flag_words_read_modify_write() {
         // X100VI 1.31: 0x143fa44 reads 0x480 or 0x4c0 and writes it back with bit 0 and bits 16 to
         // 26 replaced; 0x143fbec reads bits 0 and 1 of 0x484 and 0x4c4.
-        let sensor = Sensor::new(None, (0x59, 4));
+        let sensor = Sensor::new(None, gates((0x59, 4)));
         let mut command = Command::new(0xff948000, sensor, 1000).unwrap();
         let mut host = RecordingHost::default();
         let mut cx = Cx::new(&mut host, 1, 0, 0);
@@ -1912,7 +1920,7 @@ mod tests {
     #[test]
     fn enable_word_at_0x120_is_a_plain_boolean_word() {
         // X100VI 1.31: 0x143e754 writes 0 or 1 once; 0x143e7b4 reads it once and keeps bit 0.
-        let sensor = Sensor::new(None, (0x59, 4));
+        let sensor = Sensor::new(None, gates((0x59, 4)));
         let mut command = Command::new(0xff948000, sensor, 1000).unwrap();
         let mut host = RecordingHost::default();
         let mut cx = Cx::new(&mut host, 1, 0, 0);
@@ -1934,7 +1942,7 @@ mod tests {
     }
     #[test]
     fn unit_configuration_words_latch() {
-        let sensor = Sensor::new(None, (0x51, 8));
+        let sensor = Sensor::new(None, gates((0x51, 8)));
         let mut command = Command::new(0xff948000, sensor, 17).unwrap();
         let mut host = RecordingHost::default();
         for (o, v) in [

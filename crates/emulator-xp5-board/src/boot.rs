@@ -2016,32 +2016,46 @@ fn block_window(
         BlockDevice::Movdc { .. } => "movdc",
         BlockDevice::SensorCommand { .. } => {
             options.insert("command_latency_us".into(), integer(1));
+            // The sensor chip's facts are the body's one image-sensor part.
             let sensors: Vec<_> = selection
                 .parts
                 .iter()
                 .filter_map(|part| match &part.model {
                     fujimod_catalog::reference::PartModel::Peripheral {
                         interface:
-                            fujimod_catalog::assembly::PeripheralPart::TimedReadoutSensor {
+                            fujimod_catalog::assembly::PeripheralPart::ImageSensor {
+                                read_gate,
+                                standby_gate,
                                 fast_readout,
-                                line_ns,
+                                ..
                             },
-                    } => Some((*fast_readout, *line_ns)),
+                    } => Some((read_gate, standby_gate, fast_readout)),
                     _ => None,
                 })
                 .collect();
-            match sensors.as_slice() {
-                [] => {}
-                [(readout, line_ns)] => {
-                    options.insert("frame_timing_readout".into(), integer(u64::from(*readout)));
-                    options.insert("frame_timing_line_ns".into(), integer(*line_ns));
+            let [(read_gate, standby_gate, fast_readout)] = sensors.as_slice() else {
+                return Err(format!(
+                    "block {}: body {} installs {} image-sensor parts; the sensor command \
+                     interface needs exactly one",
+                    block.id,
+                    selection.body.id,
+                    sensors.len()
+                ));
+            };
+            for (key, gate) in [("read_gate", read_gate), ("standby_gate", standby_gate)] {
+                if let Some(gate) = gate {
+                    let mut row = toml::Table::new();
+                    row.insert("register".into(), integer(u64::from(gate.register)));
+                    row.insert("mask".into(), integer(u64::from(gate.mask)));
+                    options.insert(key.into(), toml::Value::Table(row));
                 }
-                _ => {
-                    return Err(format!(
-                        "body {} installs more than one timed-readout sensor",
-                        selection.body.id
-                    ));
-                }
+            }
+            if let Some(readout) = fast_readout {
+                options.insert(
+                    "frame_timing_readout".into(),
+                    integer(u64::from(readout.readout)),
+                );
+                options.insert("frame_timing_line_ns".into(), integer(readout.line_ns));
             }
             "imaging-sensor"
         }
@@ -2592,6 +2606,81 @@ mod bus_drain_tests {
             .err()
             .unwrap();
         assert!(error.contains("does not declare once"), "{error}");
+    }
+}
+
+#[cfg(test)]
+mod image_sensor_tests {
+    use super::device_windows;
+    use fujimod_catalog_resolution::ResolvedConfiguration;
+
+    fn sensor(resolved: &ResolvedConfiguration) -> Result<toml::Table, String> {
+        Ok(device_windows(resolved, None)?
+            .into_iter()
+            .find(|window| window.kind == "imaging-sensor")
+            .expect("sensor command window")
+            .options)
+    }
+
+    fn gate(register: i64, mask: i64) -> toml::Value {
+        toml::Value::Table(toml::Table::from_iter([
+            ("register".to_string(), toml::Value::Integer(register)),
+            ("mask".to_string(), toml::Value::Integer(mask)),
+        ]))
+    }
+
+    #[test]
+    fn the_sensor_window_carries_the_body_sensor_part() {
+        for firmware in ["xt5-431", "xh2-530", "xe5-112", "x100vi-131"] {
+            let options = sensor(&ResolvedConfiguration::bundled(firmware).unwrap()).unwrap();
+            assert_eq!(options.get("read_gate"), Some(&gate(0x59, 4)), "{firmware}");
+            assert_eq!(options.get("standby_gate"), Some(&gate(0, 1)), "{firmware}");
+            assert_eq!(
+                (
+                    options["frame_timing_readout"].as_integer(),
+                    options["frame_timing_line_ns"].as_integer()
+                ),
+                (Some(7), Some(6000)),
+                "{firmware}"
+            );
+        }
+        // The X-H2S sensor has neither gate and no decoded readout.
+        let options = sensor(&ResolvedConfiguration::bundled("xh2s-730").unwrap()).unwrap();
+        for key in [
+            "read_gate",
+            "standby_gate",
+            "frame_timing_readout",
+            "frame_timing_line_ns",
+        ] {
+            assert!(!options.contains_key(key), "xh2s {key}");
+        }
+        let options = sensor(&ResolvedConfiguration::bundled("xm5-130").unwrap()).unwrap();
+        assert_eq!(options.get("read_gate"), Some(&gate(0x59, 4)));
+        assert_eq!(options.get("standby_gate"), Some(&gate(0, 1)));
+        assert!(!options.contains_key("frame_timing_readout"));
+    }
+
+    #[test]
+    fn a_body_without_exactly_one_sensor_part_refuses_the_sensor_command_block() {
+        let mut none = ResolvedConfiguration::bundled("xt5-431").unwrap();
+        none.reference
+            .parts
+            .retain(|part| part.id != "x-trans-5-hr-image-sensor");
+        let error = sensor(&none).unwrap_err();
+        assert!(error.contains("installs 0 image-sensor parts"), "{error}");
+
+        let mut two = ResolvedConfiguration::bundled("xt5-431").unwrap();
+        let mut copy = two
+            .reference
+            .parts
+            .iter()
+            .find(|part| part.id == "x-trans-5-hr-image-sensor")
+            .unwrap()
+            .clone();
+        copy.id = "second-image-sensor".into();
+        two.reference.parts.push(copy);
+        let error = sensor(&two).unwrap_err();
+        assert!(error.contains("installs 2 image-sensor parts"), "{error}");
     }
 }
 

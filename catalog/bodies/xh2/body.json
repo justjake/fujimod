@@ -330,7 +330,8 @@
     "serial-command-16-read",
     "xt5-stabilizer-stage",
     "serial-command-16",
-    "serial-command-8"
+    "serial-command-8",
+    "x-trans-5-hr-image-sensor"
   ],
   "wiring": [
     {

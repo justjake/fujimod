@@ -20150,60 +20150,53 @@
         },
         {
           "additionalProperties": false,
-          "description": "Image sensor whose serial register selects the readout gate.",
+          "description": "Image sensor programmed through eight-byte register command packets, streaming to the\nprocessor's image receiver. Every field is a fact of the sensor chip.",
           "properties": {
-            "kind": {
-              "const": "imaging-sensor",
+            "basis": {
+              "description": "How these facts were established.",
               "type": "string"
             },
-            "read_gate_mask": {
-              "description": "Bits enabling the readout gate.",
-              "format": "uint8",
-              "maximum": 255,
-              "minimum": 0,
-              "type": "integer"
-            },
-            "read_gate_register": {
-              "description": "Sensor register controlling readout.",
-              "format": "uint16",
-              "maximum": 65535,
-              "minimum": 0,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "kind",
-            "read_gate_register",
-            "read_gate_mask"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "description": "Image sensor with a fast autofocus readout of known line length.",
-          "properties": {
             "fast_readout": {
-              "description": "Value of sensor register 0x01 that selects the fast readout.",
-              "format": "uint8",
-              "maximum": 255,
-              "minimum": 0,
-              "type": "integer"
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/SensorFastReadout"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A readout whose frame length follows the sensor's frame-length register, when\ndecoded."
             },
             "kind": {
-              "const": "timed-readout-sensor",
+              "const": "image-sensor",
               "type": "string"
             },
-            "line_ns": {
-              "description": "Length of one line of that readout.",
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
+            "read_gate": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/SensorRegisterBits"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Register bits that must be set before the sensor answers a register read; absent,\nreads are not gated."
+            },
+            "standby_gate": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/SensorRegisterBits"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Register bits that hold the sensor in standby: it streams once it has been\nprogrammed and these bits are clear. They are set at reset. Absent, the sensor\nstreams once programmed."
             }
           },
           "required": [
             "kind",
-            "fast_readout",
-            "line_ns"
+            "basis"
           ],
           "type": "object"
         },
@@ -23392,6 +23385,30 @@
       ],
       "type": "object"
     },
+    "SensorFastReadout": {
+      "additionalProperties": false,
+      "description": "An image-sensor readout of decoded line length.",
+      "properties": {
+        "line_ns": {
+          "description": "Length of one line of that readout.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "readout": {
+          "description": "Value of sensor register 0x01 that selects the readout.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "readout",
+        "line_ns"
+      ],
+      "type": "object"
+    },
     "SensorIllumination": {
       "description": "Image-circle illumination model of a sensor projection.",
       "oneOf": [
@@ -23606,6 +23623,31 @@
         "width",
         "height",
         "image_area"
+      ],
+      "type": "object"
+    },
+    "SensorRegisterBits": {
+      "additionalProperties": false,
+      "description": "Bits of one image-sensor register.",
+      "properties": {
+        "mask": {
+          "description": "Bits of that register; nonzero.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "register": {
+          "description": "Sensor register address.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "register",
+        "mask"
       ],
       "type": "object"
     },

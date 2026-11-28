@@ -293,7 +293,8 @@
     "tmd2772",
     "control-bus-device-66",
     "control-bus-device-68",
-    "x100vi-display-panel"
+    "x100vi-display-panel",
+    "x-trans-5-hr-image-sensor"
   ],
   "wiring": [
     {

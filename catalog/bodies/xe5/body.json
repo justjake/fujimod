@@ -437,7 +437,8 @@
     "serial-command-8",
     "unidentified-serial-device",
     "lsm6ds",
-    "xf18-55-lens"
+    "xf18-55-lens",
+    "x-trans-5-hr-image-sensor"
   ],
   "wiring": [
     {

@@ -4576,7 +4576,6 @@ type PeripheralPart = (
     | PeripheralPartVariant19
     | PeripheralPartVariant20
     | PeripheralPartVariant21
-    | PeripheralPartVariant22
 )
 
 
@@ -4589,25 +4588,18 @@ class PeripheralPartVariant1(TypedDict, total=False):
 
 
 class PeripheralPartVariant10(TypedDict, total=False):
-    kind: Required[Literal["power-controller"]]
-    port_detection: NotRequired[PowerPortDetection | None]
-    registers: NotRequired[list[PowerControllerRegister]]
-    transport: NotRequired[PowerControllerTransport | None]
-
-
-class PeripheralPartVariant11(TypedDict, total=False):
     kind: Required[Literal["serial-calibration-registers"]]
 
 
-class PeripheralPartVariant12(TypedDict, total=False):
+class PeripheralPartVariant11(TypedDict, total=False):
     kind: Required[Literal["bis-configuration-registers"]]
 
 
-class PeripheralPartVariant13(TypedDict, total=False):
+class PeripheralPartVariant12(TypedDict, total=False):
     kind: Required[Literal["lsm6ds-configuration-registers"]]
 
 
-class PeripheralPartVariant14(TypedDict, total=False):
+class PeripheralPartVariant13(TypedDict, total=False):
     bits: Required[int]
     data_words: NotRequired[int | None]
     kind: Required[Literal["serial-command-registers"]]
@@ -4616,28 +4608,35 @@ class PeripheralPartVariant14(TypedDict, total=False):
     read_flag: NotRequired[int | None]
 
 
-class PeripheralPartVariant15(TypedDict, total=False):
+class PeripheralPartVariant14(TypedDict, total=False):
     kind: Required[Literal["unidentified-serial-device"]]
     miso_high: Required[bool]
 
 
-class PeripheralPartVariant16(TypedDict, total=False):
+class PeripheralPartVariant15(TypedDict, total=False):
     kind: Required[Literal["fuel-gauge"]]
 
 
-class PeripheralPartVariant17(TypedDict, total=False):
+class PeripheralPartVariant16(TypedDict, total=False):
     kind: Required[Literal["tmd2772-proximity"]]
 
 
-class PeripheralPartVariant18(TypedDict, total=False):
+class PeripheralPartVariant17(TypedDict, total=False):
     kind: Required[Literal["retained-registers"]]
 
 
-class PeripheralPartVariant19(TypedDict, total=False):
+class PeripheralPartVariant18(TypedDict, total=False):
     commands: Required[list[StabilizerCommand]]
     kind: Required[Literal["stabilizer"]]
     status: Required[int]
     telemetry: Required[int]
+
+
+class PeripheralPartVariant19(TypedDict, total=False):
+    command_prefix: Required[int]
+    data_prefix: Required[int]
+    kind: Required[Literal["command-data-output"]]
+    payload_bytes: Required[int]
 
 
 class PeripheralPartVariant2(TypedDict, total=False):
@@ -4645,13 +4644,6 @@ class PeripheralPartVariant2(TypedDict, total=False):
 
 
 class PeripheralPartVariant20(TypedDict, total=False):
-    command_prefix: Required[int]
-    data_prefix: Required[int]
-    kind: Required[Literal["command-data-output"]]
-    payload_bytes: Required[int]
-
-
-class PeripheralPartVariant21(TypedDict, total=False):
     erase_bytes: NotRequired[int | None]
     jedec_id: NotRequired[int | None]
     kind: Required[Literal["serial-nor-flash"]]
@@ -4659,7 +4651,7 @@ class PeripheralPartVariant21(TypedDict, total=False):
     sampling: NotRequired[NorSampling | None]
 
 
-class PeripheralPartVariant22(TypedDict, total=False):
+class PeripheralPartVariant21(TypedDict, total=False):
     jedec_id: NotRequired[int | None]
     kind: Required[Literal["serial-nand-flash"]]
     page_bytes: NotRequired[int | None]
@@ -4672,23 +4664,19 @@ class PeripheralPartVariant3(TypedDict, total=False):
 
 
 class PeripheralPartVariant4(TypedDict, total=False):
-    kind: Required[Literal["imaging-sensor"]]
-    read_gate_mask: Required[int]
-    read_gate_register: Required[int]
+    basis: Required[str]
+    fast_readout: NotRequired[SensorFastReadout | None]
+    kind: Required[Literal["image-sensor"]]
+    read_gate: NotRequired[SensorRegisterBits | None]
+    standby_gate: NotRequired[SensorRegisterBits | None]
 
 
 class PeripheralPartVariant5(TypedDict, total=False):
-    fast_readout: Required[int]
-    kind: Required[Literal["timed-readout-sensor"]]
-    line_ns: Required[int]
-
-
-class PeripheralPartVariant6(TypedDict, total=False):
     initial_frame: Required[int]
     kind: Required[Literal["framed-command-peer"]]
 
 
-class PeripheralPartVariant7(TypedDict, total=False):
+class PeripheralPartVariant6(TypedDict, total=False):
     center: Required[list[int]]
     drive_gain: Required[list[int]]
     kind: Required[Literal["stabilizer-stage"]]
@@ -4697,17 +4685,24 @@ class PeripheralPartVariant7(TypedDict, total=False):
     rest: Required[list[int]]
 
 
-class PeripheralPartVariant8(TypedDict, total=False):
+class PeripheralPartVariant7(TypedDict, total=False):
     kind: Required[Literal["display-panel-serial"]]
 
 
-class PeripheralPartVariant9(TypedDict, total=False):
+class PeripheralPartVariant8(TypedDict, total=False):
     busy_us: Required[int]
     kind: Required[Literal["x-mount-lens"]]
     operation_us: Required[int]
     preset: Required[str]
     sense_unpowered: Required[list[bool]]
     startup_us: Required[int]
+
+
+class PeripheralPartVariant9(TypedDict, total=False):
+    kind: Required[Literal["power-controller"]]
+    port_detection: NotRequired[PowerPortDetection | None]
+    registers: NotRequired[list[PowerControllerRegister]]
+    transport: NotRequired[PowerControllerTransport | None]
 
 
 class PersistentJournalAppend(TypedDict, total=False):
@@ -6275,6 +6270,11 @@ class SensorControlInterface(TypedDict, total=False):
     register_address_bits: Required[int]
 
 
+class SensorFastReadout(TypedDict, total=False):
+    line_ns: Required[int]
+    readout: Required[int]
+
+
 type SensorIllumination = (
     Literal["uniform", "cosine-fourth"] | SensorIlluminationVariant0
 )
@@ -6319,6 +6319,11 @@ class SensorRaster(TypedDict, total=False):
     image_area: Required[list[int]]
     pixel_clock_hz: NotRequired[int | None]
     width: Required[int]
+
+
+class SensorRegisterBits(TypedDict, total=False):
+    mask: Required[int]
+    register: Required[int]
 
 
 class SensorRollingReference(TypedDict, total=False):

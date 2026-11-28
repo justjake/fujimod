@@ -722,18 +722,6 @@ pub struct ProcessedFrameInput {
     pub luma: u64,
 }
 
-/// Declared read gate facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "ResetReadGate"))]
-pub struct ReadGate {
-    /// Declared mask.
-    pub mask: u64,
-    /// Declared register.
-    pub register: u64,
-}
-
 /// Declared statistics scene facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -764,8 +752,6 @@ pub struct SensorInput {
     pub frame_active_ticks: u64,
     /// Declared frame period ticks.
     pub frame_period_ticks: u64,
-    /// Declared read gate.
-    pub read_gate: ReadGate,
     /// Declared statistics scene.
     pub statistics_scene: StatisticsScene,
 }

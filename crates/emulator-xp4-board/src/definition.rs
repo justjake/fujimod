@@ -253,7 +253,7 @@ pub struct Definition {
     pub imaging: Option<(
         (u64, u64, Vec<u32>, Vec<u32>, Vec<u32>, Option<Vec<u32>>),
         (u64, u64, u64, u64),
-        (u16, u8),
+        (Option<(u16, u8)>, Option<(u16, u8)>),
         Option<(u64, u32, u64, u64, u64, String)>,
     )>,
     /// An interrupt line the declared `imaging` sensor pulses at every frame

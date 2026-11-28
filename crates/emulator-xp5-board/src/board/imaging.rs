@@ -53,6 +53,28 @@ pub fn register_all(
             bus.register(w.base, w.size, Box::new(sink))?;
         }
     }
+    let sensor_window = match windows
+        .iter()
+        .filter(|w| w.kind == "imaging-sensor")
+        .collect::<Vec<_>>()
+        .as_slice()
+    {
+        [] => None,
+        [window] => Some(*window),
+        _ => return Err("more than one imaging-sensor window".into()),
+    };
+    // The sensor chip's gates and decoded readout are the body's image-sensor part, which the
+    // catalog puts on the imaging-sensor window (`read_gate`, `standby_gate`,
+    // `frame_timing_readout` and `frame_timing_line_ns`). An option left out is a gate the
+    // chip does not have, or a readout whose frames keep the stand-in periods of the receiver
+    // and preview windows.
+    let gates = match sensor_window {
+        Some(w) => sensor::Gates {
+            read: sensor_gate(&w.options, "read_gate")?,
+            standby: sensor_gate(&w.options, "standby_gate")?,
+        },
+        None => sensor::Gates::default(),
+    };
     let sensor = sensor::Sensor::new(
         Some(sensor::ImageRoutes {
             dma: Some([162, 163]),
@@ -65,13 +87,10 @@ pub fn register_all(
             // V_TIMING one-shot (0x3003c88 -> 0x15332b0(0x33)) once per frame.
             frame_start_pulse: Some(165),
         }),
-        (0x59, 4),
+        gates,
     );
-    // Frame timing of the decoded sensor readout (sensor::FrameTiming), opt-in through the
-    // imaging-sensor window: frame_timing_readout (the value of sensor register 0x01) and
-    // frame_timing_line_ns (its line length). Without them every frame keeps the stand-in
-    // periods of the receiver and preview windows.
-    let sensor = match windows.iter().find(|w| w.kind == "imaging-sensor") {
+    // Frame timing of the decoded sensor readout (sensor::FrameTiming).
+    let sensor = match sensor_window {
         Some(w)
             if w.options.contains_key("frame_timing_readout")
                 || w.options.contains_key("frame_timing_line_ns") =>
@@ -122,25 +141,6 @@ pub fn register_all(
     for window in windows.iter().filter(|w| w.kind == "imaging-sensor") {
         if window.base != 0xff948000 || window.size != 0x1000 {
             return Err("invalid imaging sensor window".into());
-        }
-        // X-H2S assumption: no register-0 standby gate (`standby_gate = false`); see
-        // Sensor::set_no_standby_gate. Default keeps the X100VI behavior.
-        if window
-            .options
-            .get("standby_gate")
-            .and_then(toml::Value::as_bool)
-            == Some(false)
-        {
-            sensor.set_no_standby_gate(true);
-        }
-        // X-H2S assumption: reads are not gated on register 0x59 (`read_gate = false`).
-        if window
-            .options
-            .get("read_gate")
-            .and_then(toml::Value::as_bool)
-            == Some(false)
-        {
-            sensor.set_no_read_gate(true);
         }
         bus.register(
             window.base,
@@ -426,6 +426,29 @@ pub fn register_all(
     Ok(())
 }
 
+/// The `{register, mask}` table of the imaging-sensor window option `key`, if present.
+fn sensor_gate(options: &toml::Table, key: &str) -> Result<Option<(u16, u8)>, String> {
+    let Some(value) = options.get(key) else {
+        return Ok(None);
+    };
+    let field = |name: &str| {
+        value
+            .as_table()
+            .and_then(|table| table.get(name))
+            .and_then(toml::Value::as_integer)
+    };
+    let register = field("register").and_then(|n| u16::try_from(n).ok());
+    let mask = field("mask")
+        .and_then(|n| u8::try_from(n).ok())
+        .filter(|mask| *mask != 0);
+    match (register, mask, value.as_table().map(toml::Table::len)) {
+        (Some(register), Some(mask), Some(2)) => Ok(Some((register, mask))),
+        _ => Err(format!(
+            "imaging-sensor {key} must be a {{register, mask}} table with a nonzero 8-bit mask"
+        )),
+    }
+}
+
 /// Bring-up option `retain_words`: unmodeled aligned words of the window read back their last
 /// write instead of stopping as unmodeled. Off unless the manifest sets it.
 fn retain_words(options: &toml::Table) -> Result<bool, String> {
@@ -493,6 +516,29 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    /// The sensor gates come only from `{register, mask}` tables on the window: no option is
+    /// no gate, and the retired boolean escape options are refused.
+    #[test]
+    fn sensor_gates_are_the_window_tables() {
+        let options: toml::Table = toml::from_str(
+            "read_gate = { register = 0x59, mask = 4 }\nstandby_gate = false\n\
+             wide = { register = 0x10000, mask = 1 }\nzero = { register = 0, mask = 0 }\n\
+             extra = { register = 0, mask = 1, value = 1 }",
+        )
+        .unwrap();
+        assert_eq!(sensor_gate(&options, "read_gate"), Ok(Some((0x59, 4))));
+        assert_eq!(sensor_gate(&options, "absent"), Ok(None));
+        for key in ["standby_gate", "wide", "zero", "extra"] {
+            assert!(sensor_gate(&options, key).is_err(), "{key}");
+        }
+        let mut windows = crate::boot::xt5_windows(&["imaging-sensor"]);
+        windows[0]
+            .options
+            .insert("read_gate".into(), toml::Value::Boolean(false));
+        let pins = fujimod_emulator_devices::xp5::pins::Pins::shared();
+        assert!(register_all(&mut DeviceGraph::new(), &windows, &pins).is_err());
     }
 
     /// The X-T5 4.31 manifest's 0xff983000 window registers as the advanced-filter scaler, and

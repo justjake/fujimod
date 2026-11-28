@@ -2328,29 +2328,6 @@
       ],
       "type": "object"
     },
-    "ResetReadGate": {
-      "additionalProperties": false,
-      "description": "Declared read gate facts.",
-      "properties": {
-        "mask": {
-          "description": "Declared mask.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "register": {
-          "description": "Declared register.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "mask",
-        "register"
-      ],
-      "type": "object"
-    },
     "ResetResultQuery": {
       "additionalProperties": false,
       "description": "Declared result query facts.",
@@ -2638,10 +2615,6 @@
           "minimum": 0,
           "type": "integer"
         },
-        "read_gate": {
-          "$ref": "#/$defs/ResetReadGate",
-          "description": "Declared read gate."
-        },
         "statistics_scene": {
           "$ref": "#/$defs/ResetStatisticsScene",
           "description": "Declared statistics scene."
@@ -2651,7 +2624,6 @@
         "basis",
         "frame_active_ticks",
         "frame_period_ticks",
-        "read_gate",
         "statistics_scene"
       ],
       "type": "object"

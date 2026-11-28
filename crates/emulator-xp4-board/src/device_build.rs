@@ -486,7 +486,7 @@ pub(crate) fn build(
     if imaging_frame_start_pulse.is_some() && imaging.is_none() {
         return Err("An imaging frame start pulse requires the imaging wiring".into());
     }
-    if let Some((map, timing, read_gate, ibuf)) = imaging {
+    if let Some((map, timing, gates, ibuf)) = imaging {
         // The statistics banks are guest memory when a declared memory
         // region holds them (the boot ROM start keeps its SRAM there).
         let statistics_in_memory = ibuf.as_ref().is_some_and(|(_, _, _, sram, bank, _)| {
@@ -499,7 +499,7 @@ pub(crate) fn build(
             .imaging(
                 map,
                 timing,
-                read_gate,
+                gates,
                 ibuf,
                 statistics_in_memory,
                 imaging_frame_start_pulse,
