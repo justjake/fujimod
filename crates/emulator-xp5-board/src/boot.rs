@@ -418,35 +418,120 @@ pub fn apply_run_scene(
     Ok(())
 }
 
-/// The run's XP5 device windows. `dram` is a firmware's own DRAM extent and the
-/// address its body's one bus drain moves to so that it lies past that extent;
-/// absent, the catalog's DRAM address space bounds the drains.
+/// One RAM region a run declares (an XP5 boot manifest's `[[ram]]`), and whether it is DRAM
+/// rather than companion SRAM, PHY register space or boot SRAM.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RunRam {
+    pub base: u64,
+    pub size: u64,
+    pub dram: bool,
+}
+
+/// A run's declared RAM, checked: regions are nonempty, and DRAM regions do not overlap.
+/// Adjacent DRAM regions form one span.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RunMemory {
+    ram: Vec<(u64, u64)>,
+    dram: Vec<(u64, u64)>,
+}
+
+impl RunMemory {
+    pub fn new(regions: impl IntoIterator<Item = RunRam>) -> Result<Self, String> {
+        let mut ram = Vec::new();
+        let mut dram: Vec<(u64, u64)> = Vec::new();
+        for region in regions {
+            let end = region
+                .base
+                .checked_add(region.size)
+                .filter(|_| region.size != 0)
+                .ok_or_else(|| {
+                    format!(
+                        "RAM region {:#x}+{:#x} is empty or overflows",
+                        region.base, region.size
+                    )
+                })?;
+            ram.push((region.base, end));
+            if region.dram {
+                dram.push((region.base, end));
+            }
+        }
+        dram.sort_unstable();
+        if let Some(pair) = dram.windows(2).find(|pair| pair[0].1 > pair[1].0) {
+            return Err(format!(
+                "DRAM regions {:#x}..{:#x} and {:#x}..{:#x} overlap",
+                pair[0].0, pair[0].1, pair[1].0, pair[1].1
+            ));
+        }
+        let mut spans: Vec<(u64, u64)> = Vec::new();
+        for (base, end) in dram {
+            match spans.last_mut() {
+                Some(last) if last.1 == base => last.1 = end,
+                _ => spans.push((base, end)),
+            }
+        }
+        Ok(Self { ram, dram: spans })
+    }
+
+    /// The DRAM spans as `(base, end)`, adjacent regions joined, in address order.
+    pub fn dram(&self) -> &[(u64, u64)] {
+        &self.dram
+    }
+
+    /// The exclusive end of the DRAM span that starts at `base`.
+    pub fn dram_end_from(&self, base: u64) -> Result<u64, String> {
+        self.dram
+            .iter()
+            .find(|span| span.0 == base)
+            .map(|span| span.1)
+            .ok_or_else(|| format!("the run declares no DRAM from {base:#x}"))
+    }
+
+    fn within(ranges: &[(u64, u64)], base: u64, size: u64) -> bool {
+        base.checked_add(size).is_some_and(|end| {
+            ranges
+                .iter()
+                .any(|&(start, stop)| start <= base && end <= stop)
+        })
+    }
+
+    /// Whether `base..base+size` lies in declared DRAM.
+    pub fn in_dram(&self, base: u64, size: u64) -> bool {
+        Self::within(&self.dram, base, size)
+    }
+
+    /// Whether `base..base+size` lies in one declared RAM region.
+    pub fn in_ram(&self, base: u64, size: u64) -> bool {
+        Self::within(&self.ram, base, size)
+    }
+}
+
+/// The run's XP5 device windows, given the RAM the run declares.
 pub fn device_windows(
     resolved: &fujimod_catalog_resolution::ResolvedConfiguration,
-    dram: Option<(u64, u64)>,
+    memory: &RunMemory,
 ) -> Result<Vec<DeviceWindow>, String> {
-    let Some((limit, bus_drain)) = dram else {
-        return windows_from_blocks(resolved, resolved.dram_address_space_limit_bytes()?);
-    };
-    let mut moved = resolved.clone();
-    let drains = moved
-        .reference
-        .body
-        .hardware
-        .as_mut()
-        .map(|hardware| &mut hardware.bus_drain);
-    let Some([drain]) = drains.map(|drains| drains.as_mut_slice()) else {
-        return Err("a DRAM override moves a bus drain the body does not declare once".into());
-    };
-    drain.address = bus_drain;
-    windows_from_blocks(&moved, limit)
+    windows_from_blocks(resolved, memory)
+}
+
+/// DRAM from 0 to the catalog's DRAM address-space limit, for device tests that build windows
+/// without a boot manifest.
+#[cfg(test)]
+pub(crate) fn catalog_dram(
+    resolved: &fujimod_catalog_resolution::ResolvedConfiguration,
+) -> RunMemory {
+    RunMemory::new([RunRam {
+        base: 0,
+        size: resolved.dram_address_space_limit_bytes().unwrap(),
+        dram: true,
+    }])
+    .unwrap()
 }
 
 /// The X-T5 4.31 windows of `kinds`, for device tests.
 #[cfg(test)]
 pub(crate) fn xt5_windows(kinds: &[&str]) -> Vec<DeviceWindow> {
     let resolved = fujimod_catalog_resolution::ResolvedConfiguration::bundled("xt5-431").unwrap();
-    let mut windows = device_windows(&resolved, None).unwrap();
+    let mut windows = device_windows(&resolved, &catalog_dram(&resolved)).unwrap();
     windows.retain(|window| kinds.contains(&window.kind.as_str()));
     windows
 }
@@ -458,7 +543,7 @@ pub(crate) fn xt5_windows(kinds: &[&str]) -> Vec<DeviceWindow> {
 /// supplies ADC samples, GPIO levels and flash contents.
 pub fn windows_from_blocks(
     resolved: &fujimod_catalog_resolution::ResolvedConfiguration,
-    dram_limit: u64,
+    memory: &RunMemory,
 ) -> Result<Vec<DeviceWindow>, String> {
     use fujimod_catalog_configuration::application_inputs::ApplicationBlockInput;
 
@@ -548,6 +633,7 @@ pub fn windows_from_blocks(
             ticks_per_second,
             presented_jedec,
             part_inputs,
+            memory,
         )? {
             let mut options = options;
             if !options.contains_key("registers")
@@ -612,7 +698,7 @@ pub fn windows_from_blocks(
         }
     }
     // The firmware drains the bus by reading one word of each port and discarding it; a port
-    // the run's DRAM covers is RAM instead.
+    // in the run's declared DRAM is RAM instead.
     let ports = selection
         .soc
         .blocks
@@ -620,7 +706,7 @@ pub fn windows_from_blocks(
         .filter(|block| matches!(block.device, Some(BlockDevice::UnmodeledBusDrain { .. })))
         .map(|block| block.base)
         .chain(drains.iter().map(|drain| drain.address))
-        .filter(|&address| address >= dram_limit)
+        .filter(|&address| !memory.in_dram(address, 4))
         .collect::<std::collections::BTreeSet<_>>();
     for address in ports {
         devices.push(DeviceWindow {
@@ -1293,6 +1379,7 @@ fn block_window(
     ticks_per_second: u64,
     presented_jedec: Option<u32>,
     part_inputs: &[fujimod_catalog_configuration::application_inputs::ApplicationPartInput],
+    memory: &RunMemory,
 ) -> Result<Option<(&'static str, toml::Table)>, String> {
     let mut options = toml::Table::new();
     let integer = |value: u64| toml::Value::Integer(i64::try_from(value).unwrap_or(i64::MAX));
@@ -1945,7 +2032,6 @@ fn block_window(
         BlockDevice::SdHost {
             transfer_ticks,
             clock_ticks,
-            dma_windows,
             address_high,
             ..
         } => {
@@ -1955,31 +2041,30 @@ fn block_window(
             controller.insert("transfer_ticks".into(), integer(*transfer_ticks));
             controller.insert("clock_ticks".into(), integer(*clock_ticks));
             controller.insert("rca".into(), integer(1));
-            if !dma_windows.is_empty() {
-                let (low, banks): (Vec<&fujimod_catalog::soc::SdDmaWindow>, Vec<_>) =
-                    dma_windows.iter().partition(|window| window.base == 0);
-                let [low] = low.as_slice() else {
-                    return Err(format!(
-                        "block {}: SD DMA needs one range from address 0",
-                        block.id
-                    ));
-                };
-                controller.insert("ram_bytes".into(), integer(low.size));
-                if !banks.is_empty() {
-                    controller.insert(
-                        "ram_banks".into(),
-                        toml::Value::Array(
-                            banks
-                                .iter()
-                                .map(|bank| {
-                                    toml::Value::Array(vec![integer(bank.base), integer(bank.size)])
-                                })
-                                .collect(),
-                        ),
-                    );
-                }
-                controller.insert("dram_alias".into(), toml::Value::Boolean(false));
+            // The host's DMA reaches the run's declared DRAM: the span from 0, then the others.
+            let (low, banks): (Vec<_>, Vec<_>) = memory.dram().iter().partition(|span| span.0 == 0);
+            let [(_, low)] = low.as_slice() else {
+                return Err(format!(
+                    "block {}: the SD host's DMA needs the run's DRAM from address 0; the run \
+                     declares none there",
+                    block.id
+                ));
+            };
+            controller.insert("ram_bytes".into(), integer(*low));
+            if !banks.is_empty() {
+                controller.insert(
+                    "ram_banks".into(),
+                    toml::Value::Array(
+                        banks
+                            .iter()
+                            .map(|(base, end)| {
+                                toml::Value::Array(vec![integer(*base), integer(end - base)])
+                            })
+                            .collect(),
+                    ),
+                );
             }
+            controller.insert("dram_alias".into(), toml::Value::Boolean(false));
             if let Some(address) = address_high {
                 controller.insert("address_high".into(), integer(*address));
             }
@@ -2559,12 +2644,21 @@ pub fn open(
 }
 
 #[cfg(test)]
-mod bus_drain_tests {
-    use super::device_windows;
+mod dram_tests {
+    use super::{RunMemory, RunRam, catalog_dram, device_windows};
     use fujimod_catalog_resolution::ResolvedConfiguration;
 
-    fn drains(resolved: &ResolvedConfiguration) -> Vec<u64> {
-        device_windows(resolved, None)
+    fn memory(regions: &[(u64, u64, bool)]) -> RunMemory {
+        RunMemory::new(
+            regions
+                .iter()
+                .map(|&(base, size, dram)| RunRam { base, size, dram }),
+        )
+        .unwrap()
+    }
+
+    fn drains(resolved: &ResolvedConfiguration, memory: &RunMemory) -> Vec<u64> {
+        device_windows(resolved, memory)
             .unwrap()
             .iter()
             .filter(|window| window.kind == "discarded-read")
@@ -2572,10 +2666,30 @@ mod bus_drain_tests {
             .collect()
     }
 
+    fn sd_reach(resolved: &ResolvedConfiguration, memory: &RunMemory) -> Vec<toml::Value> {
+        device_windows(resolved, memory)
+            .unwrap()
+            .iter()
+            .filter(|window| window.kind == "sdhci")
+            .map(|window| {
+                let controller = window.options["controller"].as_table().unwrap();
+                toml::Value::Array(vec![
+                    controller["ram_bytes"].clone(),
+                    controller
+                        .get("ram_banks")
+                        .cloned()
+                        .unwrap_or(toml::Value::Array(vec![])),
+                ])
+            })
+            .collect()
+    }
+
     #[test]
     fn each_body_gets_its_own_drain_beside_the_soc_ones() {
-        let x100vi = drains(&ResolvedConfiguration::bundled("x100vi-131").unwrap());
-        let xt5 = drains(&ResolvedConfiguration::bundled("xt5-431").unwrap());
+        let x100vi = ResolvedConfiguration::bundled("x100vi-131").unwrap();
+        let xt5 = ResolvedConfiguration::bundled("xt5-431").unwrap();
+        let x100vi = drains(&x100vi, &catalog_dram(&x100vi));
+        let xt5 = drains(&xt5, &catalog_dram(&xt5));
         assert!(x100vi.contains(&0x6800_0000) && !x100vi.contains(&0x6000_0000));
         assert!(xt5.contains(&0x6000_0000) && !xt5.contains(&0x6800_0000));
         for drains in [&x100vi, &xt5] {
@@ -2584,28 +2698,84 @@ mod bus_drain_tests {
     }
 
     #[test]
-    fn a_dram_override_moves_the_one_body_drain() {
-        let mut resolved = ResolvedConfiguration::bundled("xt5-431").unwrap();
-        let hardware = resolved.reference.body.hardware.as_mut().unwrap();
-        hardware.bus_drain.truncate(1);
-        let moved = device_windows(&resolved, Some((0xc000_0000, 0xc000_0000))).unwrap();
-        assert!(
-            moved
-                .iter()
-                .any(|window| window.base == 0xc000_0000 && window.kind == "discarded-read")
+    fn a_drain_in_declared_dram_is_ram_and_others_stay() {
+        // The X-H2S body declares three drains; DRAM over two of them leaves only the third
+        // (and the SoC's drains outside DRAM). Non-DRAM RAM does not remove a drain.
+        let xh2s = ResolvedConfiguration::bundled("xh2s-730").unwrap();
+        let low = drains(&xh2s, &memory(&[(0, 0x8000_0000, true)]));
+        for drain in [0x8000_0000, 0x1_0000_0000, 0x1_8000_0000, 0x1_c000_0000] {
+            assert!(low.contains(&drain), "{drain:#x}");
+        }
+        let wide = drains(
+            &xh2s,
+            &memory(&[
+                (0, 0x8000_0000, true),
+                (0x8000_0000, 0x8000_0000, true),
+                (0x1_0000_0000, 0x8000_0000, true),
+                (0x1_8000_0000, 0x1000, false),
+            ]),
         );
-        resolved
-            .reference
-            .body
-            .hardware
-            .as_mut()
-            .unwrap()
-            .bus_drain
-            .clear();
-        let error = device_windows(&resolved, Some((0xc000_0000, 0xc000_0000)))
-            .err()
-            .unwrap();
-        assert!(error.contains("does not declare once"), "{error}");
+        assert_eq!(wide, [0x1_8000_0000, 0x1_c000_0000]);
+    }
+
+    #[test]
+    fn the_sd_hosts_reach_the_declared_dram() {
+        let xt5 = ResolvedConfiguration::bundled("xt5-431").unwrap();
+        let reach = sd_reach(
+            &xt5,
+            &memory(&[
+                (0, 0x4000_0000, true),
+                (0x4000_0000, 0x8000_0000, true),
+                (0xfa20_0000, 0x10_0000, false),
+                (0x1_c000_4000, 0x3fff_c000, true),
+                (0xff80_0000, 0x4_0000, false),
+            ]),
+        );
+        let expected: toml::Value =
+            toml::from_str::<toml::Table>("v = [0xc0000000, [[0x1c0004000, 0x3fffc000]]]").unwrap()
+                ["v"]
+                .clone();
+        assert_eq!(reach, [expected.clone(), expected]);
+        // DRAM only from 0: no banks.
+        assert_eq!(
+            sd_reach(&xt5, &memory(&[(0, 0x8000_0000, true)]))[0],
+            toml::Value::Array(vec![
+                toml::Value::Integer(0x8000_0000),
+                toml::Value::Array(vec![])
+            ])
+        );
+        // No DRAM from 0 (or none at all): the SD hosts refuse.
+        for regions in [
+            &[(0x4000_0000, 0x4000_0000, true)][..],
+            &[(0, 0x4000_0000, false)][..],
+        ] {
+            let error = device_windows(&xt5, &memory(regions)).unwrap_err();
+            assert!(error.contains("DRAM from address 0"), "{error}");
+        }
+    }
+
+    #[test]
+    fn overlapping_dram_regions_are_refused() {
+        let regions = [
+            RunRam {
+                base: 0,
+                size: 0x8000_0000,
+                dram: true,
+            },
+            RunRam {
+                base: 0x7000_0000,
+                size: 0x1000_0000,
+                dram: true,
+            },
+        ];
+        let error = RunMemory::new(regions).unwrap_err();
+        assert!(error.contains("overlap"), "{error}");
+        // Non-DRAM RAM may sit anywhere; an empty region is refused.
+        let mut sram = regions;
+        sram[1].dram = false;
+        assert!(RunMemory::new(sram).is_ok());
+        sram[1].size = 0;
+        assert!(RunMemory::new(sram).is_err());
     }
 }
 
@@ -2615,7 +2785,7 @@ mod image_sensor_tests {
     use fujimod_catalog_resolution::ResolvedConfiguration;
 
     fn sensor(resolved: &ResolvedConfiguration) -> Result<toml::Table, String> {
-        Ok(device_windows(resolved, None)?
+        Ok(device_windows(resolved, &super::catalog_dram(resolved))?
             .into_iter()
             .find(|window| window.kind == "imaging-sensor")
             .expect("sensor command window")
@@ -2695,7 +2865,7 @@ mod gpio_feedback_tests {
     }
 
     fn feedback(resolved: &ResolvedConfiguration) -> Result<serde_json::Value, String> {
-        let windows = device_windows(resolved, None)?;
+        let windows = device_windows(resolved, &super::catalog_dram(resolved))?;
         let gpio = windows.iter().find(|window| window.kind == "gpio").unwrap();
         Ok(serde_json::to_value(gpio.options.get("feedback")).unwrap())
     }
@@ -2776,7 +2946,7 @@ mod gpio_feedback_tests {
     }
 
     fn sd_detect(resolved: &ResolvedConfiguration) -> Result<serde_json::Value, String> {
-        let windows = device_windows(resolved, None)?;
+        let windows = device_windows(resolved, &super::catalog_dram(resolved))?;
         let host = windows
             .iter()
             .find(|window| window.kind == "sdhci" && window.base == 0xff9b_0000)
@@ -2785,7 +2955,7 @@ mod gpio_feedback_tests {
     }
 
     fn power_programmer(resolved: &ResolvedConfiguration) -> Result<serde_json::Value, String> {
-        let windows = device_windows(resolved, None)?;
+        let windows = device_windows(resolved, &super::catalog_dram(resolved))?;
         let endpoints = windows.iter().flat_map(|window| {
             let wire = window.options.get("wire").and_then(toml::Value::as_table);
             window

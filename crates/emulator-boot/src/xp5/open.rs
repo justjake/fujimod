@@ -371,7 +371,7 @@ fn plan_caller_ram(
     }
     Err(format!(
         "caller RAM region {base:#x}+{size:#x} has no physical backing inside the DRAM window \
-         {dram_base:#x}..{dram_limit:#x}; grow DRAM through the manifest [dram] table"
+         {dram_base:#x}..{dram_limit:#x}; mark the manifest's DRAM regions `dram = true`"
     ))
 }
 
@@ -895,30 +895,28 @@ pub(crate) fn open_from(
             start.registers.extend(affinity.map(|v| (mpidr, v)));
         }
     }
-    // The manifest may extend the catalog body's DRAM map to what the firmware uses.
-    let mut overridden = None;
-    let dram_limit = match &state.dram {
-        Some(dram) => {
-            dram.validate(resolved.configuration.dram_address_space.is_some())?;
-            let reference = overridden.insert(resolved.reference.clone());
-            let drains = reference
-                .body
-                .hardware
-                .as_mut()
-                .map(|hardware| &mut hardware.bus_drain)
-                .filter(|drains| !drains.is_empty())
-                .ok_or("manifest moves the bus drain, which the body does not declare")?;
-            let [drain] = drains.as_mut_slice() else {
-                return Err(
-                    "manifest moves the bus drain, which the body declares more than once".into(),
-                );
-            };
-            drain.address = dram.bus_drain;
-            dram.limit
-        }
-        None => resolved.dram_address_space_limit_bytes()?,
-    };
-    let reference = overridden.as_ref().unwrap_or(&resolved.reference);
+    // The manifest's DRAM regions are the run's DRAM: the span from the SoC's body-DRAM base is
+    // its DRAM address space, which replaces the catalog body's extent.
+    let memory = state.memory()?;
+    let dram_base = resolved
+        .reference
+        .soc
+        .memory_regions
+        .iter()
+        .find(|region| matches!(region.size, RegionSize::BodyDram))
+        .map(|region| region.base)
+        .ok_or("SoC declares no body DRAM region")?;
+    let dram_limit = memory.dram_end_from(dram_base)?;
+    if let Some(space) = &resolved.configuration.dram_address_space
+        && space.limit_bytes != dram_limit
+    {
+        return Err(format!(
+            "the run configuration's DRAM address space ends at {:#x}, but the manifest's DRAM \
+             from {dram_base:#x} ends at {dram_limit:#x}",
+            space.limit_bytes
+        ));
+    }
+    let reference = &resolved.reference;
     let mut execution = graph::assemble_with_starts(
         reference,
         dram_limit,
@@ -930,15 +928,7 @@ pub(crate) fn open_from(
     // caller-owned application RAM remains identity-mapped by this run input.
     // A caller RAM region the catalog already backs is skipped. One at or above the run's DRAM
     // limit (the DDR PHY register and firmware space) or outside the DRAM window becomes RAM of
-    // this run. Anything else is refused: DRAM growth goes through the validated `[dram]` table.
-    let dram_base = resolved
-        .reference
-        .soc
-        .memory_regions
-        .iter()
-        .find(|region| matches!(region.size, RegionSize::BodyDram))
-        .map(|region| region.base)
-        .ok_or("SoC declares no body DRAM region")?;
+    // this run. Anything else is refused.
     for region in &state.ram {
         let size = usize::try_from(region.size)
             .map_err(|_| "caller RAM region exceeds host address space")?;
@@ -1278,13 +1268,6 @@ pub(crate) fn open_from(
     if !applied_seeds.is_empty() {
         // Seed contents are part of the machine's checkpoint identity.
         definition["flash_seeds"] = json!(applied_seeds);
-    }
-    // A manifest DRAM override changes the machine, so it is part of the run's identity.
-    if let (Some(dram), Some(object)) = (&state.dram, definition.as_object_mut()) {
-        object.insert(
-            "dram".into(),
-            json!({"limit": dram.limit, "bus_drain": dram.bus_drain}),
-        );
     }
     // A DMA master reads memory, not bus devices, so a start without a ROM gets the ROM start's
     // flash shadow: aperture memory filled from the flash storage and kept in step with

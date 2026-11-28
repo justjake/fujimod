@@ -7,6 +7,7 @@ load_firmware = true
 [[ram]]
 base = 0
 size = 0x68000000
+dram = true
 
 # M-core SRAM. The X-T5 stock code copies its M-core image here before reset release; the
 # X-M5 source of that copy is not located yet.

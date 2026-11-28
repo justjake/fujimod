@@ -8,23 +8,21 @@ load_firmware = true
 [[ram]]
 base = 0
 size = 0x40000000 # Stock low Normal map; cfg0x7508000, frames0x8473000, RTOS pools.
+dram = true
 
 # Linux DRAM366MiB plus virtio/IPC/shared arenas through0x68000000.
 # 0x30c86b0 gives the explicit subranges; all SoC devices remain at0xfa/0xff.
 [[ram]]
 base = 0x40000000
 size = 0x28000000
+dram = true
 
 # The firmware uses DRAM up to 0x80000000, not the catalog body's 0x68000000: the subject-detection
-# 0x68000000 read now lands in DRAM, as in the X-T5 runner. The body's drain peripheral moves
-# onto 0x80000000 only so that it does not overlap the new RAM.
-[dram]
-limit = 0x80000000
-bus_drain = 0x80000000
-
+# 0x68000000 read now lands in DRAM, as in the X-T5 runner, so the body's bus drain there is RAM.
 [[ram]]
 base = 0x68000000
 size = 0x18000000
+dram = true
 
 # DDR PHY register and firmware space, two PHYs of 0x1a0000 bytes (the X-T5 runner gives its DDR
 # PHY RAM the same extents: "DDR PHY register/firmware space").

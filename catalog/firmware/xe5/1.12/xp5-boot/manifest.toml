@@ -12,6 +12,7 @@ mprofile_block_execution = true
 [[ram]]
 base = 0
 size = 0x80000000
+dram = true
 
 # M-core SRAM, as on the other XP5 bodies. The extent and the source of the
 # stock M-core image copy are UNVERIFIED for the X-E5.

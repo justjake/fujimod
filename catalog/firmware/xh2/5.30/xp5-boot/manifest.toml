@@ -19,22 +19,20 @@ volatile_dummy_cycles = 20
 [[ram]]
 base = 0
 size = 0x80000000
+dram = true
 
 # The firmware uses DRAM past the body's 0x80000000: the still subject-detection arena is
 # 0x80001000+0x13ff000 (0x2e1f63c; the AI task 0x2ea34d8 clears 0x10c1000 bytes of it,
 # 0x2ea367c). The DDR setup 0x13af5a0 maps the four regions of the table 0x18f49f8 (mask
 # 0xf at 0x18f49f4): 0+0x80000000, 0x80000000+0x70000000, 0x100000000+0x80000000 and
 # 0x180000000+0x80000000. The drain helper's 0x80000000 read (0x14d1c44) therefore reads
-# RAM, as the X-T5's slot 1 does; the body's drain peripheral moves past the last region
-# only so that it does not overlap RAM. Installed capacity is unmeasured; the two regions
-# above 4 GiB are not declared until the firmware reaches them.
-[dram]
-limit = 0xf0000000
-bus_drain = 0x200000000
-
+# RAM, as the X-T5's slot 1 does: the body's bus drain there lies in DRAM and is not built.
+# Installed capacity is unmeasured; the two regions above 4 GiB are not declared until the
+# firmware reaches them.
 [[ram]]
 base = 0x80000000
 size = 0x70000000
+dram = true
 
 # Companion SRAM, main view (the SoC's companion-sram region): 0x13fb120 copies the
 # companion image from flash 0xf01c0000 to 0xfa200000 and the shared configuration
