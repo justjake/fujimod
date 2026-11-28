@@ -455,6 +455,9 @@ fn resolve(library: &Library, request: &Request) -> Result<ResolvedConfiguration
         resolved
             .override_engine(engine)
             .map_err(|error| OpenError::at(Stage::BootRom, error))?;
+    } else if request.policy == ExecutionPolicy::Exact {
+        boot::prefer_dynarmic(&mut resolved)
+            .map_err(|error| OpenError::at(Stage::BootRom, error))?;
     }
     if let Some(profile) = request.face_result_profile.clone() {
         let preset = resolved.configuration.preset.as_mut().ok_or_else(|| {

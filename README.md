@@ -49,7 +49,7 @@ Enable the `emulator` feature for `fujimod::emulator`; execution, device models
 and processor backends live in separate crates under `crates/emulator*`.
 The Python package exposes the same execution core through `fujimod.emulator`.
 On ARM64 and x86-64 Linux and macOS, `fujimod-emulator boot` uses Dynarmic for
-strict XP4 and X-Processor Pro runs by default. Use `--cpu-backend unicorn` to
+strict EXR II, XP4, and X-Processor Pro runs by default. Use `--cpu-backend unicorn` to
 select Unicorn, or `--execution-policy interactive` for Unicorn's interactive
 scheduler. The native JIT build needs the recursive Git submodules, CMake,
 Ninja, and Boost headers. `--no-default-features` builds the CLI with Unicorn.

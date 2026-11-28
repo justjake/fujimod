@@ -200,7 +200,7 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
     if let Some(engine) = request.engine {
         resolved.override_engine(engine)?;
     } else {
-        fujimod_emulator_boot::application::prefer_dynarmic(&mut resolved)?;
+        fujimod_emulator_boot::prefer_dynarmic(&mut resolved)?;
     }
     if !matches!(
         resolved.configuration.start,
@@ -346,7 +346,7 @@ fn open_with_builder(request: OpenCameraRequest) -> Result<(LaunchedCamera, Runn
         overlays: Vec::new(),
         preset,
         sd_card,
-        policy: fujimod_emulator_cpu::ExecutionPolicy::Interactive,
+        policy: fujimod_emulator_cpu::ExecutionPolicy::Exact,
         engine: None,
         cache: if request.skip_boot_cache {
             camera::BootCache::Bypass

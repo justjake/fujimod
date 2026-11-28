@@ -33,8 +33,7 @@ impl Boot for CatalogBoot {
         if let Some(backend) = inputs.cpu_backend {
             resolved.override_cpu_backend(backend.parse()?)?;
         } else if inputs.engine.is_none() && !inputs.discovery {
-            #[cfg(not(target_arch = "wasm32"))]
-            boot::application::prefer_dynarmic(&mut resolved)?;
+            boot::prefer_dynarmic(&mut resolved)?;
         }
         if let Some((numerator, denominator)) = inputs.instruction_rate {
             let rate = RunInstructionRate {

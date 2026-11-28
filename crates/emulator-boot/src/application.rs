@@ -1,7 +1,7 @@
 //! Application-profile startup plans with caller-selected firmware and media.
 use crate::host::Memory;
 use crate::{graph::ProcessorStart, xpp};
-use fujimod_catalog_configuration::{RunCpuBackend, RunEngine, RunInputs};
+use fujimod_catalog_configuration::{RunEngine, RunInputs};
 use fujimod_catalog_controls::facts::ConfigurationLocation;
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator::board::bus::Mode;
@@ -17,25 +17,6 @@ use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
-
-/// Select the exact native JIT for strict XP4 and X-Processor Pro startup.
-/// The caller applies this preference only when the run can use exact scheduling.
-pub fn prefer_dynarmic(resolved: &mut ResolvedConfiguration) -> Result<(), String> {
-    if cfg!(all(
-        feature = "dynarmic",
-        any(target_arch = "aarch64", target_arch = "x86_64"),
-        any(target_os = "linux", target_os = "macos")
-    )) && matches!(resolved.reference.soc.id.as_str(), "xp4" | "xpp")
-        && resolved
-            .configuration
-            .preset
-            .as_ref()
-            .is_some_and(|preset| preset.factory_options.cpu_backend.is_none())
-    {
-        resolved.override_cpu_backend(RunCpuBackend::Dynarmic)?;
-    }
-    Ok(())
-}
 
 /// A checked emulation plan and explicit update file.
 pub struct Startup {

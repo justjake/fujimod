@@ -30,7 +30,7 @@ pub use firmware_file::FirmwareFile;
 use fujimod_catalog::reference::PartModel;
 use fujimod_catalog_assets::Content;
 use fujimod_catalog_configuration::{
-    Exr2RunInputs, RunExecution, RunInputs, RunPurpose, RunScene, RunStart,
+    Exr2RunInputs, RunCpuBackend, RunExecution, RunInputs, RunPurpose, RunScene, RunStart,
 };
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator::board::{
@@ -49,6 +49,25 @@ use std::{
     io::Read,
     path::{Path, PathBuf},
 };
+
+/// Select the exact native JIT for strict EXR II, XP4, and X-Processor Pro startup.
+/// The caller applies this preference only when the run can use exact scheduling.
+pub fn prefer_dynarmic(resolved: &mut ResolvedConfiguration) -> Result<(), String> {
+    if cfg!(all(
+        feature = "dynarmic",
+        any(target_arch = "aarch64", target_arch = "x86_64"),
+        any(target_os = "linux", target_os = "macos")
+    )) && matches!(resolved.reference.soc.id.as_str(), "exr2" | "xp4" | "xpp")
+        && resolved
+            .configuration
+            .preset
+            .as_ref()
+            .is_some_and(|preset| preset.factory_options.cpu_backend.is_none())
+    {
+        resolved.override_cpu_backend(RunCpuBackend::Dynarmic)?;
+    }
+    Ok(())
+}
 
 /// Every binary input location is supplied by the embedding program.
 #[derive(Clone, Debug)]
