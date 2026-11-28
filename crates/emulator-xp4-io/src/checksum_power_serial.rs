@@ -185,8 +185,11 @@ impl Input for ChecksumPowerSerial {
                     let value = u16::from_be_bytes([s.frame[1], s.frame[2]]);
                     if let Some(rtc) = s.rtc.as_mut().filter(|r| r.config.owns(register)) {
                         if register == rtc.config.control && value == rtc.retained_control_value() {
+                            let repeated = rtc.config.idempotent_retained_commit
+                                && rtc.retained_committed()
+                                && s.retained_written.is_empty();
                             if s.retained_registers.is_empty()
-                                || s.retained_written != s.retained_registers
+                                || (s.retained_written != s.retained_registers && !repeated)
                             {
                                 return Err("Retained control commit requires fresh writes to every declared word".into());
                             }
@@ -491,6 +494,8 @@ mod tests {
             initial_control: 0,
             initial_seconds: 0,
             ticks_per_second: 10,
+            stage_readback: false,
+            idempotent_retained_commit: false,
         };
         assert!(
             ChecksumPowerSerial::new(
@@ -506,6 +511,88 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn optional_staging_readback_and_repeated_retained_commit() {
+        fn packet(register: u16, value: u16, write: bool) -> [u16; 4] {
+            let header = register | if write { 128 } else { 0 };
+            let hi = value >> 8;
+            let lo = value & 255;
+            [header, hi, lo, !(header + hi + lo) & 255]
+        }
+        let pins = Pins::new([0; 16]);
+        let mut gpio = Gpio::new(BASE, pins.clone()).unwrap();
+        let rtc = StagedConfig {
+            control: 100,
+            read_low: 101,
+            read_high: 102,
+            stage_low: 103,
+            stage_high: 104,
+            commit_value: 0x202,
+            valid_mask: 2,
+            retained_valid_mask: 1,
+            strobe: crate::rtc::StrobeWindow {
+                mask: 0x200,
+                set_through_ticks: 0,
+                clear_from_ticks: 1,
+            },
+            initial_control: 0,
+            initial_seconds: 0,
+            ticks_per_second: 1,
+            stage_readback: true,
+            idempotent_retained_commit: true,
+        };
+        let mut peer = ChecksumPowerSerial::new(
+            pins,
+            12,
+            5,
+            true,
+            false,
+            BTreeMap::new(),
+            vec![],
+            Some(rtc),
+            vec![65, 66],
+        )
+        .unwrap();
+        select(&mut gpio, true);
+        let transaction = |peer: &mut ChecksumPowerSerial,
+                           register,
+                           value,
+                           write,
+                           tick|
+         -> Result<Vec<u16>, String> {
+            packet(register, value, write)
+                .into_iter()
+                .map(|b| peer.exchange(8, b, tick))
+                .collect()
+        };
+        transaction(&mut peer, 103, 0x1234, true, 0).unwrap();
+        transaction(&mut peer, 104, 0x5678, true, 0).unwrap();
+        transaction(&mut peer, 100, 0x202, true, 0).unwrap();
+        assert_eq!(
+            &transaction(&mut peer, 103, 0, false, 2).unwrap()[1..3],
+            &[0x12, 0x34]
+        );
+        assert_eq!(
+            &transaction(&mut peer, 104, 0, false, 2).unwrap()[1..3],
+            &[0x56, 0x78]
+        );
+        assert_eq!(
+            &transaction(&mut peer, 101, 0, false, 2).unwrap()[1..3],
+            &[0x12, 0x36]
+        );
+        transaction(&mut peer, 65, 1, true, 2).unwrap();
+        transaction(&mut peer, 66, 2, true, 2).unwrap();
+        transaction(&mut peer, 100, 3, true, 2).unwrap();
+        let checkpoint = peer.save();
+        transaction(&mut peer, 100, 3, true, 3).unwrap();
+        assert_eq!(peer.save()["retained_written"], serde_json::json!([]));
+        peer.restore(&checkpoint).unwrap();
+        transaction(&mut peer, 100, 3, true, 3).unwrap();
+        transaction(&mut peer, 65, 1, true, 3).unwrap();
+        assert!(transaction(&mut peer, 100, 3, true, 3).is_err());
+        assert_eq!(peer.save()["retained_written"], serde_json::json!([65]));
     }
 
     #[test]
