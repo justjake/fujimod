@@ -113,10 +113,9 @@ fn main() -> Result<(), String> {
         assert_eq!(tracker.revision(), revision);
         assert_eq!(get(&cpu, Register::X(1)), 0x44000);
         cpu.protect(0x40000, 0x4000, 5)?;
-        set(&cpu, Register::Pc, 0x10000);
         set(&cpu, Register::X(1), 0x43ff8);
-        assert!(matches!(cpu.run_to_native_exit(2_000_000)?,
-            fujimod_emulator_cpu_hvf::NativeExit::Exception(trap)
+        assert!(matches!(run(&cpu, 0x10000, 100_000_000).map_err(|e| e.to_string())?,
+            Exit::Trap(trap)
                 if trap.physical_address == 0x43ff8));
         assert_eq!(tracker.revision(), revision);
         println!("PASS: stage-2 code writes through a backing alias");
@@ -455,6 +454,7 @@ fn main() -> Result<(), String> {
         Ok(())
     }
 
+    watched_code_stores()?;
     let vm = Vm::new()?;
     assert!(Vm::new().is_err());
     let cpu = vm.cpu(Model::ArmV8A)?;
@@ -1342,7 +1342,6 @@ fn main() -> Result<(), String> {
     assert!(peer.read_memory(0x20000, &mut codeword).is_err());
     drop(peer);
     drop(vm);
-    watched_code_stores()?;
     // Run the same device deadline/GIC path through the common factory. A
     // virtual timer asserts SPI32 at tick7, with no host clock involved.
     for quantum in [1, 100] {
