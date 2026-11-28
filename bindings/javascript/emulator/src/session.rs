@@ -200,6 +200,7 @@ impl Session {
                     }
                 }
                 let mut resources = board::Resources {
+                    adc_samples: None,
                     counting_dial: None,
                     pins,
                     clocks: fujimod_emulator_devices::xp5::panel_clocks::Clocks::new(),
