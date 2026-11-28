@@ -109,6 +109,12 @@ impl SetupHandoff {
                 ))
                 .map_err(|error| format!("setup-handoff.toml: {error}")),
             ),
+            "xh2s-730" => Some(
+                toml::from_str(include_str!(
+                    "../../../../catalog/firmware/xh2s/7.30/xp5-boot/setup-handoff.toml"
+                ))
+                .map_err(|error| format!("setup-handoff.toml: {error}")),
+            ),
             _ => None,
         }
     }
@@ -327,6 +333,27 @@ mod tests {
         assert!(SetupHandoff::for_firmware("xt5-431").is_none());
         let start = RomStart::from_setup_handoff(handoff).unwrap();
         assert_eq!(start.source_straps, 1);
+        assert!(!start.card_present && start.card_files.is_empty());
+    }
+
+    #[test]
+    fn x_h2s_setup_starts_the_stock_flash_stage() {
+        let config =
+            fujimod_catalog_resolution::ResolvedConfiguration::with_overlays("xh2s-730", &[])
+                .unwrap();
+        assert_eq!(
+            config.configuration.start,
+            fujimod_catalog_configuration::RunStart::Setup
+        );
+        let handoff = SetupHandoff::for_firmware("xh2s-730").unwrap().unwrap();
+        assert_eq!(
+            (handoff.pc, handoff.dat_offset, handoff.length),
+            (0xff80_0000, 0xa74, 0x12000)
+        );
+        assert_eq!(handoff.sha256.len(), 64);
+        assert!(handoff.device.is_empty());
+        let start = RomStart::from_setup_handoff(handoff).unwrap();
+        assert_eq!(start.source_straps, 0);
         assert!(!start.card_present && start.card_files.is_empty());
     }
 

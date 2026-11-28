@@ -1,0 +1,15 @@
+# The boot-setup stage as the boot ROM leaves it. The ROM copies the stage from internal flash
+# into boot SRAM and branches to its base; the mask ROM is not captured, so this start does the
+# same copy from the update image. The extent is the boot-setup stage (update-file offset 0xa74,
+# size 0x12000, base 0xff800000); its SHA-256 is checked on load. The stage sets its own stack
+# (SP_EL0 = 0xff815800 at 0xff800050..0xff800070); sp is only the entry value.
+# The stage builds the hardware-info hand-off and initializes the board (DDR, serial NOR) before
+# the OS starts, as the X-T5 and X-H2 card starts do. source_straps = 0 takes the serial-NOR path
+# of the stage, as for the X-E5 (whose flash is the same serial NOR, JEDEC 0x2c5b1b); the value is
+# chosen from that reachability and is UNVERIFIED as the physical strap level of the X-H2S.
+pc = 0xff800000
+sp = 0xff815800
+dat_offset = 0xa74
+length = 0x12000
+sha256 = "c7b32c535c67394220e8d5f4428e830f6fffa37c67c51ab50d5bce2c211a6c83"
+source_straps = 0

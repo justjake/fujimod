@@ -17,10 +17,42 @@ base = 0
 size = 0x80000000
 dram = true
 
+# Movie buffers use DRAM behind the two high bus-drain ports (0x100000000 and 0x180000000, the
+# body's bus drains). The extents follow the X-T5 channel layout, a functional model: the
+# installed capacity is unmeasured. The first 16 KiB granule of each port stays with its
+# bus-drain read.
+[[ram]]
+base = 0x100004000
+size = 0x3fffc000
+dram = true
+
+[[ram]]
+base = 0x180004000
+size = 0x3fffc000
+dram = true
+
 # M-core SRAM (same XP5 SoC window as the X-T5 4.31 manifest).
 [[ram]]
 base = 0xfa200000
 size = 0x100000
+
+# DDR PHY register and firmware space, as in the X-T5 4.31 manifest. Movie startup enters the
+# recorder DDR power setup, which trains the PHYs through these ranges. The mailbox pages above
+# each range are processor blocks (ddr-phy-0, ddr-phy-1).
+[[ram]]
+base = 0xfb000000
+size = 0x1a0000
+
+[[ram]]
+base = 0xfb400000
+size = 0x1a0000
+
+# Boot SRAM, 256 KiB. The setup start runs its stage here, and the Movie exposure task then reads
+# its statistics banks from this memory (first read at 0xff801060): the statistics block lies in
+# declared RAM, so the statistics model writes its frames into this RAM.
+[[ram]]
+base = 0xff800000
+size = 0x40000
 
 # Cold component descriptor table. Header +0 points to the rows at 0x13e0050 and +8 to
 # the lazy-image descriptor at 0x13e02f8; rows give kernel 0x40000/0x1e340 (flash

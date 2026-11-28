@@ -6,7 +6,7 @@
   "body_id": "xh2s",
   "firmware_id": "xh2s-730",
   "start": {
-    "kind": "loader"
+    "kind": "setup"
   },
   "execution": {
     "mode": "strict",
@@ -25,7 +25,7 @@
         "kind": "adc",
         "block_id": "adc",
         "samples": [
-          2713, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095
+          2713, 4095, 4095, 3774, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095
         ]
       },
       {
@@ -34,8 +34,7 @@
         "part_id": "xh2s-serial-nor",
         "source": "firmware_update",
         "erased_tail": 255,
-        "seeds": [],
-        "presented_jedec_id": 2145056
+        "seeds": []
       },
       {
         "kind": "gpio",
@@ -52,6 +51,21 @@
             "port": 11,
             "pin": 4,
             "high": false
+          },
+          {
+            "port": 9,
+            "pin": 3,
+            "high": true
+          },
+          {
+            "port": 11,
+            "pin": 5,
+            "high": false
+          },
+          {
+            "port": 11,
+            "pin": 13,
+            "high": false
           }
         ]
       }
@@ -61,7 +75,45 @@
         "kind": "clock",
         "part_id": "power-controller",
         "seconds": 845151906,
-        "valid": true
+        "valid": true,
+        "registers": [
+          {
+            "register": 0,
+            "value": 33280
+          },
+          {
+            "register": 3,
+            "value": 672
+          },
+          {
+            "register": 14,
+            "value": 18449
+          },
+          {
+            "register": 16,
+            "value": 2
+          },
+          {
+            "register": 47,
+            "value": 2080
+          },
+          {
+            "register": 48,
+            "value": 1825
+          },
+          {
+            "register": 49,
+            "value": 24408
+          },
+          {
+            "register": 50,
+            "value": 2992
+          },
+          {
+            "register": 72,
+            "value": 17
+          }
+        ]
       },
       {
         "kind": "bis_revision",
@@ -87,37 +139,37 @@
     "frames": [
       {
         "block_ids": ["receiver0"],
-        "period_ticks": 1000000000,
+        "period_ticks": 33333000,
         "active_ticks": 10000000,
         "luma": null
       },
       {
         "block_ids": ["receiver1"],
-        "period_ticks": 1000000000,
+        "period_ticks": 33333000,
         "active_ticks": null,
         "luma": null
       },
       {
         "block_ids": ["movdc0"],
-        "period_ticks": 1000000000,
+        "period_ticks": 33333000,
         "active_ticks": null,
         "luma": 128
       },
       {
         "block_ids": ["movdc1"],
-        "period_ticks": 1000000000,
+        "period_ticks": 33333000,
         "active_ticks": null,
         "luma": 128
       },
       {
         "block_ids": ["movdc2"],
-        "period_ticks": 1000000000,
+        "period_ticks": 33333000,
         "active_ticks": null,
         "luma": 128
       },
       {
         "block_ids": ["preview"],
-        "period_ticks": 1000000000,
+        "period_ticks": 33333000,
         "active_ticks": null,
         "luma": 128
       }
@@ -149,5 +201,20 @@
     },
     "firmware_profile_id": "xh2s-730"
   },
-  "polled_serial_blocks": ["spi4", "spi5", "spi8"]
+  "polled_serial_blocks": ["spi4", "spi5", "spi8"],
+  "audio_signals": [
+    {
+      "block_id": "audio-serial-0",
+      "sample_rate_hz": 48000,
+      "tone_hz": 1000,
+      "tone_amplitude_thousandths": 250
+    },
+    {
+      "block_id": "audio-serial-1",
+      "sample_rate_hz": 48000,
+      "tone_hz": 1000,
+      "tone_amplitude_thousandths": 250
+    }
+  ],
+  "idle_status_blocks": ["input"]
 }
