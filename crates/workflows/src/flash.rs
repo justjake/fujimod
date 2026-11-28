@@ -28,9 +28,20 @@ pub struct NandReadStats {
 /// Data delivery and logical flash-byte progress. Progress starts at zero and
 /// advances after each successfully delivered chunk, excluding the control read.
 pub struct Callbacks<'a> {
-    pub chunk: &'a mut dyn FnMut(u64, Vec<u8>) -> Result<(), String>,
-    pub progress: &'a mut dyn FnMut(u64, u64) -> Result<(), String>,
+    pub chunk: &'a mut ChunkSink<'a>,
+    pub progress: &'a mut ProgressSink<'a>,
 }
+
+// Native hosts run the backup on a thread-safe future, so their callbacks are
+// `Send`; browser callbacks hold JavaScript values and are not.
+#[cfg(not(target_arch = "wasm32"))]
+pub type ChunkSink<'a> = dyn FnMut(u64, Vec<u8>) -> Result<(), String> + Send + 'a;
+#[cfg(target_arch = "wasm32")]
+pub type ChunkSink<'a> = dyn FnMut(u64, Vec<u8>) -> Result<(), String> + 'a;
+#[cfg(not(target_arch = "wasm32"))]
+pub type ProgressSink<'a> = dyn FnMut(u64, u64) -> Result<(), String> + Send + 'a;
+#[cfg(target_arch = "wasm32")]
+pub type ProgressSink<'a> = dyn FnMut(u64, u64) -> Result<(), String> + 'a;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
