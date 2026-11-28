@@ -423,7 +423,8 @@
     "framed-command-peer",
     "unidentified-serial-device",
     "xf18-55-lens",
-    "x-trans-5-hs-image-sensor"
+    "x-trans-5-hs-image-sensor",
+    "hdmi-connector"
   ],
   "wiring": [
     {

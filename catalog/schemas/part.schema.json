@@ -1615,6 +1615,20 @@
         },
         {
           "additionalProperties": false,
+          "description": "HDMI output connector of the body, driven by the processor's HDMI transmitter. A sink\nplugged into it (a run input) drives hot plug and answers EDID and SCDC reads over DDC;\na body without this part has no sink to present.",
+          "properties": {
+            "kind": {
+              "const": "hdmi-connector",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Interchangeable X-mount lens on a body's lens mount.",
           "properties": {
             "busy_us": {

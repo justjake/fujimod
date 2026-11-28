@@ -41,7 +41,8 @@
         "bit": 0
       }
     },
-    "basis": "RESZ scaler"
+    "inline_source": true,
+    "basis": "RESZ scaler. Its inline source is the RIFP stream: the X-H2S Movie preview starts it with destination class 3 (+0x10 = 0x10000131), source address 0 and a two-plane destination before the RIFP run that develops the packed RAW movie frame."
   },
   "registers": [
     {
@@ -70,6 +71,7 @@
       "kind": "located",
       "firmware_ids": [
         "xe5-112",
+        "xh2s-730",
         "xt5-431"
       ]
     }

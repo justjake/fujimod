@@ -54,32 +54,42 @@ impl PictureWords {
             phase: r(0x2c),
         }
     }
-    /// Only 8-bit packed 4:2:2 (control 0, pitch = 2 * width from
-    /// 0x14312a0) is scanned out. Split-plane and 10-bit layouts stay
-    /// refused until their sample order is decoded.
-    fn unsupported(&self) -> Option<&'static str> {
+    /// The sample layout the descriptor programs. Control 0 is 8-bit packed 4:2:2 (pitch = 2 *
+    /// width), one plane. Control 1 is 8-bit two-plane 4:2:0: a luma plane and an interleaved
+    /// Cb/Cr plane of the same byte stride at the second address (the HDMI scanout of the X-H2S
+    /// UHD Movie preview programs it; the Cb-before-Cr order is assumed). The 10-bit packing
+    /// stays refused until its sample order is decoded.
+    fn pixel_order(&self) -> Result<PixelOrder, &'static str> {
         if self.address_high & !7 != 0 || self.chroma_high & !7 != 0 {
-            return Some("address-high control bits");
+            return Err("address-high control bits");
         }
         if self.stride_word & !0xfffff != 0 {
-            return Some("stride control bits");
+            return Err("stride control bits");
         }
         if self.control & PICTURE_PACKED_10BIT != 0 {
-            return Some("10-bit three-per-word packing (split luma/chroma planes)");
+            return Err("10-bit three-per-word packing (split luma/chroma planes)");
+        }
+        if self.control == 1 {
+            if self.chroma == 0 || self.chroma == self.address || self.stride & 1 != 0 {
+                return Err("NV12 requires a separate chroma plane and an even stride");
+            }
+            return Ok(PixelOrder::Nv12 {
+                chroma_address: self.chroma,
+            });
         }
         if self.control & 3 != 0 {
-            return Some("descriptor format other than packed 4:2:2");
+            return Err("descriptor format other than packed 4:2:2");
         }
         if self.control != 0 {
-            return Some("undecoded control bits");
+            return Err("undecoded control bits");
         }
         // Packed 4:2:2 reads one plane. Playback (playcont 0x56e5d20 ->
         // 0x56e5d84) programs the packed buffer as both planes; live view
         // programs zero. Any other second plane is not a packed layer.
         if self.chroma != 0 && self.chroma != self.address {
-            return Some("second plane differs from the packed 4:2:2 plane");
+            return Err("second plane differs from the packed 4:2:2 plane");
         }
-        None
+        Ok(PixelOrder::YyCbCr)
     }
 }
 impl std::fmt::Display for PictureWords {
@@ -126,7 +136,7 @@ impl Decoder<'_> {
         let mut messages = Vec::new();
         // The output publishes four picture groups from the three source
         // descriptors (some output modes split a source into two groups).
-        // Consume packed422 payload only through the programmed DMA address.
+        // Read picture payload only through the programmed DMA addresses.
         for (n, a) in if self.bank == 0 {
             [0x370, 0x3c0, 0x410, 0x460]
         } else {
@@ -139,13 +149,13 @@ impl Decoder<'_> {
                 continue;
             }
             let words = PictureWords::read(|o| self.r(a + o));
-            if let Some(reason) = words.unsupported() {
-                return Err(format!(
+            let order = words.pixel_order().map_err(|reason| {
+                format!(
                     "unsupported picture address/packing/fractional phase: bank{} group{n} \
                      (registers {:#x}+{a:#x}): {reason}; {words}",
                     self.bank, BASES[self.bank],
-                ));
-            }
+                )
+            })?;
             for (offset, mask) in [
                 (0x18, 0x3fff),
                 (0x1c, 0x1fff),
@@ -188,6 +198,14 @@ impl Decoder<'_> {
                 ));
             }
             let (sx, sy) = (crop_x / 2 + phase_x / 4096, crop_y / 2 + phase_y / 4096);
+            if matches!(order, PixelOrder::Nv12 { .. })
+                && ((phase_x | phase_y) != 0 || (source_width | source_height | sx | sy) & 1 != 0)
+            {
+                return Err(format!(
+                    "NV12 geometry or phase is unsupported: bank{} group{n}; {words}",
+                    self.bank
+                ));
+            }
             let sw = ((ww - 1) * qx / 4096) + 1;
             let sh = ((wh - 1) * qy / 4096) + 1;
             if sx + sw > source_width || sy + sh > source_height {
@@ -209,7 +227,7 @@ impl Decoder<'_> {
                 work_y: wy,
                 work_width: ww,
                 work_height: wh,
-                order: PixelOrder::YyCbCr,
+                order,
             });
         }
         for n in 0..2 {
@@ -411,6 +429,67 @@ mod tests {
         .map(|(planes, _)| planes)
     }
     #[test]
+    fn two_plane_control_reads_a_shared_chroma_row() {
+        let mut group = playback_preview();
+        group.address = 0x1000;
+        group.chroma = 0x2000;
+        group.control = 1;
+        group.stride = 4;
+        group.source = (4, 2);
+        group.work = (0, 0, 4, 2);
+        group.ratio = (0x1000, 0x1000);
+        let decode = |bank, regs: &[u32]| {
+            Decoder {
+                bank,
+                regs,
+                formats: [Encoding::Unresolved; 4],
+            }
+            .planes(|_, _| unreachable!())
+            .map(|(planes, _)| planes[0])
+        };
+
+        // The layout is the descriptor's: the same group decodes alike on either bank.
+        let regs = regs_with(0, 2, &group);
+        let plane = decode(0, &regs).unwrap();
+        assert_eq!(decode(0, &regs_with(0, 3, &group)).unwrap(), plane);
+        assert_eq!(
+            decode(1, &regs_with(1, 2, &group)).unwrap().order,
+            plane.order
+        );
+        // Two planes need a separate chroma plane.
+        group.chroma = group.address;
+        assert!(decode(0, &regs_with(0, 2, &group)).is_err());
+        group.chroma = 0x2000;
+
+        let y = [16, 235, 81, 145, 235, 16, 81, 145];
+        let uv = [128, 128, 90, 240];
+        let mut rgba = [0; 4 * 2 * 4];
+        fujimod_framebuffer::raster::composite(
+            |address, len| {
+                assert_eq!(len, 4);
+                Ok(match address {
+                    0x1000 => y[..4].to_vec(),
+                    0x1004 => y[4..].to_vec(),
+                    0x2000 => uv.to_vec(),
+                    _ => panic!("unexpected plane or row address {address:#x}"),
+                })
+            },
+            plane,
+            4,
+            2,
+            &mut rgba,
+        )
+        .unwrap();
+        assert_eq!(&rgba[..8], &[0, 0, 0, 255, 255, 255, 255, 255]);
+        assert_eq!(&rgba[16..24], &[255, 255, 255, 255, 0, 0, 0, 255]);
+        assert!(rgba[8] > rgba[9] && rgba[8] > rgba[10]);
+        assert_eq!(&rgba[8..16], &rgba[24..32]);
+
+        group.control |= PICTURE_PACKED_10BIT;
+        assert!(decode(0, &regs_with(0, 2, &group)).is_err());
+    }
+
+    #[test]
     fn playback_preview_scales_to_the_panel() {
         let regs = regs_with(0, 1, &playback_preview());
         let planes = decode(0, &regs).unwrap();
@@ -470,7 +549,8 @@ mod tests {
             assert!(error.contains(part), "{part}: {error}");
         }
         for (control, chroma, reason) in [
-            (1, 0, "descriptor format"),
+            (1, 0, "separate chroma plane"),
+            (2, 0, "descriptor format"),
             (1 << 16, 0, "undecoded control bits"),
             (0, 0x1000_0000, "second plane differs"),
         ] {

@@ -445,7 +445,9 @@ mod tests {
         // the whole aperture is RAM and no device serves its base.
         let state = xh2s_catalog_state();
         assert!(state.ram.iter().any(|region| {
-            region.dram && region.base == 0x1_0000_0000 && region.base + region.size == 0x1_8000_0000
+            region.dram
+                && region.base == 0x1_0000_0000
+                && region.base + region.size == 0x1_8000_0000
         }));
         assert!(
             state
@@ -472,6 +474,83 @@ mod tests {
         assert_eq!(detect["pin"].as_integer(), Some(12));
         assert_eq!(detect["active_high"].as_bool(), Some(false));
         assert!(!host(0xff9b_4000).options.contains_key("detect_gpio"));
+    }
+
+    #[test]
+    fn xh2s_movie_pipeline_pairs_raw12_with_input_frame_timing() {
+        use fujimod_catalog_configuration::RunScene;
+        let resolved =
+            fujimod_catalog_resolution::ResolvedConfiguration::bundled("xh2s-730").unwrap();
+        let mut windows = xh2s_catalog_state().device;
+        let Some(RunScene::Xp5(scene)) = resolved.configuration.scene.as_ref() else {
+            panic!("the X-H2S run declares an XP5 scene");
+        };
+        fujimod_emulator_xp5_board::boot::apply_run_scene(
+            &resolved,
+            &mut windows,
+            scene,
+            1_000_000_000,
+        )
+        .unwrap();
+        // RESZ takes the RIFP RAW movie stream inline (a catalog fact of the block).
+        let resz = windows
+            .iter()
+            .find(|window| window.kind == "imaging-resz")
+            .unwrap();
+        assert_eq!(
+            resz.options
+                .get("inline_source")
+                .and_then(toml::Value::as_bool),
+            Some(true)
+        );
+        // The input engine's frame events follow the run's 30 fps scene.
+        let input = windows
+            .iter()
+            .find(|window| window.kind == "imaging-input")
+            .unwrap();
+        assert_eq!(input.options["frame_period_us"].as_integer(), Some(33333));
+        assert_eq!(input.options["frame_active_us"].as_integer(), Some(10000));
+    }
+
+    #[test]
+    fn the_hdmi_transmitter_owns_the_hot_plug_word_and_only_a_connector_has_a_sink() {
+        for (firmware, sink) in [("xh2s-730", Some(false)), ("xt5-431", None)] {
+            let windows = BootState::for_firmware(firmware, None)
+                .unwrap()
+                .with_catalog_windows(
+                    &fujimod_catalog_resolution::ResolvedConfiguration::bundled(firmware).unwrap(),
+                )
+                .unwrap()
+                .device;
+            let transmitter = windows
+                .iter()
+                .find(|window| window.kind == "hdmi-transmitter")
+                .unwrap();
+            assert_eq!(
+                (transmitter.base, transmitter.size),
+                (0xff9c_0000, 0x8000),
+                "{firmware}"
+            );
+            assert_eq!(transmitter.options["interrupt"].as_integer(), Some(287));
+            assert_eq!(
+                transmitter.options["hot_plug_base"].as_integer(),
+                Some(0xff90_e200)
+            );
+            assert_eq!(
+                transmitter
+                    .options
+                    .get("sink_connected")
+                    .and_then(toml::Value::as_bool),
+                sink,
+                "{firmware}"
+            );
+            assert!(
+                windows
+                    .iter()
+                    .all(|window| window.kind != "hdmi-hot-plug-status"),
+                "{firmware}"
+            );
+        }
     }
 
     #[test]

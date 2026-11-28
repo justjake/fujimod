@@ -2141,6 +2141,30 @@
         },
         {
           "additionalProperties": false,
+          "description": "On-chip HDMI transmitter: its control registers, the DDC master that reads a sink's EDID\nand SCDC registers, and its interrupt. The transmitter owns the hot-plug status word of\n`hot_plug_block_id`, a display cable-status block, so one model answers both.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "hot_plug_block_id": {
+              "description": "Display cable-status block whose word reads the sink's hot-plug line.",
+              "type": "string"
+            },
+            "model": {
+              "const": "hdmi_transmitter",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "hot_plug_block_id",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Cable status word: bit 0 reads `connected_level` while a cable is attached.",
           "properties": {
             "basis": {
@@ -2543,6 +2567,10 @@
                 }
               ],
               "description": "Start, completion and acknowledgement handshake, when declared."
+            },
+            "inline_source": {
+              "description": "The scaler takes the RIFP RAW movie stream as an inline source: a class-3 start\nwith a zero source address scales the frame the next RIFP run develops.",
+              "type": "boolean"
             },
             "model": {
               "const": "imaging_resz",

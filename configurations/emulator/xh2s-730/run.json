@@ -129,6 +129,11 @@
         "temperature": 0,
         "angular_rate": [0, 0, 0],
         "acceleration": [0, 0, 16384]
+      },
+      {
+        "kind": "hdmi_sink",
+        "part_id": "hdmi-connector",
+        "connected": false
       }
     ],
     "timings": [],
@@ -147,6 +152,12 @@
         "block_ids": ["receiver1"],
         "period_ticks": 33333000,
         "active_ticks": null,
+        "luma": null
+      },
+      {
+        "block_ids": ["input"],
+        "period_ticks": 33333000,
+        "active_ticks": 10000000,
         "luma": null
       },
       {

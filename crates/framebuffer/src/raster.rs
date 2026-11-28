@@ -9,6 +9,10 @@ pub enum PixelOrder {
     Abgr,
     /// Packed 4:2:2 transport, two luma then Cb/Cr.
     YyCbCr,
+    /// 8-bit 4:2:0 luma with an interleaved Cb/Cr plane of the same byte stride.
+    Nv12 {
+        chroma_address: u64,
+    },
 }
 impl PixelOrder {
     pub fn parse(s: &str) -> Result<Self, String> {
@@ -26,7 +30,7 @@ impl PixelOrder {
             Self::Bgra => [b[2], b[1], b[0], b[3]],
             Self::Argb => [b[1], b[2], b[3], b[0]],
             Self::Abgr => [b[3], b[2], b[1], b[0]],
-            Self::YyCbCr => {
+            Self::YyCbCr | Self::Nv12 { .. } => {
                 let y = (b[0] as i32 - 16).max(0) * 298;
                 let cb = b[1] as i32 - 128;
                 let cr = b[2] as i32 - 128;
@@ -82,14 +86,18 @@ pub fn capture(
     {
         return Err("OSD extent exceeds8192".into());
     }
-    let yuv = matches!(p.order, PixelOrder::YyCbCr);
+    let yuv = matches!(p.order, PixelOrder::YyCbCr | PixelOrder::Nv12 { .. });
     let row_start = if yuv { p.source_x & !1 } else { p.source_x };
     let row_end = if yuv {
         (p.source_x + p.source_width + 1) & !1
     } else {
         p.source_x + p.source_width
     };
-    let bpp = if yuv { 2 } else { 4 };
+    let bpp = match p.order {
+        PixelOrder::Nv12 { .. } => 1,
+        PixelOrder::YyCbCr => 2,
+        _ => 4,
+    };
     if row_end as usize * bpp > p.stride as usize {
         return Err("OSD row exceeds programmed stride".into());
     }
@@ -111,7 +119,27 @@ pub fn capture(
                 .checked_add(sy as u64 * p.stride as u64)
                 .and_then(|a| a.checked_add(row_start as u64 * bpp as u64))
                 .ok_or("OSD DMA overflow")?;
-            rows.push(read(address, (row_end - row_start) as usize * bpp)?);
+            let columns = (row_end - row_start) as usize;
+            let row = read(address, columns * bpp)?;
+            if let PixelOrder::Nv12 { chroma_address } = p.order {
+                let address = chroma_address
+                    .checked_add(u64::from(sy / 2) * u64::from(p.stride))
+                    .and_then(|a| a.checked_add(u64::from(row_start)))
+                    .ok_or("chroma DMA overflow")?;
+                let chroma = read(address, columns)?;
+                if row.len() != columns || chroma.len() != columns {
+                    return Err("short NV12 DMA row".into());
+                }
+                // The compositor consumes a packed 4:2:2 row. Every pair in
+                // this row uses the chroma pair from its 2x2 source block.
+                let mut packed = Vec::with_capacity(columns * 2);
+                for (y, c) in row.as_chunks::<2>().0.iter().zip(chroma.as_chunks::<2>().0) {
+                    packed.extend_from_slice(&[y[0], y[1], c[0], c[1]]);
+                }
+                rows.push(packed);
+            } else {
+                rows.push(row);
+            }
         }
     }
     Ok(Snapshot { plane: p, rows })
@@ -127,7 +155,7 @@ pub fn composite_snapshot(
         return Err("OSD canvas extent mismatch".into());
     }
     let p = s.plane;
-    let yuv = matches!(p.order, PixelOrder::YyCbCr);
+    let yuv = matches!(p.order, PixelOrder::YyCbCr | PixelOrder::Nv12 { .. });
     let shown_width = p.work_width.min(width) as usize;
     if yuv
         && p.sampling.is_none()
