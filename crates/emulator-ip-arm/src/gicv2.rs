@@ -150,10 +150,8 @@ impl Gic {
             return None;
         }
         let group_mask = (0xffu16 << (self.binary_point[core] + 1)) & 0xff;
-        let running = asserted_lines(&self.active[core])
-            .map(|line| self.priority[Self::bank(core, line)][line] as u16 & group_mask)
-            .min()
-            .unwrap_or(256);
+        // Scan the active bank only when a pending interrupt can reach this core.
+        let mut running = None;
         asserted_lines(&self.pending[core][..32])
             .chain(asserted_lines(&self.pending[0][32..]).map(|line| line + 32))
             .chain(pulse)
@@ -166,8 +164,17 @@ impl Gic {
                         !self.active.iter().any(|a| a[line])
                     }
                     && self.priority[bank][line] < self.mask[core]
-                    && (u16::from(self.priority[bank][line]) & group_mask) < running
                     && (line < 32 || self.targets[line] & (1 << core) != 0)
+                    && (u16::from(self.priority[bank][line]) & group_mask)
+                        < *running.get_or_insert_with(|| {
+                            asserted_lines(&self.active[core])
+                                .map(|active| {
+                                    u16::from(self.priority[Self::bank(core, active)][active])
+                                        & group_mask
+                                })
+                                .min()
+                                .unwrap_or(256)
+                        })
             })
             .min_by_key(|&line| (self.priority[Self::bank(core, line)][line], line))
     }
@@ -181,7 +188,10 @@ impl Gic {
         value: u32,
     ) -> Result<u32, String> {
         let result = self.access_inner(core, distributor, offset, size, write, value);
-        if write || (!distributor && offset == 0xc) {
+        let acknowledged = !distributor
+            && offset == 0xc
+            && result.as_ref().is_ok_and(|value| value & 1023 != 1023);
+        if write || acknowledged {
             self.refresh();
         }
         result
