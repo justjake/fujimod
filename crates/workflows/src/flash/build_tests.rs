@@ -375,3 +375,112 @@ fn control_hash_mismatch_is_refused() {
     .unwrap_err();
     assert!(error.to_string().contains("control"), "{error}");
 }
+
+const TABLE: u64 = 0x4003_0000;
+const STOCK_CONTROL: u64 = 0x80;
+
+/// The XP4 fixture with a stock-query contract, a registered diagnostic
+/// buffer and restart facts whose borrowed query names the fixture callback.
+fn stock_fixture() -> Fixture {
+    let mut fixture = fixture();
+    let update = fs::read(&fixture.input.update).unwrap();
+    let container = invert(&update);
+    let mut flash = fixture.flash.clone();
+    flash.window.size = 0x1200;
+    flash.reader = Some(FlashReader {
+        symbol: STOCK_SYMBOL.into(),
+        alignment: 128,
+        nand: None,
+    });
+    flash.transport = Some(super::super::xp4_stock::TRANSPORT.into());
+    flash.control = FlashControl {
+        offset: 0,
+        size: STOCK_CONTROL,
+        sha256: sha256(&container[..STOCK_CONTROL as usize]),
+    };
+    fixture.bulk.source = fujimod_catalog_bulk::BulkSource::Pattern {
+        registered_buffer: BSS,
+        source_state: BSS + 8,
+        capacity: 0x10000,
+    };
+    let mut restart = ReferenceCatalog::bundled()
+        .unwrap()
+        .resolve_firmware("xe4-201")
+        .unwrap()
+        .restart
+        .unwrap();
+    let callback = SOURCE + CALLBACK_OFFSET as u64;
+    let Some(RequestTransport::BorrowedQuery {
+        callback_table,
+        stock_callback,
+        ..
+    }) = restart.mechanism.transport.as_mut()
+    else {
+        panic!("the X-E4 restart facts borrow the diagnostic query");
+    };
+    *callback_table = TABLE;
+    *stock_callback = callback;
+    restart.code_checks = vec![fujimod_catalog_bulk::CodeCheck {
+        name: "query callback".into(),
+        address: callback,
+        size: CALLBACK_SIZE,
+        sha256: "0".repeat(64),
+    }];
+    fixture.selected.flash = Some(flash.clone());
+    fixture.selected.bulk = Some(fixture.bulk.clone());
+    fixture.selected.restart = Some(restart);
+    fixture.flash = flash;
+    fixture
+}
+
+#[test]
+fn stock_query_stages_metadata_from_the_flash_and_restart_facts() {
+    let fixture = stock_fixture();
+    let (artifact, image) = prepare(&fixture.input, &fixture.selected).unwrap();
+    assert!(image.is_empty());
+    assert_eq!(artifact.image, None);
+    let Payload::Xp4StockQuery(payload) = artifact.payload else {
+        panic!("expected an XP4 stock-query artifact");
+    };
+    assert_eq!(payload.stock_reader, SOURCE + STOCK_OFFSET as u64);
+    assert_eq!(payload.callback.table, TABLE);
+    assert_eq!(payload.callback.offset, 12);
+    assert_eq!(
+        u64::from(payload.callback.original),
+        SOURCE + CALLBACK_OFFSET as u64
+    );
+    assert_eq!(
+        payload.callback.checks[0].sha256,
+        sha256(&[0xa5; CALLBACK_SIZE as usize]),
+        "the callback hash comes from the update, not the restart document"
+    );
+    assert_eq!(payload.checks.len(), 1);
+    assert_eq!(payload.update_size, UNIT_BYTES as u64);
+}
+
+#[test]
+fn stock_query_needs_the_restart_query_callback() {
+    let mut fixture = stock_fixture();
+    fixture.selected.restart = None;
+    let error = prepare(&fixture.input, &fixture.selected).unwrap_err();
+    assert!(error.to_string().contains("restart facts"), "{error}");
+
+    let mut fixture = stock_fixture();
+    fixture
+        .selected
+        .restart
+        .as_mut()
+        .unwrap()
+        .code_checks
+        .clear();
+    let error = prepare(&fixture.input, &fixture.selected).unwrap_err();
+    assert!(error.to_string().contains("not checked"), "{error}");
+}
+
+#[test]
+fn stock_query_control_must_match_the_update() {
+    let mut fixture = stock_fixture();
+    fixture.selected.flash.as_mut().unwrap().control.sha256 = "0".repeat(64);
+    let error = prepare(&fixture.input, &fixture.selected).unwrap_err();
+    assert!(error.to_string().contains("control differs"), "{error}");
+}

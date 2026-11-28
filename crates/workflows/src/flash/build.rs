@@ -2,6 +2,7 @@
 use super::{Artifact, CodeCheck, MappedPayload, Payload, Range, Transport, WordCheck};
 use fujimod_catalog::{ReferenceCatalog, ResolvedSelection, capture::FirmwareFlash};
 use fujimod_catalog_bulk::FirmwareBulk;
+use fujimod_catalog_restart::RequestTransport;
 use fujimod_firmware::{extent, invert, sha256};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -200,6 +201,9 @@ pub fn prepare(input: &Selection, selected: &ResolvedSelection) -> Result<(Artif
     }
     if flash.transport.as_deref() == Some("xp4-camera-code") {
         return prepare_xp4(input, selected, flash, bulk);
+    }
+    if flash.transport.as_deref() == Some(super::xp4_stock::TRANSPORT) {
+        return prepare_xp4_stock(input, selected);
     }
     check(
         flash.transport.as_deref() == Some("xp5-cmd-callback"),
@@ -709,6 +713,127 @@ fn prepare_xpp(
     ))
 }
 
+/// Package metadata for XP4 stock-reader reads. No code is compiled: the
+/// stock reader and the `0x450006` query callback it borrows come from the
+/// flash and restart facts, and the update supplies their code hashes and the
+/// control bytes.
+fn prepare_xp4_stock(
+    input: &Selection,
+    selected: &ResolvedSelection,
+) -> Result<(Artifact, Vec<u8>)> {
+    let flash = selected.flash.as_ref().ok_or("no flash fact")?;
+    let bulk = selected.bulk.as_ref().ok_or("no bulk fact")?;
+    let restart = selected
+        .restart
+        .as_ref()
+        .ok_or("XP4 stock reads take the query callback from the restart facts")?;
+    let Some(RequestTransport::BorrowedQuery {
+        callback_table,
+        callback_offset,
+        stock_callback,
+        ..
+    }) = &restart.mechanism.transport
+    else {
+        return Err("the restart facts publish no borrowed diagnostic query".into());
+    };
+    check(
+        restart.code_alias == 0,
+        "XP4 stock reads need uncached restart callback facts",
+    )?;
+    let update_identity = selected
+        .firmware
+        .update
+        .as_ref()
+        .ok_or("no update identity")?;
+    let update = fs::read(&input.update)?;
+    check(
+        update.len() as u64 == update_identity.size && sha256(&update) == update_identity.sha256,
+        "update identity differs",
+    )?;
+    check(flash.update_image.xor == 255, "unsupported XP4 update XOR")?;
+    let inverted = invert(&update);
+    let map = document(&input.load_map)?;
+    check(
+        map["format_version"] == 2
+            && map["firmware_id"] == selected.firmware.id
+            && map["firmware_sha256"] == update_identity.sha256,
+        "load-map identity differs",
+    )?;
+    let units = sources(&map, &inverted)?;
+    let checks = flash
+        .code_ranges
+        .iter()
+        .map(|range| {
+            Ok(CodeCheck {
+                address: range.address,
+                size: range.size,
+                sha256: sha256(source(&units, range.address, range.size)?),
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let callback_checks = restart
+        .code_checks
+        .iter()
+        .filter(|check| check.address == *stock_callback)
+        .map(|check| {
+            Ok(CodeCheck {
+                address: check.address,
+                size: check.size,
+                sha256: sha256(source(&units, check.address, check.size)?),
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    check(
+        !callback_checks.is_empty(),
+        "the stock query callback code is not checked",
+    )?;
+    let reader = flash
+        .reader
+        .as_ref()
+        .ok_or("XP4 flash reader contract is missing")?;
+    let stock_reader = flash
+        .code_ranges
+        .iter()
+        .find(|range| range.name == reader.symbol)
+        .ok_or("XP4 stock reader is not a checked code range")?
+        .address;
+    let update_size = (inverted.len() as u64)
+        .checked_sub(flash.update_image.dat_offset)
+        .ok_or("invalid XP4 update origin")?
+        .min(flash.window.size);
+    let update_bytes = extent(&inverted, flash.update_image.dat_offset, update_size)?;
+    let control = extent(update_bytes, flash.control.offset, flash.control.size)?;
+    let control_sha256 = sha256(control);
+    check(
+        control_sha256 == flash.control.sha256,
+        "XP4 flash control differs from the update",
+    )?;
+    let payload = Payload::Xp4StockQuery(super::xp4_stock::Payload {
+        schema: 1,
+        firmware_id: selected.firmware.id.clone(),
+        firmware_sha256: update_identity.sha256.clone(),
+        stock_reader,
+        stock_reader_symbol: reader.symbol.clone(),
+        callback: super::xp4_stock::Callback {
+            table: *callback_table,
+            offset: u32::try_from(*callback_offset)?,
+            original: u32::try_from(*stock_callback)?,
+            checks: callback_checks,
+        },
+        checks,
+        control_sha256,
+        update_size,
+    });
+    payload.validate(flash, bulk, &[])?;
+    Ok((
+        Artifact {
+            payload,
+            image: None,
+        },
+        Vec::new(),
+    ))
+}
+
 /// Package a verified ARM32 XP4 reader, its `0x450006` callback profile and
 /// linked-symbol map into a staged command artifact.
 fn prepare_xp4(
@@ -1111,7 +1236,17 @@ pub fn stage(recipe: &Stage) -> Result<()> {
         .ok_or("runtime firmware list")?;
     for input in &recipe.selections {
         let selected = catalog.resolve_firmware(&input.firmware_id)?;
-        let (artifact, image) = if input.command.is_empty() {
+        let stock_query = selected
+            .flash
+            .as_ref()
+            .is_some_and(|flash| flash.transport.as_deref() == Some(super::xp4_stock::TRANSPORT));
+        let (artifact, image) = if stock_query {
+            check(
+                input.command.is_empty(),
+                "XP4 stock reads compile no reader",
+            )?;
+            prepare_xp4_stock(input, &selected)?
+        } else if input.command.is_empty() {
             let flash = selected
                 .flash
                 .as_ref()
@@ -1191,6 +1326,8 @@ pub fn stage(recipe: &Stage) -> Result<()> {
                 input.firmware_id,
                 image.len()
             );
+        } else if matches!(artifact.payload, Payload::Xp4StockQuery(_)) {
+            println!("{}: staged XP4 stock-reader metadata", input.firmware_id);
         } else {
             println!("{}: staged mapped-E1 flash metadata", input.firmware_id);
         }
