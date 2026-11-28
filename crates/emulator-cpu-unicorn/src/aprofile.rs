@@ -169,7 +169,15 @@ impl Core {
             policy: Cell::new(ExecutionPolicy::Exact),
             pause_requested,
             clock: Cell::new(None),
-            loop_mode: Cell::default(),
+            // AArch64 loop proofs are off until an owner asks for them: on
+            // xt5-431 to REC their candidate observation cost 8% of the run
+            // (39.5 s against 36.5 s for two guest seconds) and fast-forwarded
+            // nothing that changed the outcome.
+            loop_mode: Cell::new(if a32 {
+                loops::LoopMode::default()
+            } else {
+                loops::LoopMode::Disabled
+            }),
             loop_window: Cell::new(false),
             prove_loops: Cell::new(false),
             proofs: a64::Proofs::default(),
