@@ -1,0 +1,71 @@
+diff --git a/src/dynarmic/frontend/decoder/decoder_detail.h b/src/dynarmic/frontend/decoder/decoder_detail.h
+--- a/src/dynarmic/frontend/decoder/decoder_detail.h
++++ b/src/dynarmic/frontend/decoder/decoder_detail.h
+@@ -67,6 +67,21 @@
+         return std::make_tuple(mask, expect);
+     }
+ 
++    struct FixedBits {
++        opcode_type required = ~opcode_type{0};
++        opcode_type forbidden = ~opcode_type{0};
++
++        consteval void Add(const char (&pattern)[opcode_bitsize + 1]) {
++            const auto [mask, expect] = GetMaskAndExpect(StringToArray<opcode_bitsize>(pattern));
++            required &= expect;
++            forbidden &= mask & ~expect;
++        }
++
++        constexpr bool Matches(opcode_type instruction) const {
++            return (instruction & (required | forbidden)) == required;
++        }
++    };
++
+     /**
+      * Generates the masks and shifts for each argument.
+      * A '-' in a bitstring indicates that we don't care about that value.
+diff --git a/src/dynarmic/frontend/A32/decoder/vfp.h b/src/dynarmic/frontend/A32/decoder/vfp.h
+--- a/src/dynarmic/frontend/A32/decoder/vfp.h
++++ b/src/dynarmic/frontend/A32/decoder/vfp.h
+@@ -22,6 +22,19 @@
+ 
+ template<typename V>
+ std::optional<std::reference_wrapper<const VFPMatcher<V>>> DecodeVFP(u32 instruction) {
++    // Skip the matcher scan when the opcode violates a fixed bit shared by
++    // all encodings in this table, without duplicating the opcode patterns.
++    static constexpr auto fixed = []() consteval {
++        typename Decoder::detail::detail<VFPMatcher<V>>::FixedBits bits;
++#define INST(fn, name, bitstring) bits.Add(bitstring);
++#include "./vfp.inc"
++#undef INST
++        return bits;
++    }();
++    if (!fixed.Matches(instruction)) {
++        return std::nullopt;
++    }
++
+     using Table = std::vector<VFPMatcher<V>>;
+ 
+     static const struct Tables {
+diff --git a/src/dynarmic/frontend/A32/decoder/asimd.h b/src/dynarmic/frontend/A32/decoder/asimd.h
+--- a/src/dynarmic/frontend/A32/decoder/asimd.h
++++ b/src/dynarmic/frontend/A32/decoder/asimd.h
+@@ -67,6 +67,19 @@
+ 
+ template<typename V>
+ std::optional<std::reference_wrapper<const ASIMDMatcher<V>>> DecodeASIMD(u32 instruction) {
++    // Skip the matcher scan when the opcode violates a fixed bit shared by
++    // all encodings in this table, without duplicating the opcode patterns.
++    static constexpr auto fixed = []() consteval {
++        typename Decoder::detail::detail<ASIMDMatcher<V>>::FixedBits bits;
++#define INST(fn, name, bitstring) bits.Add(bitstring);
++#include "./asimd.inc"
++#undef INST
++        return bits;
++    }();
++    if (!fixed.Matches(instruction)) {
++        return std::nullopt;
++    }
++
+     static const auto table = GetASIMDDecodeTable<V>();
+ 
+     const auto matches_instruction = [instruction](const auto& matcher) { return matcher.Matches(instruction); };
