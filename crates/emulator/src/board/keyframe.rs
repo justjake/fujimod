@@ -389,6 +389,9 @@ impl Board {
                 .map_err(|_| "exclusive monitors poisoned")?
                 .restore_checkpoint(&saved.exclusive)?;
             state.restore_state(&saved.saved)?;
+            for (cpu, profile) in self.cpus.iter().zip(&state.aprofile) {
+                cpu.set_fast_counters(profile.as_ref().map(aprofile::Profile::fast_counters))?;
+            }
             state.memory.rearm(&self.cpus)?;
             Ok::<_, String>(())
         })();

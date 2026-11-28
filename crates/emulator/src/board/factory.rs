@@ -181,8 +181,50 @@ pub(super) struct Engines {
         any(target_os = "linux", target_os = "macos")
     ))]
     dynarmic_code: fujimod_emulator_cpu_dynarmic::CodeVisibility,
+    #[cfg(not(target_os = "emscripten"))]
+    unicorn_workers: bool,
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     hypervisor: Option<fujimod_emulator_cpu_hvf::Vm>,
+}
+
+/// Whether the M-profile companion runs on its own native worker thread.
+///
+/// Only the Unicorn engine can use it. Under the Hypervisor engine the AArch64
+/// cores are native VMs driven from the owner thread, so moving the M-profile
+/// core to a worker turns every cohort handoff into a thread hop while the
+/// owner can no longer do useful work in the same window: measured on an Apple
+/// Silicon host, the worker arrangement took 139.7k interactive windows against
+/// 31.7k inlined, with a 641 us mean window instead of 184 us.
+///
+/// On the Unicorn engine every core is a worker that the owner starts and
+/// waits on, so concurrency is a two-way win when the host can run the threads
+/// side by side. Below four hardware threads the five workers thrash their
+/// futexes and spend more host time in the kernel than in the guest; there the
+/// inlined cores interleave more cheaply. `FUJIMOD_UNICORN_WORKERS` forces
+/// either choice for benchmarking and for hosts whose thread count does not
+/// describe their available capacity.
+fn unicorn_workers(graph: &Graph, engine: RunEngine) -> bool {
+    let one_m4_companion = graph
+        .processors
+        .iter()
+        .filter(|p| p.model == Model::CortexM4)
+        .count()
+        == 1
+        && graph.processors.iter().any(|p| p.model == Model::ArmV8A);
+    if !one_m4_companion || engine != RunEngine::Unicorn {
+        return false;
+    }
+    match std::env::var("FUJIMOD_UNICORN_WORKERS").ok().as_deref() {
+        Some("0") => false,
+        Some("1") => true,
+        Some(other) => {
+            debug_assert!(false, "unexpected FUJIMOD_UNICORN_WORKERS={other}");
+            false
+        }
+        // Concurrent cores stay opt-in until a measurement shows they pay:
+        // the cohort window path is slower and diverges today.
+        None => false,
+    }
 }
 impl Engines {
     fn new(graph: &Graph, options: &Options) -> Result<Self, String> {
@@ -221,6 +263,8 @@ impl Engines {
                 any(target_os = "linux", target_os = "macos")
             ))]
             dynarmic_code: Default::default(),
+            #[cfg(not(target_os = "emscripten"))]
+            unicorn_workers: unicorn_workers(graph, options.engine),
             #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
             hypervisor,
         })
@@ -262,6 +306,25 @@ impl Engines {
             ));
             #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
             return Err("Hypervisor engine requires macOS ARM64".into());
+        }
+        #[cfg(not(target_os = "emscripten"))]
+        if self.unicorn_workers {
+            use fujimod_emulator_cpu_unicorn::worker;
+            match model {
+                Model::CortexM4 => {
+                    return Ok(Box::new(worker::spawn_mprofile(
+                        translation_cache_size_bytes,
+                        true,
+                    )?));
+                }
+                Model::ArmV8A => {
+                    return Ok(Box::new(worker::spawn_aprofile(
+                        translation_cache_size_bytes,
+                        memory.shared(),
+                    )?));
+                }
+                _ => {}
+            }
         }
         let raw = self
             .unicorn

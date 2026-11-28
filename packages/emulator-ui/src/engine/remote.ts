@@ -177,6 +177,7 @@ export class RemoteEngine implements Engine {
       | NativeState
       | NativeCatalogMessage
       | NativeSessionMessage
+      | ({ type: 'metrics' } & CameraPerformance)
       | { type: 'progress'; message: string; percent?: number };
     try {
       message = JSON.parse(source) as typeof message;
@@ -186,6 +187,11 @@ export class RemoteEngine implements Engine {
     }
     if (message.type === 'progress') {
       this.progress?.(message.message, message.percent);
+      return;
+    }
+    if (message.type === 'metrics') {
+      const { type: _, ...metrics } = message;
+      this.metricListeners.emit(metrics);
       return;
     }
     if (message.type === 'native-state') {
@@ -352,6 +358,10 @@ export class RemoteEngine implements Engine {
   }
   setPosition(id: string, position: string): Promise<void> {
     return this.rpc('set_position', { id, position });
+  }
+  /** Hold the camera to the wall clock, or let it run as fast as the host allows. */
+  setRealTime(on: boolean): Promise<void> {
+    return this.rpc('real_time', { on });
   }
   setScene(_scene: Scene | null): Promise<void> {
     return this.unavailableMethod('Scene input');

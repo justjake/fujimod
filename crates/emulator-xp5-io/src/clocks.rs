@@ -1,9 +1,15 @@
 //! PLL/divider request banks with bounded divider selections.
 //! Completion/readback only; rates are not measured. Initial PLL words are
 //! zero unless a board declares them with a `Reset`.
+use fujimod_emulator_devices::bus::FastReadWord;
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::sync::{
+    Arc,
+    atomic::{AtomicU32, Ordering},
+};
 pub const BANKS: [(u64, usize); 17] = [
     (0xffa01000, 4),
     (0xffa02000, 3),
@@ -41,11 +47,37 @@ struct State {
     #[serde(default)]
     idle_status: u32,
 }
+struct FastMirrors {
+    config: [Arc<AtomicU32>; 2],
+    dividers: [Arc<AtomicU32>; 4],
+    zero: Arc<AtomicU32>,
+    idle_status: Arc<AtomicU32>,
+}
+impl FastMirrors {
+    fn from_state(state: &State) -> Self {
+        Self {
+            config: state.config.map(|v| Arc::new(AtomicU32::new(v))),
+            dividers: state.dividers.map(|v| Arc::new(AtomicU32::new(v))),
+            zero: Arc::new(AtomicU32::new(0)),
+            idle_status: Arc::new(AtomicU32::new(state.idle_status)),
+        }
+    }
+    fn sync(&self, state: &State) {
+        for (mirror, &value) in self.config.iter().zip(&state.config) {
+            mirror.store(value, Ordering::Release);
+        }
+        for (mirror, &value) in self.dividers.iter().zip(&state.dividers) {
+            mirror.store(value, Ordering::Release);
+        }
+        self.idle_status.store(state.idle_status, Ordering::Release);
+    }
+}
 pub struct Bank {
     base: u64,
     state: State,
     count: usize,
     index: usize,
+    mirrors: FastMirrors,
 }
 impl Bank {
     pub fn new(base: u64) -> Result<Self, String> {
@@ -85,11 +117,13 @@ impl Bank {
             state.dividers[..count].copy_from_slice(&reset.dividers);
             state.idle_status = reset.idle_status;
         }
+        let mirrors = FastMirrors::from_state(&state);
         Ok(Self {
             base,
             state,
             count,
             index,
+            mirrors,
         })
     }
     fn divider(&self, o: u64) -> Option<usize> {
@@ -125,6 +159,29 @@ impl Device for Bank {
             }
         }
     }
+    fn fast_reads(&self, window_base: u64, window_size: u64) -> Vec<FastReadWord> {
+        let Some(window_end) = window_base.checked_add(window_size) else {
+            return Vec::new();
+        };
+        let mut words = Vec::with_capacity(self.count + 4);
+        let mut push = |reg: u64, atom: &Arc<AtomicU32>| {
+            if let Some(address) = self.base.checked_add(reg)
+                && let Some(end) = address.checked_add(4)
+                && address >= window_base
+                && end <= window_end
+            {
+                words.push(FastReadWord::atomic_u32(address - window_base, atom.clone()));
+            }
+        };
+        push(0x00, &self.mirrors.config[0]);
+        push(0x08, &self.mirrors.config[1]);
+        for i in 0..self.count {
+            push(0x40 + 4 * i as u64, &self.mirrors.dividers[i]);
+        }
+        push(0x80, &self.mirrors.zero);
+        push(0xf0, &self.mirrors.idle_status);
+        words
+    }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, n: u8, v: u64) {
         let o = address.wrapping_sub(self.base);
         if n != 4 {
@@ -137,11 +194,18 @@ impl Device for Bank {
                 return;
             }
             self.state.dividers[i] = v as u32;
+            self.mirrors.dividers[i].store(v as u32, Ordering::Release);
             return;
         }
         match o {
-            0 => self.state.config[0] = v as u32,
-            8 => self.state.config[1] = v as u32,
+            0 => {
+                self.state.config[0] = v as u32;
+                self.mirrors.config[0].store(v as u32, Ordering::Release);
+            }
+            8 => {
+                self.state.config[1] = v as u32;
+                self.mirrors.config[1].store(v as u32, Ordering::Release);
+            }
             // Immediate functional completion; no PLL lock time is claimed.
             0x80 if matches!(v, 2 | 3)
                 || ((v == 5 && matches!(self.index, 7 | 8 | 9 | 12))
@@ -149,13 +213,45 @@ impl Device for Bank {
             _ => cx.unmodeled(),
         }
     }
-    fujimod_emulator_devices::checkpoint_fields!(state: State);
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        #[derive(Serialize)]
+        struct Snapshot<'a> {
+            state: &'a State,
+        }
+        Checkpoint::encode(self.name(), &Snapshot { state: &self.state })
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        #[allow(dead_code)]
+        #[derive(Deserialize)]
+        struct Snapshot {
+            state: State,
+        }
+        let Snapshot { state: _ } = saved.decode(self.name())?;
+        if !saved.blobs().is_empty() {
+            return Err("device snapshot blob lengths differ".into());
+        }
+        Ok(())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        #[derive(Deserialize)]
+        struct Snapshot {
+            state: State,
+        }
+        let Snapshot { state } = saved.decode(self.name())?;
+        if !saved.blobs().is_empty() {
+            return Err("device snapshot blob lengths differ".into());
+        }
+        self.state = state;
+        self.mirrors.sync(&self.state);
+        Ok(())
+    }
     fn save(&self) -> Value {
         serde_json::to_value(&self.state).unwrap()
     }
     fn restore(&mut self, v: &Value) -> Result<(), String> {
         self.state = serde_json::from_value(v.clone())
             .map_err(|e| format!("invalid clock bank checkpoint: {e}"))?;
+        self.mirrors.sync(&self.state);
         Ok(())
     }
 }
@@ -230,5 +326,66 @@ mod tests {
         assert_eq!(read(&mut other, 0), 0x1234);
         assert_eq!(saved, other.save());
         assert!(other.restore(&serde_json::json!({"config": "x"})).is_err());
+    }
+
+    #[test]
+    fn fast_reads_match_device_read_across_writes_and_restores() {
+        use fujimod_emulator_devices::bus::FastReadValue;
+        use std::collections::BTreeMap;
+
+        let mut bank = Bank::with_reset(BASE, Some(&reset())).unwrap();
+        let fast: BTreeMap<u64, Arc<AtomicU32>> = bank
+            .fast_reads(BASE, 0x100)
+            .into_iter()
+            .map(|word| {
+                let FastReadValue::AtomicU32(atom) = word.value else {
+                    panic!("expected AtomicU32 at {:#x}", word.offset);
+                };
+                (word.offset, atom)
+            })
+            .collect();
+        let expected_offsets = [0x00, 0x08, 0x40, 0x44, 0x48, 0x4c, 0x80, 0xf0];
+        assert_eq!(fast.keys().copied().collect::<Vec<_>>(), expected_offsets);
+
+        let assert_parity = |bank: &mut Bank| {
+            for &offset in &expected_offsets {
+                let expected = read(bank, offset);
+                assert_eq!(
+                    u64::from(fast[&offset].load(Ordering::Acquire)),
+                    expected,
+                    "offset {offset:#x}"
+                );
+            }
+        };
+        assert_parity(&mut bank);
+
+        let initial_checkpoint = bank.checkpoint().unwrap();
+        let initial_json = bank.save();
+
+        let mut host = RecordingHost::default();
+        for (offset, value) in [(0x00, 0x9999), (0x08, 0x77), (0x44, 0x123), (0x80, 2)] {
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            bank.write(&mut cx, BASE + offset, 4, value);
+            assert!(!cx.is_unmodeled());
+        }
+        assert_parity(&mut bank);
+
+        bank.restore(&initial_json).unwrap();
+        assert_parity(&mut bank);
+
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        bank.write(&mut cx, BASE + 0x4c, 4, 0x55);
+        assert_parity(&mut bank);
+
+        bank.restore_checkpoint(&initial_checkpoint).unwrap();
+        assert_parity(&mut bank);
+
+        // Subwindow clipping exposes only matching registers relative to window_base.
+        let clipped: Vec<u64> = bank
+            .fast_reads(BASE + 0x44, 0x40)
+            .into_iter()
+            .map(|w| w.offset)
+            .collect();
+        assert_eq!(clipped, vec![0x00, 0x04, 0x08, 0x3c]);
     }
 }

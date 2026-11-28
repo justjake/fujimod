@@ -2,11 +2,14 @@
 //! physical phase interrupts and DMA scanout; host publication is separate.
 //! Register behavior and sampling limits are explicit in the scanout model.
 
+use fujimod_emulator_devices::bus::FastReadWord;
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::xp5::panel_clocks::Clocks;
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_framebuffer::raster::{self, PixelOrder};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::sync::{Arc, RwLock};
 
 #[derive(Clone, Serialize, Deserialize)]
 struct State {
@@ -36,9 +39,14 @@ pub struct Config {
     /// Diagnostic transport overrides; converter transport is the default.
     pub raw_formats: [Option<PixelOrder>; 4],
 }
+struct DisplayFastView {
+    regs: Vec<u32>,
+    deadline: Option<u64>,
+}
 pub struct Display {
     bank: usize,
     state: State,
+    fast_view: Arc<RwLock<DisplayFastView>>,
     period_ns: Option<u64>,
     clocks: Clocks,
     formats: [Option<PixelOrder>; 4],
@@ -59,10 +67,15 @@ impl Display {
         {
             return Err("display period must be 1ms..1s".into());
         }
+        let regs = vec![0; 0x7d4 / 4];
+        let fast_view = Arc::new(RwLock::new(DisplayFastView {
+            regs: regs.clone(),
+            deadline: None,
+        }));
         Ok(Self {
             bank,
             state: State {
-                regs: vec![0; 0x7d4 / 4],
+                regs,
                 enabled: false,
                 generation: 0,
                 phase: 0,
@@ -70,6 +83,7 @@ impl Display {
                 frames: 0,
                 last_rgba: Vec::new(),
             },
+            fast_view,
             period_ns: config.period_ns,
             formats: config.raw_formats,
             clocks,
@@ -77,6 +91,17 @@ impl Display {
             blank: None,
             input: None,
         })
+    }
+    fn publish_fast_view(&self) {
+        let mut view = self.fast_view.write().unwrap();
+        view.regs.copy_from_slice(&self.state.regs);
+        view.deadline = self.state.deadline;
+    }
+    fn publish_fast_reg(&self, index: usize, value: u32) {
+        self.fast_view.write().unwrap().regs[index] = value;
+    }
+    fn publish_fast_deadline(&self) {
+        self.fast_view.write().unwrap().deadline = self.state.deadline;
     }
     fn base(&self) -> u64 {
         0xff990000 + self.bank as u64 * 0x10000
@@ -257,6 +282,39 @@ impl Device for Display {
     fn name(&self) -> &'static str {
         "lcdc"
     }
+    fn fast_reads(&self, window_base: u64, window_size: u64) -> Vec<FastReadWord> {
+        let Some(window_end) = window_base.checked_add(window_size) else {
+            return Vec::new();
+        };
+        let base = self.base();
+        let mut words = Vec::new();
+        for o in (0u64..0x7d4).step_by(4) {
+            if !register(self.bank, o) {
+                continue;
+            }
+            let Some(address) = base.checked_add(o) else {
+                continue;
+            };
+            let Some(end) = address.checked_add(4) else {
+                continue;
+            };
+            if address < window_base || end > window_end {
+                continue;
+            }
+            let view = self.fast_view.clone();
+            words.push(FastReadWord::clocked_u32(
+                address - window_base,
+                Arc::new(move |now| {
+                    let view = view.read().ok()?;
+                    if view.deadline.is_some_and(|d| now >= d) {
+                        return None;
+                    }
+                    Some(if o == 0 { 1 } else { view.regs[o as usize / 4] })
+                }),
+            ));
+        }
+        words
+    }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, n: u8) -> u64 {
         self.advance(cx);
         let o = address.wrapping_sub(self.base());
@@ -309,10 +367,12 @@ impl Device for Display {
                     }
                 }
             }
+            self.publish_fast_view();
             self.status(cx);
             return;
         }
         self.state.regs[o as usize / 4] = v;
+        self.publish_fast_reg(o as usize / 4, v);
         if matches!(o, 8 | 0x14 | 0x18 | 0x20 | 0x24 | 0x28) {
             self.status(cx);
         }
@@ -326,6 +386,7 @@ impl Device for Display {
         while let Some(at) = self.state.deadline.filter(|at| *at <= cx.now()) {
             if !self.state.enabled {
                 self.state.deadline = None;
+                self.publish_fast_deadline();
                 return;
             }
             // Category2 invokes the native commit. Scanout at the following
@@ -368,7 +429,25 @@ impl Device for Display {
     fn next_deadline(&self, _: u64) -> Option<u64> {
         self.state.deadline
     }
-    fujimod_emulator_devices::checkpoint_state!(state: State, Self::validate_state);
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode(self.name(), &self.state)
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        if !saved.children().is_empty() || !saved.blobs().is_empty() {
+            return Err(format!("{} snapshot has unexpected parts", self.name()));
+        }
+        let state: State = saved.decode(self.name())?;
+        self.validate_state(&state)
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        self.state = saved.decode(self.name())?;
+        self.publish_fast_view();
+        Ok(())
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.checkpoint()?.state())
+    }
     fn save(&self) -> Value {
         serde_json::to_value(&self.state).unwrap()
     }
@@ -377,6 +456,7 @@ impl Device for Display {
             .map_err(|e| format!("display checkpoint: {e}"))?;
         self.validate_state(&state)?;
         self.state = state;
+        self.publish_fast_view();
         // Republish the same deterministic sequence into a new host run;
         // publication is not a new modeled image change.
         self.needs_publication = true;
@@ -389,6 +469,7 @@ impl Display {
     fn schedule(&mut self, cx: &mut Cx<'_>, from: u64, delay: f64) {
         if let Some(at) = from.checked_add(delay.ceil().max(1.0) as u64) {
             self.state.deadline = Some(at);
+            self.publish_fast_deadline();
             cx.schedule(at, self.state.generation);
         } else {
             cx.fail("display phase deadline overflow");
@@ -926,5 +1007,82 @@ mod tests {
         late.event(&mut Cx::new(&mut lh, 0, 0, 0), 0);
         assert_eq!(late.save(), state);
         assert_eq!(late.next_deadline(lh.now), None);
+    }
+
+    #[test]
+    fn fast_reads_match_device_read_and_decline_at_phase_deadline() {
+        use fujimod_emulator_devices::bus::FastReadValue;
+        use std::collections::BTreeMap;
+
+        for bank in 0..2 {
+            let (mut d, mut h) = setup(bank);
+            let base = d.base();
+            let fast: BTreeMap<u64, Arc<dyn Fn(u64) -> Option<u32> + Send + Sync>> = d
+                .fast_reads(base, 0x1000)
+                .into_iter()
+                .map(|word| {
+                    let FastReadValue::ClockedU32(read) = word.value else {
+                        panic!("expected ClockedU32 at {:#x}", word.offset);
+                    };
+                    (word.offset, read)
+                })
+                .collect();
+
+            let deadline = d.next_deadline(0).unwrap();
+            assert_eq!(fast[&0x00](deadline - 1), Some(1));
+            assert_eq!(fast[&0x04](deadline - 1), Some(1));
+            assert_eq!(fast[&0x08](deadline - 1), Some(1 << 20));
+            assert_eq!(fast[&0x00](deadline), None);
+            assert_eq!(fast[&0x08](deadline + 1), None);
+
+            // Every valid offset matches Device::read before the deadline, and holes are omitted.
+            let assert_parity = |d: &mut Display, h: &mut OutputHost| {
+                let now = h.now;
+                for o in (0u64..0x7d8).step_by(4) {
+                    let mut cx = Cx::new(h, 0, 0, 0);
+                    let expected = d.read(&mut cx, base + o, 4);
+                    if cx.is_unmodeled() {
+                        assert!(!fast.contains_key(&o), "bank={bank} unmodeled {o:#x}");
+                    } else {
+                        assert_eq!(
+                            fast[&o](now),
+                            Some(expected as u32),
+                            "bank={bank} offset={o:#x} at {now}"
+                        );
+                    }
+                }
+            };
+            assert_parity(&mut d, &mut h);
+
+            let enabled_checkpoint = d.checkpoint().unwrap();
+            let enabled_json = d.save();
+
+            // Advancing past the deadline schedules the next phase and restores fast reads.
+            due(&mut d, &mut h);
+            let next_deadline = d.next_deadline(h.now).unwrap();
+            assert!(next_deadline > h.now);
+            assert_parity(&mut d, &mut h);
+            assert_eq!(fast[&0x04](next_deadline), None);
+
+            // Disabling clears the deadline and keeps registers readable at any tick.
+            write(&mut d, &mut h, base + 4, 0);
+            write(&mut d, &mut h, base + 0x14, 0x0010_0100);
+            assert_eq!(fast[&0x04](u64::MAX - 1), Some(0));
+            assert_eq!(fast[&0x14](u64::MAX - 1), Some(0x0010_0100));
+
+            // JSON restore and binary checkpoint restore re-sync both registers and deadline.
+            d.restore(&enabled_json).unwrap();
+            h.now = 0;
+            assert_eq!(fast[&0x14](0), Some(0));
+            assert_eq!(fast[&0x04](deadline), None);
+            assert_parity(&mut d, &mut h);
+
+            write(&mut d, &mut h, base + 4, 0);
+            assert_eq!(fast[&0x04](deadline), Some(0));
+
+            d.restore_checkpoint(&enabled_checkpoint).unwrap();
+            assert_eq!(fast[&0x04](deadline - 1), Some(1));
+            assert_eq!(fast[&0x04](deadline), None);
+        }
     }
 }

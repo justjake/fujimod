@@ -206,6 +206,33 @@ impl Run {
     }
 }
 
+/// The scheduler quantum of an Interactive XP5 run, or `None` to keep the
+/// configuration's. One processor's turn is one slice: a short slice costs a
+/// wakeup per switch but keeps the timeline tight, while a long one lets a
+/// spinning processor run far past its peers before they are serviced.
+/// Measured on xt5-431 and x100vi-131 (Linux, Unicorn, 100 ms guest time):
+/// 500-1000 entries per slice is about 700 ms of host time, 5000 about
+/// 800-950 ms. The configuration's 1000 is the measured optimum, so
+/// Interactive keeps it and Exact, whose quantum is not a scheduling knob,
+/// is left to the configuration.
+///
+/// Re-calibrated at 1000, 10,000, 25,000 and 50,000 on both bodies (Linux,
+/// Unicorn, 2 s guest time, one run each): only 1000 leaves the board state
+/// byte-identical to the accepted build. Every larger slice moves a processor
+/// past a peer's interrupt deadline, so the M-core's NVIC deadline, the timer
+/// generations, the per-core instruction totals and the final `waiting` set
+/// all change; the display frames happen to stay equal, so the state is the
+/// check that matters. Host time does not improve either (xt5-431 53.7 s at
+/// 1000 vs 50.1/49.5/51.5 s at 10k/25k/50k; x100vi-131 76.1 s at 1000 vs
+/// 94.4/106.4/131.1 s), so 1000 stays.
+fn interactive_quantum(policy: ExecutionPolicy) -> Option<usize> {
+    matches!(policy, ExecutionPolicy::Interactive).then_some(INTERACTIVE_QUANTUM)
+}
+
+/// Instructions per scheduler slice in Interactive mode, measured on both
+/// XP5 bodies (see `interactive_quantum`).
+const INTERACTIVE_QUANTUM: usize = 1000;
+
 /// Host-time cadence of status lines, so a slow run is visibly alive.
 const WALL_STATUS_EVERY: Duration = Duration::from_secs(10);
 
@@ -372,7 +399,7 @@ impl RunHost {
             scene,
             output: Some(run_directory.clone()),
             mode,
-            quantum: quantum_override,
+            quantum: quantum_override.or_else(|| interactive_quantum(policy)),
             camera_settings,
             flash_seeds: Vec::new(),
         };
@@ -522,7 +549,13 @@ impl RunHost {
                 .saturating_add(crate::host::duration_ticks(status_every, ticks_per_second)),
             status_every,
             next_wall_status: Instant::now() + WALL_STATUS_EVERY,
-            slice: (ticks_per_second / 1_000).clamp(1, 100_000_000),
+            slice: (ticks_per_second
+                / if policy == ExecutionPolicy::Interactive {
+                    100
+                } else {
+                    1_000
+                })
+            .clamp(1, 100_000_000),
             patches,
             fujimod,
             interrupted,
@@ -615,6 +648,10 @@ impl RunHost {
             timed_gpio.front().map(|item| item.0),
             timed_pokes.front().map(|item| item.0),
             watch_after.map(|item| item.0),
+            (*policy == ExecutionPolicy::Interactive
+                && *status_every != Duration::ZERO
+                && *next_status > now)
+                .then_some(*next_status),
         ]
         .into_iter()
         .flatten()

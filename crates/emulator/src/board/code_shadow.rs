@@ -95,6 +95,9 @@ pub(super) struct CodeShadow {
     retained: u64,
     discards: u64,
     changes: u64,
+    /// Code-store notifications seen, and the ones that rewrote bytes.
+    calls: u64,
+    rewrites: u64,
     /// Pages found changed behind the engine, with how often.
     changed_pages: HashMap<u64, u64>,
     scratch: Option<Box<Bytes>>,
@@ -115,6 +118,8 @@ impl Default for CodeShadow {
             retained: 0,
             discards: 0,
             changes: 0,
+            calls: 0,
+            rewrites: 0,
             changed_pages: HashMap::new(),
             scratch: None,
         }
@@ -151,7 +156,7 @@ impl CodeShadow {
         let mut changed: Vec<_> = self.changed_pages.iter().collect();
         changed.sort_by_key(|&(page, count)| (std::cmp::Reverse(*count), *page));
         format!(
-            "kept={} discarded={} changed-behind-engine={} pages={} changed-pages={}",
+            "kept={} discarded={} changed-behind-engine={} pages={} changed-pages={} code-stores={} code-rewrites={}",
             self.retained,
             self.discards,
             self.changes,
@@ -161,7 +166,9 @@ impl CodeShadow {
                 .take(8)
                 .map(|(page, count)| format!("{page:#x}:{count}"))
                 .collect::<Vec<_>>()
-                .join(",")
+                .join(","),
+            self.calls,
+            self.rewrites,
         )
     }
     /// The engine's translations were discarded.
@@ -183,6 +190,41 @@ impl CodeShadow {
     pub(super) fn peer_ran(&mut self) {
         self.epoch += 1;
         self.retained += 1;
+        self.last = None;
+    }
+    /// A store covered bytes a translation was made from: a peer, the host or
+    /// a device wrote code, and the engine retired the translations covering
+    /// it already. The copy of each stored page can no longer be trusted, so
+    /// drop it. The next entry copies the page again from guest memory and
+    /// compares against nothing, which keeps this processor from reporting a
+    /// change of its own writing and from discarding every translation. A
+    /// program that streams data through a page that holds code costs one
+    /// notification per store, but no copy, no comparison and no discard.
+    pub(super) fn code_stored(&mut self, cpu: &dyn Cpu, address: u64, bytes: usize) {
+        let _ = cpu;
+        let end = match address.checked_add(bytes as u64) {
+            Some(end) if bytes != 0 => end,
+            _ => return self.invalidate(),
+        };
+        let first = address & !(PAGE - 1);
+        let last = (end - 1) & !(PAGE - 1);
+        let (word, bit) = filter_bit(first);
+        let (last_word, last_bit) = filter_bit(last);
+        if self.filter[word] & bit == 0 && self.filter[last_word] & last_bit == 0 {
+            return;
+        }
+        self.calls += 1;
+        for page_address in [Some(first), (last != first).then_some(last)]
+            .into_iter()
+            .flatten()
+        {
+            if self.pages.remove(&page_address).is_some() {
+                self.rewrites += 1;
+                let (word, bit) = filter_bit(page_address);
+                self.filter[word] &= !bit;
+                self.dirty_pages.retain(|&address| address != page_address);
+            }
+        }
         self.last = None;
     }
     /// A slice begins.
@@ -270,6 +312,40 @@ impl CodeShadow {
         // and the range stays inside it; execution is serialized with the
         // read, and the slice is used before the processor runs again.
         Some(unsafe { std::slice::from_raw_parts(host?.as_ptr().add(offset as usize), len) })
+    }
+    /// The 1 KiB pages whose copied bytes are known equal to guest memory now,
+    /// limited to the low 1 MiB the translated guard's bitmap addresses. A
+    /// proven 4 KiB page proves each of its four 1 KiB sub-pages, and the
+    /// guard arms sub-pages. Each page is compared first when something else
+    /// may have written since its copy, so a page that changed behind the
+    /// engine is absent rather than armed.
+    pub(super) fn proven_pages(&mut self, cpu: &dyn Cpu) -> Vec<u64> {
+        if self.unproven || self.changed {
+            return Vec::new();
+        }
+        let epoch = self.epoch;
+        let mut proven = Vec::new();
+        for (&address, page) in self.pages.iter_mut() {
+            if address >= 1 << 20 {
+                continue;
+            }
+            if page.verified != epoch {
+                let scratch = self
+                    .scratch
+                    .get_or_insert_with(|| Box::new([0; PAGE as usize]));
+                if page.differs(cpu, address, scratch) {
+                    continue;
+                }
+                page.verified = epoch;
+            }
+            for offset in [0, 0x400, 0x800, 0xc00] {
+                let sub = address + offset;
+                if sub < 1 << 20 {
+                    proven.push(sub);
+                }
+            }
+        }
+        proven
     }
     /// Touch the pages an instruction at `pc` can occupy, and the page after
     /// its own: a translation that starts in one page ends within the next.

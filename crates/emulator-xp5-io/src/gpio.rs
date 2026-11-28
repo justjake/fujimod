@@ -1,11 +1,17 @@
 //! X-Processor 5 GPIO register/pin state; external levels are body inputs.
-use fujimod_emulator_devices::bus::InterruptLine;
+use fujimod_emulator_devices::bus::{FastReadWord, InterruptLine};
 use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::parts::gpio::{Feedback, InputIrq};
 use fujimod_emulator_devices::xp5::pins::{Pins, SharedPins};
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
+use std::sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
+};
+
+
 
 #[derive(Clone, Copy, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -45,6 +51,8 @@ pub struct Gpio {
     feedback: Vec<Feedback>,
     /// Due tick of each feedback wire's pending rise.
     rising: Vec<Option<u64>>,
+    /// Earliest pending feedback rise tick (`u64::MAX` when none).
+    next_rise_due: Arc<AtomicU64>,
     /// Latching wires whose pad has risen and now stays high.
     held: Vec<bool>,
 }
@@ -78,10 +86,7 @@ impl Gpio {
         // Processor interrupt inputs begin deasserted. An initially active
         // physical level is ready immediately, without waiting for an edge.
         let previous = input_irqs.iter().map(|irq| !irq.active_high).collect();
-        let targets = input_irqs
-            .iter()
-            .map(|irq| InterruptLine::Shared(irq.line))
-            .collect();
+        let targets = input_irqs.iter().map(|irq| InterruptLine::Shared(irq.line)).collect();
         Ok(Self {
             pins,
             base,
@@ -91,22 +96,26 @@ impl Gpio {
             previous,
             feedback: Vec::new(),
             rising: Vec::new(),
+            next_rise_due: Arc::new(AtomicU64::new(u64::MAX)),
             held: Vec::new(),
         })
     }
+    fn publish_next_rise(&self) {
+        let next = self
+            .rising
+            .iter()
+            .flatten()
+            .min()
+            .copied()
+            .unwrap_or(u64::MAX);
+        self.next_rise_due.store(next, Ordering::Release);
+    }
     /// Pads wired to a core's own interrupt inputs (e.g. the companion's NVIC).
-    pub fn with_core_input_irqs(
-        mut self,
-        core: usize,
-        irqs: Vec<InputIrq>,
-    ) -> Result<Self, String> {
+    pub fn with_core_input_irqs(mut self, core: usize, irqs: Vec<InputIrq>) -> Result<Self, String> {
         for irq in irqs {
             irq.validate(20)?;
             self.previous.push(!irq.active_high);
-            self.targets.push(InterruptLine::Core {
-                core,
-                line: irq.line,
-            });
+            self.targets.push(InterruptLine::Core { core, line: irq.line });
             self.input_irqs.push(irq);
         }
         Ok(self)
@@ -128,6 +137,7 @@ impl Gpio {
             }
         }
         self.rising = vec![None; feedback.len()];
+        self.publish_next_rise();
         self.held = vec![false; feedback.len()];
         self.feedback = feedback;
         Ok(self)
@@ -135,11 +145,9 @@ impl Gpio {
     /// Explicit register state at the selected boot handoff. Construction
     /// performs no guest write, pin transition, or interrupt delivery.
     pub fn with_initial_outputs(self, outputs: Vec<InitialOutput>) -> Result<Self, String> {
-        if outputs
-            .iter()
-            .enumerate()
-            .any(|(i, o)| o.port >= 20 || outputs[..i].iter().any(|p| p.port == o.port))
-        {
+        if outputs.iter().enumerate().any(|(i, o)| {
+            o.port >= 20 || outputs[..i].iter().any(|p| p.port == o.port)
+        }) {
             return Err("invalid initial GPIO output ports".into());
         }
         {
@@ -159,9 +167,7 @@ impl Gpio {
             for (i, r) in registers.iter().enumerate() {
                 if r.port >= pins.ports.len()
                     || r.register >= pins.ports[r.port].registers.len()
-                    || registers[..i]
-                        .iter()
-                        .any(|p| (p.port, p.register) == (r.port, r.register))
+                    || registers[..i].iter().any(|p| (p.port, p.register) == (r.port, r.register))
                 {
                     return Err(format!(
                         "invalid initial GPIO register: port {} register {}",
@@ -213,11 +219,8 @@ impl Gpio {
     }
     fn route_inputs(&mut self, cx: &mut Cx<'_>) {
         let pins = self.pins.lock().unwrap();
-        for ((irq, target), previous) in self
-            .input_irqs
-            .iter()
-            .zip(&self.targets)
-            .zip(&mut self.previous)
+        for ((irq, target), previous) in
+            self.input_irqs.iter().zip(&self.targets).zip(&mut self.previous)
         {
             let current = pins.level(irq.port, irq.pin) != 0;
             if current != *previous {
@@ -230,18 +233,14 @@ impl Gpio {
     }
     fn complete_rises(&mut self, now: u64) {
         let mut pins = self.pins.lock().unwrap();
-        for ((wire, rising), held) in self
-            .feedback
-            .iter()
-            .zip(&mut self.rising)
-            .zip(&mut self.held)
-        {
+        for ((wire, rising), held) in self.feedback.iter().zip(&mut self.rising).zip(&mut self.held) {
             if rising.is_some_and(|due| due <= now) {
                 pins.set_input(wire.input_port, wire.input_pin, true);
                 *rising = None;
                 *held = wire.latch_high;
             }
         }
+        self.publish_next_rise();
     }
     fn validate_saved(&self, saved: &Saved) -> Result<(), String> {
         let pins = self.pins.lock().unwrap();
@@ -319,6 +318,68 @@ impl Device for Gpio {
         } else {
             "gpio-ports"
         }
+    }
+    fn fast_reads(&self, window_base: u64, window_size: u64) -> Vec<FastReadWord> {
+        let Some(window_end) = window_base.checked_add(window_size) else {
+            return Vec::new();
+        };
+        let mut words = Vec::new();
+        let mut push_reader =
+            |reg_offset: u64, read_pins: fn(&Pins, usize, usize) -> u32, port: usize, reg: usize| {
+                let Some(address) = self.base.checked_add(reg_offset) else {
+                    return;
+                };
+                let Some(end) = address.checked_add(4) else {
+                    return;
+                };
+                if address < window_base || end > window_end {
+                    return;
+                }
+                let pins = self.pins.clone();
+                let next_rise_due = self.next_rise_due.clone();
+                words.push(FastReadWord::clocked_u32(
+                    address - window_base,
+                    Arc::new(move |now| {
+                        if now >= next_rise_due.load(Ordering::Acquire) {
+                            return None;
+                        }
+                        let pins = pins.lock().ok()?;
+                        Some(read_pins(&pins, port, reg))
+                    }),
+                ));
+            };
+        if self.special {
+            for r in 0..=8 {
+                push_reader(
+                    r as u64 * 4,
+                    |pins, port, reg| pins.ports[port].registers[reg],
+                    3,
+                    r,
+                );
+            }
+            push_reader(0x100, |pins, _, _| pins.special, 0, 0);
+        } else {
+            for p in 0..20 {
+                if p == 3 {
+                    continue;
+                }
+                for r in 0..=8 {
+                    let offset = p as u64 * 0x40 + r as u64 * 4;
+                    if r == 5 {
+                        push_reader(offset, |pins, port, _| pins.word(port), p, r);
+                    } else {
+                        push_reader(
+                            offset,
+                            |pins, port, reg| pins.ports[port].registers[reg],
+                            p,
+                            r,
+                        );
+                    }
+                }
+            }
+            push_reader(0x500, |pins, _, _| u32::from(pins.global), 0, 0);
+        }
+        words
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         let offset = address.wrapping_sub(self.base);
@@ -421,6 +482,7 @@ impl Device for Gpio {
                     }
                 }
             }
+            self.publish_next_rise();
         } else {
             cx.unmodeled();
         }
@@ -470,6 +532,7 @@ impl Device for Gpio {
         *self.pins.lock().unwrap() = pins;
         self.previous = previous;
         self.rising = rising;
+        self.publish_next_rise();
         self.held = held;
         Ok(())
     }
@@ -495,13 +558,12 @@ impl Device for Gpio {
         *self.pins.lock().unwrap() = saved.pins;
         self.previous = saved.previous;
         self.rising = saved.rising;
+        self.publish_next_rise();
         self.held = saved.held;
         Ok(())
     }
     fn fingerprint(&self) -> Result<Value, String> {
-        Ok(
-            json!({"pins":*self.pins.lock().unwrap(), "previous":self.previous, "rising":self.rising, "held":self.held}),
-        )
+        Ok(json!({"pins":*self.pins.lock().unwrap(), "previous":self.previous, "rising":self.rising, "held":self.held}))
     }
 }
 
@@ -510,27 +572,17 @@ mod tests {
     #[test]
     fn initial_output_latches_do_not_emit_edges_or_interrupts() {
         let pins = Pins::shared();
-        let gpio = Gpio::new(0xff907000, pins.clone(), false, Vec::new())
-            .unwrap()
-            .with_initial_outputs(vec![InitialOutput {
-                port: 12,
-                levels: 0x100,
-            }])
+        let gpio = Gpio::new(0xff907000, pins.clone(), false, Vec::new()).unwrap()
+            .with_initial_outputs(vec![InitialOutput { port: 12, levels: 0x100 }])
             .unwrap();
         assert_eq!(pins.lock().unwrap().output_level(12, 8), 1);
         assert_eq!(pins.lock().unwrap().output_level(12, 10), 0);
         assert_eq!(pins.lock().unwrap().output_rising_edges(12, 8), 0);
         let saved = gpio.save();
         assert_eq!(gpio.save(), saved);
-        assert!(
-            Gpio::new(0xff907000, pins, false, Vec::new())
-                .unwrap()
-                .with_initial_outputs(vec![InitialOutput {
-                    port: 20,
-                    levels: 0
-                }])
-                .is_err()
-        );
+        assert!(Gpio::new(0xff907000, pins, false, Vec::new()).unwrap()
+            .with_initial_outputs(vec![InitialOutput {port:20,levels:0}])
+            .is_err());
     }
     use super::*;
     use fujimod_emulator_devices::test_host::recording::RecordingHost;
@@ -540,11 +592,7 @@ mod tests {
         let mut control = Gpio::new(0xff90b000, pins.clone(), true, Vec::new()).unwrap();
         let mut host = RecordingHost::default();
         let mut cx = Cx::new(&mut host, 0, 0, 0);
-        for (offset, value) in [
-            (0u64, 0x0002_0002u64),
-            (4, 0x000f_000f),
-            (0x14, 0x3ff2_3ff2),
-        ] {
+        for (offset, value) in [(0u64, 0x0002_0002u64), (4, 0x000f_000f), (0x14, 0x3ff2_3ff2)] {
             control.write(&mut cx, 0xff90b000 + offset, 4, value);
             assert_eq!(cx.refusal(), None, "{offset:#x}");
         }
@@ -608,11 +656,7 @@ mod tests {
         let pins = Pins::shared();
         let mut gpio = Gpio::new(0xff907000, pins.clone(), false, Vec::new())
             .unwrap()
-            .with_initial_inputs(vec![InitialInput {
-                port: 11,
-                pin: 4,
-                high: false,
-            }])
+            .with_initial_inputs(vec![InitialInput { port: 11, pin: 4, high: false }])
             .unwrap();
         assert_eq!(pins.lock().unwrap().level(11, 4), 0);
         assert_eq!(pins.lock().unwrap().level(11, 3), 1);
@@ -620,35 +664,17 @@ mod tests {
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         assert_eq!(gpio.read(&mut cx, 0xff907000 + 11 * 0x40 + 0x14, 4), 0xffef);
         for invalid in [
-            vec![InitialInput {
-                port: 20,
-                pin: 0,
-                high: true,
-            }],
-            vec![InitialInput {
-                port: 1,
-                pin: 16,
-                high: true,
-            }],
+            vec![InitialInput { port: 20, pin: 0, high: true }],
+            vec![InitialInput { port: 1, pin: 16, high: true }],
             vec![
-                InitialInput {
-                    port: 1,
-                    pin: 2,
-                    high: true,
-                },
-                InitialInput {
-                    port: 1,
-                    pin: 2,
-                    high: false,
-                },
+                InitialInput { port: 1, pin: 2, high: true },
+                InitialInput { port: 1, pin: 2, high: false },
             ],
         ] {
-            assert!(
-                Gpio::new(0xff907000, Pins::shared(), false, Vec::new())
-                    .unwrap()
-                    .with_initial_inputs(invalid)
-                    .is_err()
-            );
+            assert!(Gpio::new(0xff907000, Pins::shared(), false, Vec::new())
+                .unwrap()
+                .with_initial_inputs(invalid)
+                .is_err());
         }
     }
     #[test]
@@ -733,15 +759,7 @@ mod wiring_tests {
 
     #[test]
     fn a_fed_pad_starts_at_its_drive_bit_level() {
-        let wire = Feedback {
-            port: 4,
-            register: 0,
-            bit: 4,
-            input_port: 4,
-            input_pin: 4,
-            rise_delay: 0,
-            latch_high: false,
-        };
+        let wire = Feedback { port: 4, register: 0, bit: 4, input_port: 4, input_pin: 4, rise_delay: 0, latch_high: false };
         // Undeclared pads read high; the wire pulls a low drive bit's pad low.
         let pins = Pins::shared();
         assert_eq!(pins.lock().unwrap().level(4, 4), 1);
@@ -755,10 +773,7 @@ mod wiring_tests {
         pins.lock().unwrap().set_input(4, 4, false);
         Gpio::new(0xff907000, pins.clone(), false, Vec::new())
             .unwrap()
-            .with_initial_outputs(vec![InitialOutput {
-                port: 4,
-                levels: 1 << 4,
-            }])
+            .with_initial_outputs(vec![InitialOutput { port: 4, levels: 1 << 4 }])
             .unwrap()
             .with_feedback(vec![wire])
             .unwrap();
@@ -767,22 +782,9 @@ mod wiring_tests {
 
     #[test]
     fn a_delayed_wire_rises_after_its_delay_and_edges_a_core_irq() {
-        let wire = Feedback {
-            port: 1,
-            register: 0,
-            bit: 14,
-            input_port: 0,
-            input_pin: 4,
-            rise_delay: 1000,
-            latch_high: false,
-        };
+        let wire = Feedback { port: 1, register: 0, bit: 14, input_port: 0, input_pin: 4, rise_delay: 1000, latch_high: false };
         let pins = Pins::shared();
-        let route = InputIrq {
-            port: 0,
-            pin: 4,
-            line: 27,
-            active_high: true,
-        };
+        let route = InputIrq { port: 0, pin: 4, line: 27, active_high: true };
         let mut gpio = Gpio::new(0xff907000, pins.clone(), false, Vec::new())
             .unwrap()
             .with_core_input_irqs(1, vec![route])
@@ -826,13 +828,8 @@ mod wiring_tests {
     #[test]
     fn a_latched_wire_holds_its_pad_high_after_the_first_rise() {
         let wire = Feedback {
-            port: 1,
-            register: 0,
-            bit: 14,
-            input_port: 0,
-            input_pin: 4,
-            rise_delay: 1000,
-            latch_high: true,
+            port: 1, register: 0, bit: 14, input_port: 0, input_pin: 4,
+            rise_delay: 1000, latch_high: true,
         };
         let pins = Pins::shared();
         let mut gpio = Gpio::new(0xff907000, pins.clone(), false, Vec::new())
@@ -942,5 +939,126 @@ mod wiring_tests {
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         ordinary.write(&mut cx, 0xff907014, 4, 0x0001_0001);
         assert!(cx.is_unmodeled());
+    }
+
+    #[test]
+    fn fast_reads_match_device_read_and_decline_on_due_feedback_rise() {
+        use fujimod_emulator_devices::bus::FastReadValue;
+        use std::collections::BTreeMap;
+
+        let wire = Feedback {
+            port: 1,
+            register: 0,
+            bit: 14,
+            input_port: 0,
+            input_pin: 4,
+            rise_delay: 1000,
+            latch_high: false,
+        };
+        let pins = Pins::shared();
+        let base = 0xff90_7000;
+        let mut gpio = Gpio::new(base, pins.clone(), false, Vec::new())
+            .unwrap()
+            .with_feedback(vec![wire])
+            .unwrap();
+        let fast: BTreeMap<u64, Arc<dyn Fn(u64) -> Option<u32> + Send + Sync>> = gpio
+            .fast_reads(base, 0x1000)
+            .into_iter()
+            .map(|word| {
+                let FastReadValue::ClockedU32(read) = word.value else {
+                    panic!("expected ClockedU32 at {:#x}", word.offset);
+                };
+                (word.offset, read)
+            })
+            .collect();
+
+        let mut host = RecordingHost::default();
+        let assert_parity = |gpio: &mut Gpio, host: &mut RecordingHost| {
+            let now = host.now;
+            for offset in (0u64..0x600).step_by(4) {
+                let mut cx = Cx::new(host, 0, 0, 0);
+                let expected = gpio.read(&mut cx, base + offset, 4);
+                if cx.is_unmodeled() {
+                    assert!(!fast.contains_key(&offset), "unmodeled {offset:#x}");
+                } else {
+                    assert_eq!(
+                        fast[&offset](now),
+                        Some(expected as u32),
+                        "offset {offset:#x} at {now}"
+                    );
+                }
+            }
+        };
+        assert_parity(&mut gpio, &mut host);
+
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        gpio.write(&mut cx, base + 0x500, 4, 0x00ff_005a);
+        gpio.write(&mut cx, base + 0x18, 4, 0x1234_5678);
+        assert!(cx.refusal().is_none());
+        drop(cx);
+        assert_parity(&mut gpio, &mut host);
+
+        // Trigger delayed feedback rise due at tick 1100.
+        host.now = 100;
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        gpio.write(&mut cx, base + 0x40, 4, (1 << 30) | (1 << 14));
+        assert!(cx.refusal().is_none());
+        drop(cx);
+        let rising_checkpoint = gpio.checkpoint().unwrap();
+        let rising_json = gpio.save();
+
+        // Before deadline, fast reads succeed; at/after deadline, they decline to owner.
+        assert!(fast[&0x14](1099).is_some());
+        assert_eq!(fast[&0x14](1100), None);
+        assert_eq!(fast[&0x500](1500), None);
+
+        // Advancing completes the rise and re-enables fast reads with the risen pad level.
+        host.now = 1100;
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        gpio.event(&mut cx, 0);
+        drop(cx);
+        assert_parity(&mut gpio, &mut host);
+        assert_eq!(fast[&0x14](1100).unwrap() & (1 << 4), 1 << 4);
+
+        // Restoring JSON and binary checkpoint with pending rise re-arms the deadline guard.
+        gpio.restore(&rising_json).unwrap();
+        assert!(fast[&0x14](1099).is_some());
+        assert_eq!(fast[&0x14](1100), None);
+
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        gpio.event(&mut cx, 0);
+        drop(cx);
+        assert!(fast[&0x14](1100).is_some());
+
+        gpio.restore_checkpoint(&rising_checkpoint).unwrap();
+        assert!(fast[&0x14](1099).is_some());
+        assert_eq!(fast[&0x14](1100), None);
+
+        // Port 3 (special bank) exposes its 9 registers plus +0x100.
+        let special_base = 0xff90_b000;
+        let mut special = Gpio::new(special_base, pins, true, Vec::new()).unwrap();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        special.write(&mut cx, special_base + 0x14, 4, 0x00ff_00a5);
+        special.write(&mut cx, special_base + 0x100, 4, 0xfeed_face);
+        drop(cx);
+        let special_fast: BTreeMap<u64, Arc<dyn Fn(u64) -> Option<u32> + Send + Sync>> = special
+            .fast_reads(special_base, 0x200)
+            .into_iter()
+            .map(|w| {
+                let FastReadValue::ClockedU32(r) = w.value else {
+                    panic!("expected ClockedU32");
+                };
+                (w.offset, r)
+            })
+            .collect();
+        for offset in (0u64..0x200).step_by(4) {
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            let expected = special.read(&mut cx, special_base + offset, 4);
+            if cx.is_unmodeled() {
+                assert!(!special_fast.contains_key(&offset), "special unmodeled {offset:#x}");
+            } else {
+                assert_eq!(special_fast[&offset](0), Some(expected as u32));
+            }
+        }
     }
 }

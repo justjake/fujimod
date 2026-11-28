@@ -11,7 +11,7 @@ use openh264::encoder::{
 use openh264::formats::{RgbaSliceU8, YUVBuffer};
 use serde_json::Value;
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     sync::{Arc, mpsc},
     time::{Duration, Instant},
 };
@@ -21,11 +21,17 @@ const MAX_MESSAGES_PER_TICK: usize = 64;
 const VIDEO_BITS_PER_SECOND: u32 = 3_000_000;
 /// A keyframe at least this often lets a controller recover from loss.
 const KEYFRAME_INTERVAL: Duration = Duration::from_secs(1);
+/// How often controllers hear the camera's speed.
+const METRICS_INTERVAL: Duration = Duration::from_millis(500);
+/// Speed spans about this much wall time, so menus and live view read alike.
+const SPEED_WINDOW: Duration = Duration::from_secs(2);
 
 /// A camera session a desktop window drives: any processor, any host.
 pub trait Run {
     fn session(&self) -> &Session;
     fn session_mut(&mut self) -> &mut Session;
+    /// Guest board ticks in one second of camera time.
+    fn ticks_per_second(&self) -> u64;
     /// Advance the guest by one bounded slice.
     fn step(&mut self) -> Result<(), String>;
     /// Advance the guest about a millisecond while a host waits on a device.
@@ -95,6 +101,8 @@ impl Room {
             sequence: 0,
             catalog: None,
             pending_releases: Vec::new(),
+            pace: None,
+            real_time: None,
         };
         while viewer.joining.is_empty() {
             if abandoned() {
@@ -125,6 +133,8 @@ pub fn serve<R: Run>(
         run.step()?;
         let frames = run.frames()?;
         viewer.show(&frames)?;
+        viewer.publish_metrics(&run);
+        viewer.hold_to_real_time(&run);
     }
     run.finish()
 }
@@ -175,6 +185,16 @@ pub struct Viewer {
     catalog: Option<String>,
     /// Buttons whose last holder left, released before the next command.
     pending_releases: Vec<String>,
+    pace: Option<Pace>,
+    /// Wall time and guest tick from which a real-time run is held to the clock.
+    real_time: Option<(Instant, u64)>,
+}
+
+/// Guest ticks sampled against wall time.
+struct Pace {
+    started: (Instant, u64),
+    samples: VecDeque<(Instant, u64)>,
+    published: Instant,
 }
 
 impl Viewer {
@@ -362,6 +382,51 @@ impl Viewer {
         Ok(())
     }
 
+    /// In real time, wait while the guest is ahead of the wall clock, at most a frame.
+    fn hold_to_real_time(&mut self, run: &dyn Run) {
+        let Some((wall, start)) = self.real_time else { return };
+        let rate = run.ticks_per_second().max(1) as f64;
+        let ahead = run.session().board.now().saturating_sub(start) as f64 / rate
+            - wall.elapsed().as_secs_f64();
+        if ahead > 0.0 {
+            std::thread::sleep(Duration::from_secs_f64(ahead.min(1.0 / 60.0)));
+        }
+    }
+
+    /// Send each controller the camera's speed against real time.
+    pub fn publish_metrics(&mut self, run: &dyn Run) {
+        let (now, ticks) = (Instant::now(), run.session().board.now());
+        let pace = self.pace.get_or_insert_with(|| Pace {
+            started: (now, ticks),
+            samples: VecDeque::from([(now, ticks)]),
+            published: now,
+        });
+        if now.duration_since(pace.published) < METRICS_INTERVAL {
+            return;
+        }
+        pace.published = now;
+        pace.samples.push_back((now, ticks));
+        while pace.samples.len() > 2 && now.duration_since(pace.samples[1].0) >= SPEED_WINDOW {
+            pace.samples.pop_front();
+        }
+        let rate = run.ticks_per_second().max(1) as f64;
+        let ratio = |(wall, guest): (Instant, u64)| {
+            let elapsed = now.duration_since(wall).as_secs_f64();
+            if elapsed > 0.0 { ticks.saturating_sub(guest) as f64 / rate / elapsed } else { 0.0 }
+        };
+        let event = Event::Metrics {
+            guest_ticks: ticks,
+            virtual_seconds: ticks.saturating_sub(pace.started.1) as f64 / rate,
+            wall_seconds: now.duration_since(pace.started.0).as_secs_f64(),
+            speed: ratio(pace.samples[0]),
+            average_speed: ratio(pace.started),
+        };
+        let Ok(text) = event.json() else { return };
+        for index in 0..self.controllers.len() {
+            self.send_text(index, text.clone());
+        }
+    }
+
     fn publish_state(&mut self, session: &Session) {
         let Ok(Some(catalog)) = self.catalog(session) else {
             return;
@@ -481,6 +546,14 @@ impl Viewer {
                 let (node, script) =
                     session.touch_input(string(&args, "id")?, string(&args, "phase")?, x, y)?;
                 session.touch(&node, &script)?;
+                Ok(Value::Null)
+            }
+            "real_time" => {
+                let on = args
+                    .get("on")
+                    .and_then(Value::as_bool)
+                    .ok_or("on must be a boolean")?;
+                self.real_time = on.then(|| (Instant::now(), session.board.now()));
                 Ok(Value::Null)
             }
             "close" => Ok(Value::Null),

@@ -2,9 +2,10 @@
 //!
 //! A Vm is one physical address space. Its Core values remain thread-affine;
 //! callbacks execute on their owner, never on a native vCPU worker. Exact mode
-//! uses host time only to cancel execution. Interactive progress is host
-//! nanoseconds, and guest CNTVCT/CNTV use the host's native virtual counter and
-//! timer.
+//! uses host time only to cancel execution. Interactive progress charges
+//! native execution time in guest nanoseconds, optionally scaled by
+//! `FUJIMOD_HVF_TIME_SCALE`. The native virtual counter is anchored to the
+//! declared guest clock at interactive segment entry.
 #![cfg(all(target_os = "macos", target_arch = "aarch64"))]
 
 mod ffi;
@@ -569,6 +570,17 @@ impl Cpu for Core {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(clock);
         Ok(())
     }
+    fn set_fast_counters(&self, counters: Option<FastCounters>) -> Result<(), String> {
+        if self.running.get() {
+            return Err("fast counters require a stopped processor".into());
+        }
+        *self
+            .shared
+            .fast_counters
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = counters;
+        Ok(())
+    }
     fn exclusive_domain(&self) -> Option<fujimod_emulator_cpu::exclusive::Shared> {
         Some(self.machine.monitors.clone())
     }
@@ -581,8 +593,6 @@ impl Cpu for Core {
     fn features(&self) -> Features {
         Features {
             asynchronous_runs: true,
-            // The anchor clocks device-published reads only; guest counters
-            // keep using the host's native virtual counter.
             guest_clock: true,
             instruction_limit: true,
             shared_physical_maps: true,

@@ -1,9 +1,18 @@
 //! XP5 15-channel ADC sequencer. External resistor values are explicit inputs.
+use fujimod_emulator_devices::bus::FastReadWord;
 use fujimod_emulator_devices::{Cx, Device, parts::analog::Samples};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::sync::{
+    Arc,
+    atomic::{AtomicU32, Ordering},
+};
 
 pub const BASE: u64 = 0xff906000;
+/// Register offsets served from mirrors without a device call. The sample
+/// channels (`0x10..=0x48`) are not mirrored: their levels are shared with
+/// other devices, which can change them without a register write here.
+const MIRRORED: [u64; 7] = [0, 4, 8, 0xc, 0x4c, 0x50, 0x54];
 #[derive(Clone, Serialize, Deserialize)]
 struct Registers {
     enable: u32,
@@ -26,6 +35,7 @@ pub struct Adc {
     /// Host overrides of the idle samples (`XT5_ADC`), read in place of `state.samples`. They are
     /// kept outside the checkpointed state and the manifest, so a snapshot loads with any value.
     overrides: [Option<u16>; 15],
+    mirrors: [Arc<AtomicU32>; MIRRORED.len()],
 }
 
 /// Parse `XT5_ADC="CHANNEL=SAMPLE,..."`: idle samples that replace the manifest's for this run,
@@ -67,7 +77,7 @@ impl Adc {
             Ok(spec) => parse_overrides(&spec)?,
             Err(_) => [None; 15],
         };
-        Ok(Self {
+        let adc = Self {
             registers: Registers {
                 enable: 0,
                 config: [0; 2],
@@ -77,7 +87,28 @@ impl Adc {
             },
             samples: Samples::new(samples.to_vec())?,
             overrides,
-        })
+            mirrors: std::array::from_fn(|_| Arc::new(AtomicU32::new(0))),
+        };
+        adc.publish_mirrors();
+        Ok(adc)
+    }
+
+    fn register(&self, offset: u64) -> u32 {
+        match offset {
+            0 => self.registers.enable,
+            4 | 8 => self.registers.config[(offset / 4 - 1) as usize],
+            0xc => self.registers.ack,
+            0x4c => self.registers.mask,
+            0x50 => 8,
+            0x54 => self.registers.timing,
+            _ => unreachable!("ADC register {offset:#x} is not mirrored"),
+        }
+    }
+
+    fn publish_mirrors(&self) {
+        for (mirror, offset) in self.mirrors.iter().zip(MIRRORED) {
+            mirror.store(self.register(offset), Ordering::Release);
+        }
     }
 
     pub fn external_samples(&self) -> Samples {
@@ -106,6 +137,7 @@ impl Adc {
         Self::validate_state(&state)?;
         self.samples.replace(&state.samples)?;
         self.registers = state.registers;
+        self.publish_mirrors();
         Ok(())
     }
 }
@@ -143,6 +175,20 @@ impl Device for Adc {
     fn name(&self) -> &'static str {
         "adc-sequencer-input"
     }
+    fn fast_reads(&self, window_base: u64, window_size: u64) -> Vec<FastReadWord> {
+        let Some(window_end) = window_base.checked_add(window_size) else {
+            return Vec::new();
+        };
+        self.mirrors
+            .iter()
+            .zip(MIRRORED)
+            .filter_map(|(mirror, offset)| {
+                let address = BASE.checked_add(offset)?;
+                (address >= window_base && address.checked_add(4)? <= window_end)
+                    .then(|| FastReadWord::atomic_u32(address - window_base, mirror.clone()))
+            })
+            .collect()
+    }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         let offset = address.wrapping_sub(BASE);
         if size != 4 || offset & 3 != 0 {
@@ -150,18 +196,13 @@ impl Device for Adc {
             return 0;
         }
         match offset {
-            0 => self.registers.enable as u64,
-            4 | 8 => self.registers.config[(offset / 4 - 1) as usize] as u64,
-            0xc => self.registers.ack as u64,
+            0 | 4 | 8 | 0xc | 0x4c | 0x50 | 0x54 => u64::from(self.register(offset)),
             0x10..=0x48 => {
                 let n = ((offset - 0x10) / 4) as usize;
                 self.overrides[n]
                     .unwrap_or_else(|| self.samples.get(n).expect("XP5 ADC has 15 channels"))
                     as u64
             }
-            0x4c => self.registers.mask as u64,
-            0x50 => 8,
-            0x54 => self.registers.timing as u64,
             _ => {
                 cx.unmodeled();
                 0
@@ -193,6 +234,7 @@ impl Device for Adc {
             }
             _ => cx.unmodeled(),
         }
+        self.publish_mirrors();
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &self.snapshot())
@@ -273,6 +315,43 @@ mod tests {
         assert_eq!(encoder_levels.get(11).unwrap(), 3439);
         assert_eq!(adc.save()["adc"]["samples"][8], 0);
         assert_eq!(adc.save()["adc"]["enable"], 0);
+    }
+
+    #[test]
+    fn fast_reads_match_register_reads_and_leave_samples_to_the_device() {
+        let mut adc = Adc::new([4095; 15]).unwrap();
+        let fast: std::collections::BTreeMap<u64, Arc<AtomicU32>> = adc
+            .fast_reads(BASE, 0x100)
+            .into_iter()
+            .map(|word| {
+                let fujimod_emulator_devices::bus::FastReadValue::AtomicU32(atom) = word.value
+                else {
+                    panic!("expected AtomicU32 at {:#x}", word.offset);
+                };
+                (word.offset, atom)
+            })
+            .collect();
+        assert_eq!(fast.keys().copied().collect::<Vec<_>>(), MIRRORED);
+        let mut host = RecordingHost::default();
+        let check = |adc: &mut Adc, host: &mut RecordingHost| {
+            for offset in MIRRORED {
+                let mut cx = Cx::new(host, 0, 0, 0);
+                let expected = adc.read(&mut cx, BASE + offset, 4);
+                assert_eq!(u64::from(fast[&offset].load(Ordering::Acquire)), expected);
+            }
+        };
+        check(&mut adc, &mut host);
+        for (offset, value) in [(0, 1), (4, 0x55), (8, 0xaa), (0xc, 0), (0x4c, 0x7fff), (0x54, 9)] {
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            adc.write(&mut cx, BASE + offset, 4, value);
+            check(&mut adc, &mut host);
+        }
+        let saved = adc.checkpoint().unwrap();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        adc.write(&mut cx, BASE + 4, 4, 0);
+        adc.restore_checkpoint(&saved).unwrap();
+        check(&mut adc, &mut host);
+        assert_eq!(fast[&4].load(Ordering::Acquire), 0x55);
     }
 
     #[test]
