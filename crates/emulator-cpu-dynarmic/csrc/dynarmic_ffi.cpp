@@ -5,6 +5,7 @@
 #include "dynarmic/interface/exclusive_monitor.h"
 #include "dynarmic/frontend/A32/a32_ir_emitter.h"
 #include "dynarmic/ir/basic_block.h"
+#include "dynarmic/ir/cond.h"
 #include <memory>
 #include <array>
 #include <cstring>
@@ -226,7 +227,7 @@ bool UserCallbacksImpl::PreCodeReadHook(bool thumb, VAddr pc, IREmitter& ir) {
         return true;
     };
     uint32_t kind = word ? callbacks.batch_instruction(*word) : 0;
-    if (kind >= 4 && (instance->jit->Cpsr() & 31) == 0x10) kind = 0;
+    if (kind >= 4 && kind <= 6 && (instance->jit->Cpsr() & 31) == 0x10) kind = 0;
     if (!entry) {
         if (pc - start.PC() < max_block_instructions * 4) {
             if (kind == 1) return consume_word();
@@ -258,7 +259,14 @@ bool UserCallbacksImpl::PreCodeReadHook(bool thumb, VAddr pc, IREmitter& ir) {
             ir.Imm64(reinterpret_cast<uintptr_t>(this)), ir.Imm64(*word),
             ir.ZeroExtendWordToLong(ir.GetRegister(reg)));
     }
-    if (kind != 0) {
+    if (kind == 7) {
+        // Fall-through retires the branch in the JIT. A taken back edge
+        // exits with no ticks so the caller can try to accelerate the loop.
+        ir.current_location = ir.current_location.AdvancePC(4);
+        ir.block.SetCondition(Dynarmic::IR::Cond::GE);
+        ir.block.SetConditionFailedLocation(ir.current_location);
+        ir.block.ConditionFailedCycleCount() = 1;
+    } else if (kind != 0) {
         compiled_multiple_transfer = kind == 3;
         return consume_word();
     }

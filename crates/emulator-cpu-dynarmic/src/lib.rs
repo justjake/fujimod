@@ -70,7 +70,15 @@ extern "C" fn batch_instruction(word: u32) -> u32 {
     let writeback = body & (1 << 21) != 0;
     let unconditional = word >> 28 == 14;
     match (body >> 25) & 7 {
-        5 => u32::from(word >> 28 != 10),
+        5 => {
+            if word >> 28 != 10 {
+                1
+            } else if body & 0x0180_0000 == 0x0080_0000 {
+                7
+            } else {
+                0
+            }
+        }
         2 | 3 => {
             let register_shift = body & (1 << 25) != 0 && body & 16 != 0;
             if !writeback && !register_shift && (pre || (rn != 15 && rd != 15)) {
@@ -3088,6 +3096,42 @@ mod tests {
             assert_eq!(core.instruction_progress(), Some(2));
             assert_eq!(unsafe { ffi::dynarmic_get_reg(core.inst, 0) }, expected);
             assert_eq!(unsafe { ffi::dynarmic_get_reg(core.inst, 15) }, 0x1008);
+        }
+    }
+
+    #[test]
+    fn native_backward_branch_counts_taken_and_fallthrough_paths() {
+        let core = Core::new(Model::CortexA7).unwrap();
+        core.map_zeroed(0x1000, 4096, 7).unwrap();
+        for (offset, word) in [
+            (0, 0xe280_0001u32), // add r0, r0, #1
+            (4, 0xaaff_fffd),    // bge 0x1000
+            (8, 0xe280_0002),    // add r0, r0, #2
+            (12, 0xeaff_fffe),   // b .
+        ] {
+            core.write_memory(0x1000 + offset, &word.to_le_bytes())
+                .unwrap();
+        }
+        for (cpsr, expected_pc, expected_value) in
+            [(0x0000_00d3, 0x1004, 1), (0x8000_00d3, 0x100c, 2)]
+        {
+            core.set_cpsr(cpsr).unwrap();
+            core.write_register(arm::CORE[0], &0u32.to_le_bytes())
+                .unwrap();
+            core.set_loop_window(true).unwrap();
+            core.run(Run {
+                begin: 0x1004,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(2),
+            })
+            .unwrap();
+            assert_eq!(core.instruction_progress(), Some(2));
+            assert_eq!(
+                unsafe { ffi::dynarmic_get_reg(core.inst, 0) },
+                expected_value
+            );
+            assert_eq!(unsafe { ffi::dynarmic_get_reg(core.inst, 15) }, expected_pc);
         }
     }
 
