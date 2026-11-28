@@ -4554,7 +4554,8 @@ mod tests {
         let code = [0x9100_0400u32, 0x9100_0400, 0x17ff_fffe]; // add; add; b .
         let bytes: Vec<_> = code.into_iter().flat_map(u32::to_le_bytes).collect();
         cpu.write_memory(address, &bytes).unwrap();
-        let budget = 50_000_000usize;
+        // Far more than a fast host retires before the pause arrives.
+        let budget = 50_000_000_000usize;
         let run = cpu
             .start_run(Run {
                 begin: address,

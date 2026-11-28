@@ -759,6 +759,7 @@ fn m4_atomic_fast_reads_bypass_board_callbacks_in_interactive_mode_only() {
         let graph = Graph {
             decoders: vec![],
             processors: vec![Processor {
+                cpu_backend: Default::default(),
                 model: Model::CortexM4,
                 registers: vec![],
                 released: true,

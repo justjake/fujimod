@@ -887,6 +887,7 @@ fn single_m4_board(blocks: bool, program: &[u16], stack: u32) -> Board {
     let graph = Graph {
         decoders: vec![],
         processors: vec![Processor {
+            cpu_backend: Default::default(),
             model: Model::CortexM4,
             registers: vec![],
             released: true,
@@ -1375,6 +1376,7 @@ fn refused_multi_load_reads_a_device_exactly_once_in_both_modes() {
         let graph = Graph {
             decoders: vec![],
             processors: vec![Processor {
+                cpu_backend: Default::default(),
                 model: Model::CortexM4,
                 registers: vec![],
                 released: true,
@@ -1525,6 +1527,7 @@ fn inline_pop_never_replays_a_device_read() {
         let graph = Graph {
             decoders: vec![],
             processors: vec![Processor {
+                cpu_backend: Default::default(),
                 model: Model::CortexM4,
                 registers: vec![],
                 released: true,

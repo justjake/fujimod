@@ -79,6 +79,7 @@ pub struct Options {
     translation_cache_size_bytes: Option<u32>,
     epoch: Option<(u64, Vec<u64>)>,
     ram_fill: Option<u8>,
+    unicorn_workers: Option<bool>,
 }
 
 impl Options {
@@ -88,6 +89,7 @@ impl Options {
             translation_cache_size_bytes: None,
             epoch: None,
             ram_fill: None,
+            unicorn_workers: None,
         }
     }
 
@@ -106,6 +108,13 @@ impl Options {
     /// Set a smaller cache for focused tests.
     pub fn with_translation_cache_size_bytes(mut self, bytes: u32) -> Self {
         self.translation_cache_size_bytes = Some(bytes);
+        self
+    }
+
+    /// Run a Unicorn XP5 board's cores on worker threads in concurrent
+    /// windows, instead of `FUJIMOD_UNICORN_WORKERS` deciding.
+    pub fn with_unicorn_workers(mut self, on: bool) -> Self {
+        self.unicorn_workers = Some(on);
         self
     }
 }
@@ -196,14 +205,14 @@ pub(super) struct Engines {
 /// Silicon host, the worker arrangement took 139.7k interactive windows against
 /// 31.7k inlined, with a 641 us mean window instead of 184 us.
 ///
-/// On the Unicorn engine every core is a worker that the owner starts and
-/// waits on, so concurrency is a two-way win when the host can run the threads
-/// side by side. Below four hardware threads the five workers thrash their
-/// futexes and spend more host time in the kernel than in the guest; there the
-/// inlined cores interleave more cheaply. `FUJIMOD_UNICORN_WORKERS` forces
-/// either choice for benchmarking and for hosts whose thread count does not
-/// describe their available capacity.
-fn unicorn_workers(graph: &Graph, engine: RunEngine) -> bool {
+/// On the Unicorn engine workers are opt-in, through
+/// [`Options::with_unicorn_workers`] or `FUJIMOD_UNICORN_WORKERS=1`. Their
+/// concurrent cohort windows let cores drift up to a whole window apart, so a
+/// lagging core reads devices at a peer's time: on xt5-431 the M4 is never
+/// released. Concurrency is also not a measured win yet: below four hardware
+/// threads the workers thrash their futexes. Serialized slices stay the default
+/// until a measurement shows otherwise.
+fn unicorn_workers(graph: &Graph, options: &Options) -> bool {
     let one_m4_companion = graph
         .processors
         .iter()
@@ -211,8 +220,11 @@ fn unicorn_workers(graph: &Graph, engine: RunEngine) -> bool {
         .count()
         == 1
         && graph.processors.iter().any(|p| p.model == Model::ArmV8A);
-    if !one_m4_companion || engine != RunEngine::Unicorn {
+    if !one_m4_companion || options.engine != RunEngine::Unicorn {
         return false;
+    }
+    if let Some(on) = options.unicorn_workers {
+        return on;
     }
     match std::env::var("FUJIMOD_UNICORN_WORKERS").ok().as_deref() {
         Some("0") => false,
@@ -221,8 +233,6 @@ fn unicorn_workers(graph: &Graph, engine: RunEngine) -> bool {
             debug_assert!(false, "unexpected FUJIMOD_UNICORN_WORKERS={other}");
             false
         }
-        // Concurrent cores stay opt-in until a measurement shows they pay:
-        // the cohort window path is slower and diverges today.
         None => false,
     }
 }
@@ -264,7 +274,7 @@ impl Engines {
             ))]
             dynarmic_code: Default::default(),
             #[cfg(not(target_os = "emscripten"))]
-            unicorn_workers: unicorn_workers(graph, options.engine),
+            unicorn_workers: unicorn_workers(graph, options),
             #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
             hypervisor,
         })

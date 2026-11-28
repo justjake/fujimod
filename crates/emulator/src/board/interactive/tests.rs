@@ -665,6 +665,7 @@ fn mixed_board(policy: ExecutionPolicy, bus: Bus, m4_registers: &[(Register, u64
                 registers.extend_from_slice(m4_registers);
             }
             factory::Processor {
+                cpu_backend: Default::default(),
                 model,
                 registers,
                 released: true,
@@ -702,7 +703,9 @@ fn mixed_board(policy: ExecutionPolicy, bus: Bus, m4_registers: &[(Register, u64
         instructions_per_tick: Ratio::new(1, 1).unwrap(),
     }
     .build(
-        factory::Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1 << 20),
+        factory::Options::new(RunEngine::Unicorn)
+            .with_translation_cache_size_bytes(1 << 20)
+            .with_unicorn_workers(true),
         bus,
         None,
     )
