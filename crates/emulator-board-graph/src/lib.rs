@@ -162,7 +162,7 @@ fn build_processor(
         .transpose()?;
     Ok(factory::Processor {
         model,
-        cpu_backend: if model == Model::CortexA7 {
+        cpu_backend: if matches!(model, Model::CortexA7 | Model::CortexR5F) {
             cpu_backend
         } else {
             RunCpuBackend::Unicorn
@@ -268,12 +268,14 @@ pub fn assemble_with_starts(
     let soc = &selection.soc;
     let body = &selection.body;
     if cpu_backend == RunCpuBackend::Dynarmic
-        && !soc
-            .processors
-            .iter()
-            .any(|p| p.model == ProcessorModel::CortexA7)
+        && !soc.processors.iter().any(|p| {
+            matches!(
+                p.model,
+                ProcessorModel::CortexA7 | ProcessorModel::CortexR5f
+            )
+        })
     {
-        return Err("cpu_backend=dynarmic requires a Cortex-A7 processor".into());
+        return Err("cpu_backend=dynarmic requires a Cortex-A7 or Cortex-R5F processor".into());
     }
     if dram_address_space_limit_bytes == 0 || !dram_address_space_limit_bytes.is_multiple_of(4096) {
         return Err("DRAM address-space limit must be positive and page-aligned".into());

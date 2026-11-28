@@ -619,7 +619,9 @@ fn run_exr2(
     let screenshot = boot_options.path("--screenshot");
     let limit = boot_options.instruction_limit()?.unwrap_or(2_000_000_000);
     let pc_trace = boot_options.pc_trace()?;
-    let execution_policy = boot_options.execution_policy(pc_trace.is_some())?;
+    let cpu_backend = resolved.configuration.cpu_backend();
+    let execution_policy = boot_options
+        .execution_policy(pc_trace.is_some() || cpu_backend == RunCpuBackend::Dynarmic)?;
     let mode = boot::discovery_mode(boot_options.discovery);
     let stubs = boot_options
         .stubs
@@ -727,6 +729,7 @@ fn run_exr2(
         boot::save_snapshot(&session, &path)?;
     }
     let mut receipt = serde_json::to_value(&report).map_err(|error| error.to_string())?;
+    receipt["cpu_backend"] = serde_json::json!(cpu_backend);
     if let Some(loaded) = loaded_mod {
         receipt["mod"] = loaded.report(&boot::mod_loader::BoardMachine(&session.board));
     }

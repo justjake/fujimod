@@ -358,10 +358,14 @@ pub fn validate_selection(
 
     if configuration.cpu_backend() == RunCpuBackend::Dynarmic
         && !selection.soc.processors.iter().any(|processor| {
-            processor.model == fujimod_catalog::reference::ProcessorModel::CortexA7
+            use fujimod_catalog::reference::ProcessorModel;
+            matches!(
+                processor.model,
+                ProcessorModel::CortexA7 | ProcessorModel::CortexR5f
+            )
         })
     {
-        return Err("cpu_backend=dynarmic requires a Cortex-A7 processor".into());
+        return Err("cpu_backend=dynarmic requires a Cortex-A7 or Cortex-R5F processor".into());
     }
 
     if selection.body.dram_bytes.is_none() && configuration.dram_address_space.is_none() {

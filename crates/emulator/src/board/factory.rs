@@ -236,6 +236,7 @@ impl Engines {
     }
     fn cpu(
         &self,
+        core_index: usize,
         processor: &Processor,
         options: &Options,
         translation_cache_size_bytes: u32,
@@ -249,18 +250,52 @@ impl Engines {
                 any(target_arch = "aarch64", target_arch = "x86_64"),
                 any(target_os = "linux", target_os = "macos")
             ))]
-            return Ok(Box::new(
-                fujimod_emulator_cpu_dynarmic::Core::new_with_code_visibility(
-                    model,
-                    self.dynarmic_code.clone(),
-                )?,
-            ));
+            {
+                use fujimod_emulator_cpu_dynarmic::{Core, RProfileConfig};
+                let visibility = self.dynarmic_code.clone();
+                if let Some(config) = &processor.rprofile {
+                    if config
+                        .data_cache
+                        .as_ref()
+                        .is_some_and(|cache| !cache.checked.is_empty())
+                    {
+                        return Err(
+                            "Dynarmic cannot model declared Cortex-R data-cache coherence checks"
+                                .into(),
+                        );
+                    }
+                    let core = Core::new_rprofile(
+                        RProfileConfig {
+                            core_index,
+                            tcm: config.tcm,
+                            high_vectors: config.high_vectors,
+                            cp14_identity: config.cp14_identity,
+                        },
+                        visibility,
+                    )?;
+                    if let Some(cache) = &config.data_cache {
+                        core.set_cache_ids([cache.geometry().ccsidr(), 0, 0]);
+                    }
+                    let monitors = memory.exclusive_domain();
+                    let owner = monitors
+                        .lock()
+                        .map_err(|_| "exclusive monitors poisoned")?
+                        .register(4)?;
+                    core.set_armv7a_exclusive_context(monitors, owner);
+                    core.set_armv7a_owner_exclusives(true)?;
+                    return Ok(Box::new(core));
+                }
+                return Ok(Box::new(Core::new_with_code_visibility(model, visibility)?));
+            }
             #[cfg(not(all(
                 feature = "dynarmic",
                 any(target_arch = "aarch64", target_arch = "x86_64"),
                 any(target_os = "linux", target_os = "macos")
             )))]
-            return Err(dynarmic_unavailable());
+            {
+                let _ = core_index;
+                return Err(dynarmic_unavailable());
+            }
         }
         if model == Model::ArmV8A && matches!(options.engine, RunEngine::Hypervisor) {
             #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
@@ -390,8 +425,10 @@ impl Graph {
                 .iter()
                 .filter(|processor| processor.cpu_backend == RunCpuBackend::Dynarmic)
         };
-        if dynarmic().any(|processor| processor.model != Model::CortexA7) {
-            return Err("cpu_backend=dynarmic requires a Cortex-A7 processor".into());
+        if dynarmic()
+            .any(|processor| !matches!(processor.model, Model::CortexA7 | Model::CortexR5F))
+        {
+            return Err("cpu_backend=dynarmic requires a Cortex-A7 or Cortex-R5F processor".into());
         }
         #[cfg(not(all(
             feature = "dynarmic",
@@ -575,8 +612,10 @@ impl Graph {
         let cpus = self
             .processors
             .iter()
-            .map(|p| {
+            .enumerate()
+            .map(|(core_index, p)| {
                 engines.cpu(
+                    core_index,
                     p,
                     &options,
                     translation_cache_size_bytes,
