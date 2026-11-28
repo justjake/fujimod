@@ -2,7 +2,7 @@ use super::*;
 use fujimod_catalog::{
     capture::{
         FLASH_SCHEMA_URI, FlashCodeRange, FlashControl, FlashDevice, FlashRange, FlashReader,
-        FlashStateCheck, FlashUpdateImage,
+        FlashReaderScratch, FlashStateCheck, FlashUpdateImage,
     },
     reference::ContentIdentity,
 };
@@ -194,6 +194,7 @@ fn fixture() -> Fixture {
             symbol: STOCK_SYMBOL.into(),
             alignment: 32,
             nand: None,
+            scratch: None,
         }),
         transport: Some("xp4-camera-code".into()),
         code_ranges: vec![FlashCodeRange {
@@ -391,6 +392,14 @@ fn stock_fixture() -> Fixture {
         symbol: STOCK_SYMBOL.into(),
         alignment: 128,
         nand: None,
+        scratch: Some(FlashReaderScratch {
+            state: FlashRange {
+                address: BSS + 0x80,
+                size: 0x60,
+            },
+            pointer: BSS + 0x80 + 0x38,
+            size: BSS + 0x80 + 0x14,
+        }),
     });
     flash.transport = Some(super::super::xp4_stock::TRANSPORT.into());
     flash.control = FlashControl {
@@ -413,6 +422,7 @@ fn stock_fixture() -> Fixture {
     let Some(RequestTransport::BorrowedQuery {
         callback_table,
         stock_callback,
+        forward,
         ..
     }) = restart.mechanism.transport.as_mut()
     else {
@@ -420,12 +430,21 @@ fn stock_fixture() -> Fixture {
     };
     *callback_table = TABLE;
     *stock_callback = callback;
-    restart.code_checks = vec![fujimod_catalog_bulk::CodeCheck {
-        name: "query callback".into(),
-        address: callback,
-        size: CALLBACK_SIZE,
-        sha256: "0".repeat(64),
-    }];
+    *forward = Some(SOURCE);
+    restart.code_checks = vec![
+        fujimod_catalog_bulk::CodeCheck {
+            name: "query callback".into(),
+            address: callback,
+            size: CALLBACK_SIZE,
+            sha256: "0".repeat(64),
+        },
+        fujimod_catalog_bulk::CodeCheck {
+            name: "query forwarder".into(),
+            address: SOURCE,
+            size: 0x20,
+            sha256: "0".repeat(64),
+        },
+    ];
     fixture.selected.flash = Some(flash.clone());
     fixture.selected.bulk = Some(fixture.bulk.clone());
     fixture.selected.restart = Some(restart);
@@ -454,6 +473,10 @@ fn stock_query_stages_metadata_from_the_flash_and_restart_facts() {
         sha256(&[0xa5; CALLBACK_SIZE as usize]),
         "the callback hash comes from the update, not the restart document"
     );
+    assert_eq!(
+        payload.callback.checks[1].address, SOURCE,
+        "every restart code check is kept, including the forwarder"
+    );
     assert_eq!(payload.checks.len(), 1);
     assert_eq!(payload.update_size, UNIT_BYTES as u64);
 }
@@ -475,6 +498,17 @@ fn stock_query_needs_the_restart_query_callback() {
         .clear();
     let error = prepare(&fixture.input, &fixture.selected).unwrap_err();
     assert!(error.to_string().contains("not checked"), "{error}");
+
+    let mut fixture = stock_fixture();
+    fixture
+        .selected
+        .restart
+        .as_mut()
+        .unwrap()
+        .code_checks
+        .truncate(1);
+    let error = prepare(&fixture.input, &fixture.selected).unwrap_err();
+    assert!(error.to_string().contains("forwarder"), "{error}");
 }
 
 #[test]

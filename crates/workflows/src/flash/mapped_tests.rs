@@ -59,6 +59,7 @@ fn no_window() -> FirmwareFlash {
         symbol: "flash_read".into(),
         alignment: 1,
         nand: None,
+        scratch: None,
     });
     flash.code_ranges = vec![FlashCodeRange {
         name: "flash_read".into(),

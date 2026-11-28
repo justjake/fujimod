@@ -19,6 +19,9 @@ const TABLE: u32 = 0x1100;
 const TABLE_BASE: u32 = 0x2000;
 const SLOT: u32 = TABLE_BASE + 12;
 const STOCK_CALLBACK: u32 = 0x0020_6c00;
+const CALLBACK_CODE: [u8; 0x20] = [9; 0x20];
+const SCRATCH: u32 = 0x30000;
+const SCRATCH_SIZE: u32 = 0x1000;
 const BASE: u32 = 0x10000;
 const WINDOW: u32 = 0xf000_0000;
 const WINDOW_SIZE: u32 = 0x1200;
@@ -76,6 +79,14 @@ fn fixture() -> (FirmwareBulk, FirmwareFlash, Payload) {
             symbol: "stock flash reader".into(),
             alignment: 128,
             nand: None,
+            scratch: Some(FlashReaderScratch {
+                state: FlashRange {
+                    address: u64::from(DRIVER),
+                    size: 0x60,
+                },
+                pointer: u64::from(DRIVER + 0x38),
+                size: u64::from(DRIVER + 0x14),
+            }),
         }),
         transport: Some(TRANSPORT.into()),
         code_ranges: vec![FlashCodeRange {
@@ -105,7 +116,11 @@ fn fixture() -> (FirmwareBulk, FirmwareFlash, Payload) {
             table: u64::from(TABLE),
             offset: 12,
             original: STOCK_CALLBACK,
-            checks: Vec::new(),
+            checks: vec![CodeCheck {
+                address: u64::from(STOCK_CALLBACK),
+                size: CALLBACK_CODE.len() as u64,
+                sha256: hex(&CALLBACK_CODE),
+            }],
         },
         checks: vec![CodeCheck {
             address: u64::from(READER),
@@ -187,11 +202,57 @@ fn saved() -> Vec<u8> {
     vec![0x5a; BORROWED_BYTES as usize]
 }
 
-fn preflight() -> Vec<E> {
+/// A RAM configuration read, or a write when `writing`, of the debug gate.
+fn gate(value: u8, writing: bool) -> Vec<E> {
+    use fujimod_usb::ff80::commands::configuration::{
+        ConfigurationLocation, ReadConfiguration, WriteConfiguration,
+    };
+    let location = ConfigurationLocation {
+        view: ConfigurationView::Ram,
+        page: 0,
+        offset: DEBUG_GATE,
+    };
+    let request = if writing {
+        WriteConfiguration::new(location, vec![value], limits().configuration)
+            .unwrap()
+            .encode()
+    } else {
+        ReadConfiguration::new(location, NonZeroU32::MIN, limits().configuration)
+            .unwrap()
+            .encode()
+    };
+    let mut reply = request[..36].to_vec();
+    if !writing {
+        reply.push(value);
+    }
+    let maximum = reply.len();
+    exchange_max(request, reply, maximum)
+}
+
+/// Identity, an open debug gate, code, driver state and the reader scratch.
+fn checked(scratch: u32, scratch_size: u32) -> Vec<E> {
+    checked_after(gate(1, false), scratch, scratch_size)
+}
+
+/// Identity, the debug gate exchanges, code, driver state and the scratch.
+fn checked_after(gate: Vec<E>, scratch: u32, scratch_size: u32) -> Vec<E> {
     let mut steps = info(4, "X-M5");
     steps.extend(info(8, "2.06"));
+    steps.extend(gate);
+    steps.extend(memory_read(STOCK_CALLBACK, &CALLBACK_CODE));
     steps.extend(memory_read(READER, &READER_CODE));
     steps.extend(memory_read(DRIVER, &word(1)));
+    steps.extend(memory_read(DRIVER + 0x38, &word(scratch)));
+    steps.extend(memory_read(DRIVER + 0x14, &word(scratch_size)));
+    steps
+}
+
+fn preflight() -> Vec<E> {
+    preflight_after(gate(1, false))
+}
+
+fn preflight_after(gate: Vec<E>) -> Vec<E> {
+    let mut steps = checked_after(gate, SCRATCH, SCRATCH_SIZE);
     steps.extend(memory_read(REGISTERED, &descriptor()));
     steps.extend(memory_read(TABLE, &word(TABLE_BASE)));
     steps.extend(reads(BASE, &saved()));
@@ -332,10 +393,7 @@ fn a_callback_that_is_not_stock_is_left_alone() {
 #[test]
 fn a_buffer_too_small_for_a_chunk_is_never_borrowed() {
     let (bulk, flash, payload) = fixture();
-    let mut steps = info(4, "X-M5");
-    steps.extend(info(8, "2.06"));
-    steps.extend(memory_read(READER, &READER_CODE));
-    steps.extend(memory_read(DRIVER, &word(1)));
+    let mut steps = checked(SCRATCH, SCRATCH_SIZE);
     steps.extend(memory_read(
         REGISTERED,
         &[BASE, 0x4000]
@@ -348,6 +406,50 @@ fn a_buffer_too_small_for_a_chunk_is_never_borrowed() {
     assert!(error.contains("registered diagnostic buffer"), "{error}");
     assert_eq!(remaining, 0);
     assert_eq!(state, SessionState::Ready);
+}
+
+#[test]
+fn a_closed_debug_gate_is_opened_for_the_capture_and_closed_after() {
+    let (bulk, flash, payload) = fixture();
+    let mut opened = gate(0, false);
+    opened.extend(gate(1, true));
+    opened.extend(gate(1, false));
+    let mut steps = preflight_after(opened);
+    steps.extend(stock_read(0, &[0xee; CONTROL as usize]));
+    steps.extend(restore(&request(0, CONTROL)));
+    steps.extend(gate(1, false));
+    steps.extend(gate(0, true));
+    steps.extend(gate(0, false));
+    let (result, state, remaining, _) = run(steps, &payload, &flash, &bulk);
+    let error = result.unwrap_err().to_string();
+    assert!(error.contains("Control chunk"), "{error}");
+    assert_eq!(remaining, 0, "the gate is closed again after the capture");
+    assert_eq!(state, SessionState::Ready);
+}
+
+#[test]
+fn a_reader_scratch_under_the_borrowed_buffer_is_never_borrowed() {
+    let (bulk, flash, payload) = fixture();
+    let mut steps = checked(BASE + 0x1000, SCRATCH_SIZE);
+    steps.extend(memory_read(REGISTERED, &descriptor()));
+    steps.extend(memory_read(TABLE, &word(TABLE_BASE)));
+    let (result, state, remaining, _) = run(steps, &payload, &flash, &bulk);
+    let error = result.unwrap_err().to_string();
+    assert!(error.contains("reader scratch"), "{error}");
+    assert_eq!(remaining, 0, "nothing is saved or written");
+    assert_eq!(state, SessionState::Ready);
+}
+
+#[test]
+fn an_unbounded_reader_scratch_stops_before_the_buffer_is_read() {
+    let (bulk, flash, payload) = fixture();
+    for size in [8, 0x20000] {
+        let (result, state, remaining, _) = run(checked(SCRATCH, size), &payload, &flash, &bulk);
+        let error = result.unwrap_err().to_string();
+        assert!(error.contains("Unbounded"), "{error}");
+        assert_eq!(remaining, 0);
+        assert_eq!(state, SessionState::Ready);
+    }
 }
 
 #[test]
@@ -378,4 +480,10 @@ fn validation_requires_the_stock_query_contract() {
     assert!(refused(&other, &bulk, &payload, &[]).contains("geometry"));
     let other = zero_base_camera();
     assert!(refused(&flash, &other, &payload, &[]).contains("registered 32-bit"));
+    let mut other = flash.clone();
+    other.reader.as_mut().unwrap().scratch = None;
+    assert!(refused(&other, &bulk, &payload, &[]).contains("scratch is absent"));
+    let mut other = payload.clone();
+    other.callback.checks.clear();
+    assert!(refused(&flash, &bulk, &other, &[]).contains("callback code"));
 }

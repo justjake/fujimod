@@ -1463,25 +1463,127 @@ fn xp4_packet_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> 
     // the diagnostic query callback, so only that firmware publishes the
     // stock-query transport. The reader takes 128-byte aligned requests.
     let stock_query = firmware == "xe4-201";
+    let mut code_ranges = vec![
+        high_level.span("flash command routine"),
+        reader.span("stock flash reader"),
+        transfer.span("flash DMA transfer"),
+        initializer.span("flash controller initialization"),
+        preparation.span("flash read preparation"),
+    ];
+    let mut state_checks = vec![
+        json!({"name":"flash driver initialized","address":state_address,"size":4,"value":0x77666555u32}),
+    ];
+    let mut stock_reader = Value::Null;
+    if stock_query {
+        let facts = xp4_stock_query_facts(
+            &locator,
+            &words,
+            reader_address,
+            initializer_address,
+            state_address,
+        )?;
+        code_ranges.push(facts.copy.span("flash scratch copy"));
+        state_checks.extend(facts.state_checks);
+        stock_reader = json!({
+            "symbol":"stock flash reader",
+            "alignment":128,
+            "scratch":facts.scratch
+        });
+    }
     Ok(json!({
         "device":{"kind":"serial-nor"},
         "window":{"address":0xf0000000u64,"size":0x4000000u64},
         "e1_window":{"address":0xf0000000u64,"size":0x4000000u64},
         "update_image":{"dat_offset":image_origin,"xor":255},
-        "reader":stock_query.then(|| json!({"symbol":"stock flash reader","alignment":128})),
+        "reader":stock_reader,
         "transport":stock_query.then_some("xp4-stock-query"),
-        "code_ranges":[
-            high_level.span("flash command routine"),
-            reader.span("stock flash reader"),
-            transfer.span("flash DMA transfer"),
-            initializer.span("flash controller initialization"),
-            preparation.span("flash read preparation")
-        ],
-        "state_checks":[
-            {"name":"flash driver initialized","address":state_address,"size":4,"value":0x77666555u32}
-        ],
+        "code_ranges":code_ranges,
+        "state_checks":state_checks,
         "control":{"offset":0,"size":32768}
     }))
+}
+
+struct Xp4StockQueryFacts {
+    copy: Routine,
+    scratch: Value,
+    state_checks: [Value; 2],
+}
+
+/// The driver RAM and state the X-E4 2.01 stock reader path relies on.
+///
+/// The reader copies through a staging routine that takes its buffer from
+/// driver state `+0x38` and its piece size from `+0x14`; the initializer
+/// stores both. The driver words end with the active NOR part descriptor
+/// (`+0x58`) and the read mode byte (`+0x5c`). The camera-proven capture
+/// required the part descriptor `0x016b140c` and mode 0, the
+/// already-initialized polled path the reader was analyzed for.
+fn xp4_stock_query_facts<L: Lookup>(
+    locator: &Locator<'_, L>,
+    reader_words: &[u32],
+    reader_address: u64,
+    initializer_address: u64,
+    state_address: u64,
+) -> Result<Xp4StockQueryFacts> {
+    const COPY_CALL_WORD: usize = 67;
+    const PART_SELECTOR: u64 = 0x011c8358;
+    const MODE_SETTER: u64 = 0x011c9b80;
+    const PART_DESCRIPTOR: u64 = 0x016b140c;
+    const POINTER: u64 = 0x38;
+    const SIZE: u64 = 0x14;
+    const PART: u64 = 0x58;
+    const MODE: u64 = 0x5c;
+    const STATE_BYTES: u64 = 0x60;
+    let words_at = |address: u64, count: usize| -> Result<Vec<u32>> {
+        Ok(locator
+            .index
+            .read(locator.firmware, &locator.unit, address, count * 4)
+            .map_err(|error| error.to_string())?
+            .ok_or("unmapped XP4 stock reader code")?
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|bytes| u32::from_le_bytes(*bytes))
+            .collect())
+    };
+    let copy_address = arm_branch_target(
+        reader_address + (COPY_CALL_WORD * 4) as u64,
+        reader_words[COPY_CALL_WORD],
+    )?;
+    let copy = locator.routine(copy_address)?;
+    let copy_words = words_at(copy_address, 18)?;
+    let initializer = words_at(initializer_address, 45)?;
+    let selector = words_at(PART_SELECTOR, 17)?;
+    let mode = words_at(MODE_SETTER, 5)?;
+    // ldr sb, [r3, #0x14] and ldr r0, [r7, #0x38] (r7 = r3) in the copy;
+    // str r0, [r4, #0x14] and str r3, [r4, #0x38] in the initializer;
+    // strb r0, [r3] in the mode setter.
+    if copy.header.ranges.len() != 1
+        || arm_mov_pair_for(copy_words[5], copy_words[6], 3)? != state_address
+        || copy_words[7] != 0xe5939014
+        || copy_words[8] != 0xe1a07003
+        || copy_words[17] != 0xe5970038
+        || arm_mov_pair_for(initializer[26], initializer[27], 4)? != state_address
+        || initializer[39] != 0xe5840014
+        || initializer[44] != 0xe5843038
+        || arm_mov_pair_for(selector[2], selector[3], 3)? != state_address + PART
+        || arm_mov_pair_for(selector[15], selector[16], 3)? != PART_DESCRIPTOR
+        || arm_mov_pair_for(mode[2], mode[3], 3)? != state_address + MODE
+        || mode[4] != 0xe5c30000
+    {
+        return Err("XP4 stock reader scratch or driver state changed".into());
+    }
+    Ok(Xp4StockQueryFacts {
+        copy,
+        scratch: json!({
+            "state":{"address":state_address,"size":STATE_BYTES},
+            "pointer":state_address + POINTER,
+            "size":state_address + SIZE
+        }),
+        state_checks: [
+            json!({"name":"flash part descriptor","address":state_address + PART,"size":4,"value":PART_DESCRIPTOR}),
+            json!({"name":"flash read mode","address":state_address + MODE,"size":1,"value":0}),
+        ],
+    })
 }
 
 fn verify_xp4_packet_reader(

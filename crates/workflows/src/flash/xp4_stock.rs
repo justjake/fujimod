@@ -4,7 +4,12 @@
 //! query callback slot points at the stock reader. The query passes the
 //! address of a request in the registered diagnostic buffer, and the reader
 //! copies flash into that buffer. The slot is restored after every query and
-//! the borrowed buffer bytes are restored after the capture.
+//! the borrowed buffer bytes are restored after the capture. The RAM debug
+//! gate is opened for the capture when it was closed, and closed afterwards.
+//!
+//! The borrowed buffer must not overlap the driver state or the staging
+//! buffer the reader copies through, which is located from the driver state
+//! on the camera.
 //!
 //! The stock reader refuses a request that ends at the end of the flash
 //! window, so the final `TAIL_BYTES` come from CPU reads of the mapped window,
@@ -20,9 +25,12 @@ use fujimod_catalog_bulk::{BulkRange, BulkSource, FirmwareBulk};
 use fujimod_usb::{
     ff80::{
         Session, SessionState,
-        commands::diagnostic::{CommandStatus, DiagnosticTag},
+        commands::{
+            configuration::ConfigurationView,
+            diagnostic::{CommandStatus, DiagnosticTag},
+        },
     },
-    operations::checks::sha256_bytes,
+    operations::{checks::sha256_bytes, configuration},
 };
 use serde::{Deserialize, Serialize};
 
@@ -42,6 +50,11 @@ const BORROWED_BYTES: u64 = DESTINATION + CHUNK_CAPACITY;
 pub(super) const TAIL_BYTES: u64 = 0x1000;
 /// Bytes before the tail read both ways and compared.
 const OVERLAP_BYTES: u64 = 256;
+/// RAM configuration byte that opens debug memory access, borrowed as 1.
+const DEBUG_GATE: u32 = 0xf7;
+/// Bounds on the stock reader's staging buffer size, as the camera-proven
+/// capture accepted them.
+const SCRATCH_BYTES: std::ops::RangeInclusive<u64> = 16..=0x10000;
 
 /// Metadata for a stock-reader capture; it carries no image.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -60,6 +73,7 @@ pub struct Payload {
 
 /// The stock `0x450006` query callback: the slot at `offset` in the table
 /// whose address the word at `table` holds, and the slot's stock value.
+/// `checks` cover the stock callback and the query path that calls it.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Callback {
@@ -111,6 +125,10 @@ impl Payload {
                 && READ_ALIGNMENT.is_multiple_of(u64::from(reader.alignment)),
             "XP4 stock reader differs from the catalog",
         )?;
+        require(
+            reader.scratch.is_some(),
+            "XP4 stock reader scratch is absent",
+        )?;
         let window = &flash.window;
         require(
             window.address.is_multiple_of(READ_ALIGNMENT)
@@ -139,6 +157,13 @@ impl Payload {
                 && self.callback.original.is_multiple_of(4)
                 && u64::from(self.callback.original) != self.stock_reader,
             "Invalid XP4 query callback",
+        )?;
+        require(
+            self.callback
+                .checks
+                .iter()
+                .any(|check| check.address == u64::from(self.callback.original)),
+            "The stock query callback code is not checked",
         )?;
         bulk::memory_range(range(self.callback.table, 4))?;
         for check in self.checks.iter().chain(&self.callback.checks) {
@@ -204,8 +229,74 @@ pub(crate) async fn read(
     )?;
     (callbacks.progress)(0, target.size).map_err(BulkError::Check)?;
     bulk::check_identity(session, bulk).await?;
-    let mut access = bulk::Access { session, limits };
-    execute(&mut access, bulk, flash, payload, target, callbacks).await
+    let gate = configuration::read_byte(
+        session,
+        ConfigurationView::Ram,
+        DEBUG_GATE,
+        limits.configuration,
+    )
+    .await?;
+    require(gate <= 1, "Unexpected debug gate value; nothing written")?;
+    let capture = async {
+        if gate == 0 {
+            configuration::write_byte_verified(
+                session,
+                ConfigurationView::Ram,
+                DEBUG_GATE,
+                1,
+                limits.configuration,
+            )
+            .await?;
+        }
+        let mut access = bulk::Access { session, limits };
+        execute(&mut access, bulk, flash, payload, target, callbacks).await
+    }
+    .await;
+    let restored = if gate == 0 {
+        restore_gate(session, limits).await
+    } else {
+        Ok(())
+    };
+    bulk::finish(capture, restored)
+}
+
+/// Close the borrowed debug gate unless completion is unknown or its owner
+/// changed; a camera restart closes it otherwise.
+async fn restore_gate(session: &mut Session, limits: Limits) -> bulk::Result<()> {
+    if session.state() != SessionState::Ready {
+        return Err(BulkError::Check(
+            "Completion unknown; debug gate restoration withheld".into(),
+        ));
+    }
+    let cleanup = async {
+        let current = configuration::read_byte(
+            session,
+            ConfigurationView::Ram,
+            DEBUG_GATE,
+            limits.configuration,
+        )
+        .await?;
+        require(
+            current <= 1,
+            "Debug gate ownership changed; restoration withheld",
+        )?;
+        if current == 1 {
+            configuration::write_byte_verified(
+                session,
+                ConfigurationView::Ram,
+                DEBUG_GATE,
+                0,
+                limits.configuration,
+            )
+            .await?;
+        }
+        Ok(())
+    }
+    .await;
+    if cleanup.is_err() {
+        session.invalidate_completion();
+    }
+    cleanup
 }
 
 async fn execute(
@@ -224,6 +315,24 @@ async fn execute(
             format!("Flash driver state differs: {}", check.name),
         )?;
     }
+    let scratch = flash
+        .reader
+        .as_ref()
+        .and_then(|reader| reader.scratch.as_ref())
+        .ok_or_else(|| BulkError::Check("XP4 stock reader scratch is absent".into()))?;
+    let staging = BulkRange {
+        address: word(&access.raw(scratch.pointer, 4).await?),
+        size: word(&access.raw(scratch.size, 4).await?),
+    };
+    require(
+        SCRATCH_BYTES.contains(&staging.size)
+            && staging.address != 0
+            && staging
+                .address
+                .checked_add(staging.size)
+                .is_some_and(|end| end <= flash.window.address),
+        "Unbounded stock reader scratch",
+    )?;
     let descriptor_address = registered_buffer(bulk)?;
     let descriptor = access.raw(descriptor_address, 8).await?;
     let (base, capacity) = (word(&descriptor[..4]), word(&descriptor[4..]));
@@ -251,8 +360,10 @@ async fn execute(
             && !flash
                 .state_checks
                 .iter()
-                .any(|check| overlaps(check.address, u64::from(check.size))),
-        "The borrowed diagnostic buffer overlaps checked state",
+                .any(|check| overlaps(check.address, u64::from(check.size)))
+            && !overlaps(scratch.state.address, scratch.state.size)
+            && !overlaps(staging.address, staging.size),
+        "The borrowed diagnostic buffer overlaps checked state or the reader scratch",
     )?;
     bulk::memory_range(range(slot, 4))?;
     let mut borrow = Borrow {

@@ -731,10 +731,11 @@ fn prepare_xp4_stock(
         callback_table,
         callback_offset,
         stock_callback,
+        forward: Some(forward),
         ..
     }) = &restart.mechanism.transport
     else {
-        return Err("the restart facts publish no borrowed diagnostic query".into());
+        return Err("the restart facts publish no borrowed diagnostic query forwarder".into());
     };
     check(
         restart.code_alias == 0,
@@ -771,10 +772,11 @@ fn prepare_xp4_stock(
             })
         })
         .collect::<Result<Vec<_>>>()?;
+    // Every restart code check, so the query handler and forwarder that hand
+    // the buffer to the slot are checked with the stock callback.
     let callback_checks = restart
         .code_checks
         .iter()
-        .filter(|check| check.address == *stock_callback)
         .map(|check| {
             Ok(CodeCheck {
                 address: check.address,
@@ -784,8 +786,12 @@ fn prepare_xp4_stock(
         })
         .collect::<Result<Vec<_>>>()?;
     check(
-        !callback_checks.is_empty(),
-        "the stock query callback code is not checked",
+        [*stock_callback, *forward].iter().all(|address| {
+            callback_checks
+                .iter()
+                .any(|check| check.address == *address)
+        }),
+        "the stock query callback or forwarder code is not checked",
     )?;
     let reader = flash
         .reader
