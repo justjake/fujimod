@@ -83,7 +83,7 @@ impl Mpu {
         let begin = u64::from(address);
         let last = begin + bytes.saturating_sub(1) as u64;
         let last_address = u32::try_from(last).map_err(|_| 0x0d_u32)?;
-        let check = |address| {
+        let check = |address| -> Result<(), u32> {
             armv7r::check(sctlr, &self.regions, address, access, user).map_err(
                 |fault| match fault {
                     armv7r::ProtectionFault::Background => 0,
