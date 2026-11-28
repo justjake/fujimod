@@ -16,6 +16,7 @@ const ReleasePersonalNotePreview = import.meta.env.DEV
   ? lazy(() => import('./development/release-personal-note'))
   : undefined;
 const SdkDocs = lazy(() => import('./docs/Page'));
+const FluidKitCompare = lazy(() => import('./docs/FluidKitCompare'));
 const Manual = lazy(() => import('./docs/Manual'));
 const DocsOverview = lazy(() => import('./docs/Overview'));
 const DesignIndex = lazy(() => import('./docs/design/Index'));
@@ -67,12 +68,14 @@ export default function App() {
                 : path === '/features/custom-settings-editor/' ||
                     path === '/features/custom-settings-editor'
                   ? CustomSettingsEditorFeature
-                  : path.startsWith('/docs/sdk/')
-                    ? SdkDocs
-                    : isManualPath(path)
-                      ? Manual
-                      : path === '/'
-                        ? Home
-                        : undefined;
+                  : path.startsWith('/docs/fluid-kit/')
+                    ? FluidKitCompare
+                    : path.startsWith('/docs/sdk/')
+                      ? SdkDocs
+                      : isManualPath(path)
+                        ? Manual
+                        : path === '/'
+                          ? Home
+                          : undefined;
   return Page ? <Guarded page={() => <Page />} /> : <ErrorPage status={404} />;
 }
