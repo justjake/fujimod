@@ -991,29 +991,6 @@
           "output": "lens_focus",
           "steps_per_mm": 267.0
         },
-        "focus_imaging": {
-          "basis": "Declared catalog input.",
-          "contrast": {
-            "kind": "squared_horizontal_gradients",
-            "luma_bits": 8
-          },
-          "face_detector": {
-            "mode": "retained_words"
-          },
-          "input_clock_mode": "input_enable",
-          "memory_bytes_per_tick": 16,
-          "metering": "rgb_cell_means12",
-          "optics": {
-            "maximum_radius": 32,
-            "pulses_per_radius": 8,
-            "target_position": 0
-          },
-          "raster": {
-            "height": 853,
-            "stride": 4992,
-            "width": 2496
-          }
-        },
         "iris_mechanics": {
           "boundary": "end_stop",
           "travel_limits": [
