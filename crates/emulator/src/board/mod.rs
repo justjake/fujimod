@@ -383,6 +383,8 @@ struct Settled {
     local_mmio_accesses: u64,
     defer_local_mmio: bool,
     deferred_local_mmio_accesses: u64,
+    local_mmio_catchups: u64,
+    local_mmio_grant_caps: u64,
 }
 impl Settled {
     fn new() -> Self {
@@ -407,6 +409,8 @@ impl Settled {
             defer_local_mmio: std::env::var_os("FUJIMOD_DEFER_LOCAL_MMIO")
                 .is_some_and(|value| value == "1"),
             deferred_local_mmio_accesses: 0,
+            local_mmio_catchups: 0,
+            local_mmio_grant_caps: 0,
         }
     }
     #[inline]
@@ -3560,7 +3564,7 @@ impl State {
         &self,
         core: usize,
         address: u64,
-    ) -> Result<Option<(u64, u64)>, String> {
+    ) -> Result<Option<(u64, u64, u64)>, String> {
         if !self.settled.defer_local_mmio
             || self.execution_policy != ExecutionPolicy::Interactive
             || self.parallel.is_some()
@@ -3585,10 +3589,12 @@ impl State {
             .checked_add(blocks.inline.debited()?)
             .ok_or("Thumb entry count overflow")?;
         let tick = self.timeline.projected_tick(core, entered, blocks.deferred_sync_at)?;
-        let until = self.settled.until.min(self.clock_limit.unwrap_or(u64::MAX));
-        Ok((tick < until
-            && self.timeline.next_event().is_none_or(|event| tick < event.at))
-            .then_some((tick, entered)))
+        let until = self
+            .settled
+            .until
+            .min(self.clock_limit.unwrap_or(u64::MAX))
+            .min(self.timeline.next_event().map_or(u64::MAX, |event| event.at));
+        Ok((tick < until).then_some((tick, entered, until)))
     }
 
     fn access(
@@ -3612,7 +3618,7 @@ impl State {
             None
         };
         if let Some(register) = local_register
-            && let Some((tick, entered)) = self.deferred_local_mmio_tick(core, address)?
+            && let Some((tick, entered, until)) = self.deferred_local_mmio_tick(core, address)?
         {
             if let Some(sample) = sample.as_deref_mut() {
                 sample.begin_dispatch();
@@ -3636,7 +3642,16 @@ impl State {
                 let dropped_lag = self.timeline.lags()[core].saturating_sub(entered);
                 if dropped_lag != 0 && blocks.deferred_sync_at.is_none() {
                     blocks.deferred_sync_at = Some(entered);
-                    blocks.inline.remove_lag(dropped_lag);
+                    // The access lands on the frontier. The old grant
+                    // may already have excluded some or all of the lag.
+                    let room = self.timeline.ratio().budget(
+                        self.timeline.now(),
+                        self.timeline.phase(),
+                        until,
+                    )?;
+                    self.settled.local_mmio_catchups += 1;
+                    self.settled.local_mmio_grant_caps +=
+                        u64::from(blocks.inline.cap_remaining(room));
                 }
                 self.polls.last[core] = None;
                 self.settled.local_mmio_accesses += 1;

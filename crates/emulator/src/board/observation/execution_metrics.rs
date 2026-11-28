@@ -79,6 +79,8 @@ impl Board {
             "private_interrupt_reuses": state.settled.private_interrupt_reuses,
             "local_mmio_accesses": state.settled.local_mmio_accesses,
             "deferred_local_mmio_accesses": state.settled.deferred_local_mmio_accesses,
+            "local_mmio_catchups": state.settled.local_mmio_catchups,
+            "local_mmio_grant_caps": state.settled.local_mmio_grant_caps,
             "bounded_cohort_segments": self.bounded_segments,
             "local_grant_completions": self.local_grant_completions,
             "cohort_pause_barriers": self.cohort_pause_barriers,

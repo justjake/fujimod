@@ -148,6 +148,7 @@ struct Outcome {
     register_access_calls: u64,
     published_fast_read_hits: u64,
     deferred_accesses: u64,
+    local_mmio_catchups: u64,
 }
 
 fn run(quantum: usize, blocks: bool, windows: &[u64]) -> Outcome {
@@ -342,6 +343,7 @@ fn run_with_diagnostic(
         register_access_calls,
         published_fast_read_hits,
         deferred_accesses: s.settled.deferred_local_mmio_accesses,
+        local_mmio_catchups: s.settled.local_mmio_catchups,
     }
 }
 
@@ -503,6 +505,7 @@ fn deferred_local_mmio_preserves_guest_ticks_and_checkpoint() {
     let candidate = run(true);
     assert_eq!(reference.deferred_accesses, 0);
     assert!(candidate.deferred_accesses > 0);
+    assert!(candidate.local_mmio_catchups > 0);
     assert!(candidate.deferred_accesses < candidate.accesses);
     assert_eq!(candidate.register_access_calls, candidate.accesses);
     assert_eq!(candidate.read_ticks, reference.read_ticks);
@@ -750,6 +753,7 @@ fn run_a64(quantum: usize, windows: &[u64], stable: bool, fast_forward: bool) ->
         register_access_calls: 0,
         published_fast_read_hits: 0,
         deferred_accesses: 0,
+        local_mmio_catchups: 0,
     }
 }
 

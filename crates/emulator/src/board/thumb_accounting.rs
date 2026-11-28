@@ -155,29 +155,30 @@ impl Window {
         Ok((self.granted - remaining) as u64)
     }
 
-    /// An access caught the processor up to the frontier. Entries that could
-    /// have run in that old lag can no longer use the native allowance.
-    pub fn remove_lag(&mut self, lag: u64) {
+    /// Shorten only the unspent allowance. A cap may introduce an earlier
+    /// scheduler boundary, so a shortened grant no longer ends the run.
+    pub fn cap_remaining(&mut self, room: u64) -> bool {
         if self.granted == 0 {
-            return;
+            return false;
         }
         let record = unsafe { self.record.as_mut().unwrap().as_mut() };
         let old = record.accounting.budget;
-        let removed = (old as u64).min(lag) as i64;
-        record.accounting.budget -= removed;
-        self.granted -= removed;
-        if removed == 0 {
-            return;
+        let remaining = old.min(room.min(i64::MAX as u64) as i64);
+        if remaining == old {
+            return false;
         }
+        record.accounting.budget = remaining;
+        self.granted -= old - remaining;
         if let Some(mut recovery) = self.recovery {
             let recovery = unsafe { recovery.as_mut() };
             if recovery.last_block_remaining_budget == old {
-                recovery.last_block_remaining_budget -= removed;
+                recovery.last_block_remaining_budget = remaining;
             }
         }
         if let Some(mut status) = self.exception_status {
             unsafe { *status.as_mut() &= !THUMB_GRANT_ENDS_RUN };
         }
+        true
     }
 
     #[inline]
@@ -231,7 +232,7 @@ mod tests {
     }
 
     #[test]
-    fn dropping_processor_lag_preserves_debited_entries_and_recovery() {
+    fn capping_room_preserves_debited_entries_and_recovery() {
         let mut raw = zeroed_recovery();
         let recovery = NonNull::from(&mut raw);
         let mut flags = 0;
@@ -249,7 +250,9 @@ mod tests {
         record.last_block_bytes = 10;
         record.last_block_icount = 5;
         assert_eq!(window.debited().unwrap(), 5);
-        window.remove_lag(7);
+        assert!(!window.cap_remaining(30));
+        assert_ne!(flags & THUMB_GRANT_ENDS_RUN, 0);
+        assert!(window.cap_remaining(12));
         assert_eq!(window.debited().unwrap(), 5);
         assert_eq!(window.charged_block(), Some((0x100, 10, 5)));
         assert_eq!(raw.thumb_accounting.accounting.budget, 12);
