@@ -254,8 +254,10 @@ pub struct Definition {
         Vec<(u8, u16)>,
         Option<fujimod_emulator_xp4_io::rtc::StagedConfig>,
         Vec<u8>,
-        Option<fujimod_emulator_xp4_io::checksum_power_serial::AlarmConfig>,
     )>,
+    /// Wake alarm of the checksum power SPI peer, absent when the body declares none.
+    #[serde(default)]
+    pub checksum_power_alarm: Option<fujimod_emulator_xp4_io::checksum_power_serial::AlarmConfig>,
     #[serde(default)]
     pub imaging: Option<(
         (u64, u64, Vec<u32>, Vec<u32>, Vec<u32>, Option<Vec<u32>>),
