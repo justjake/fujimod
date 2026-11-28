@@ -25,7 +25,7 @@ typedef struct DynarmicCallbacks {
     void* user_data;
     void* inline_read32;
     uint32_t (*batch_instruction)(uint32_t);
-    bool (*is_shift_count_loop)(uint32_t, uint32_t, uint32_t);
+    bool (*is_counted_loop)(uint32_t, uint32_t, uint32_t, uint32_t);
     void (*guard_transfer)(void*, uint32_t, uint32_t);
     bool (*read_code)(void*, uint32_t, uint32_t*);
     uint64_t (*read)(void*, uint32_t, uint32_t);

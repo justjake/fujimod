@@ -1,8 +1,8 @@
-//! Run-limit bounded fast-forward of side-effect-free ARM loops.
+//! Run-limit bounded fast-forward of ARM loops.
 use super::{Core, NativeAccess, ffi};
 use fujimod_emulator_cpu::{
     Access, Cpu, Hook, arm, armv7a,
-    loop_proof::{self, Isa, Proof, RegisterLoop, ShiftCountLoop, State},
+    loop_proof::{self, Isa, Proof, RegisterLoop, ShiftCountLoop, State, WordFillLoop},
     loops::LoopMode,
 };
 use std::cell::{Cell, RefCell};
@@ -18,8 +18,16 @@ pub(super) fn is_shift_count_branch(word: u32) -> bool {
     word == 0x8aff_fffb // BHI to the head of a four-instruction loop.
 }
 
-pub(super) extern "C" fn is_shift_count_loop(shift: u32, increment: u32, compare: u32) -> bool {
-    ShiftCountLoop::decode([shift, increment, compare]).is_some()
+pub(super) fn is_word_fill_branch(word: u32) -> bool {
+    word == 0x1aff_fffc // BNE to the head of a three-instruction loop.
+}
+
+pub(super) extern "C" fn is_counted_loop(branch: u32, first: u32, second: u32, third: u32) -> bool {
+    if is_word_fill_branch(branch) {
+        WordFillLoop::decode([first, second]).is_some()
+    } else {
+        is_shift_count_branch(branch) && ShiftCountLoop::decode([first, second, third]).is_some()
+    }
 }
 
 #[derive(Default)]
@@ -33,6 +41,7 @@ pub(super) struct Loops {
 enum Advance {
     Counter(RegisterLoop),
     ShiftCount(ShiftCountLoop),
+    WordFill(WordFillLoop),
     General(Proof),
 }
 
@@ -50,7 +59,7 @@ impl Core {
         cpsr: u32,
         word: u32,
         remaining: u64,
-        cached_fetch: bool,
+        native_pages: bool,
     ) -> Result<bool, String> {
         if self.shared.device_accessed.get()
             || self.loops.mode.get() != LoopMode::Accelerate
@@ -81,7 +90,7 @@ impl Core {
         }
         let size = (address - start) as usize + 4;
         let mut bytes = [0; 64];
-        if cached_fetch
+        if native_pages
             && let Some(NativeAccess::Ram(pointer, _)) =
                 self.shared.native_access(start as u32, size, Access::Fetch)
         {
@@ -105,6 +114,10 @@ impl Core {
                 let (words, _) = bytes[..size].as_chunks::<4>();
                 let body = std::array::from_fn(|index| u32::from_le_bytes(words[index]));
                 ShiftCountLoop::decode(body).map(Advance::ShiftCount)
+            } else if is_word_fill_branch(word) {
+                let (words, _) = bytes[..size].as_chunks::<4>();
+                let body = std::array::from_fn(|index| u32::from_le_bytes(words[index]));
+                WordFillLoop::decode(body).map(Advance::WordFill)
             } else if word >> 28 == 10 {
                 RegisterLoop::decode(start, &bytes[..size], |word| {
                     privileged && armv7a::data_cache_set_way(word)
@@ -135,6 +148,15 @@ impl Core {
             }
             Advance::ShiftCount(proof) => {
                 let Some(advanced) = proof.advance(before, remaining) else {
+                    return Ok(false);
+                };
+                advanced
+            }
+            Advance::WordFill(proof) => {
+                if !native_pages {
+                    return Ok(false);
+                }
+                let Some(advanced) = self.advance_word_fill(proof, before, remaining) else {
                     return Ok(false);
                 };
                 advanced
@@ -176,5 +198,33 @@ impl Core {
         self.loops
             .skipped
             .set(self.loops.skipped.get().saturating_add(skipped));
+    }
+
+    fn advance_word_fill(
+        &self,
+        proof: &WordFillLoop,
+        before: State,
+        remaining: u64,
+    ) -> Option<(State, u64)> {
+        let address = proof.address(&before);
+        if address & 3 != 0 || self.shared.observe_exclusive_stores.get() {
+            return None;
+        }
+        let page = self.shared.inline_page(address);
+        if page.is_null() || page.addr() & 1 != 0 {
+            return None;
+        }
+        let offset = (address & 4095) as usize;
+        let limit = ((4096 - offset) / 4) as u32;
+        let advanced = proof.advance(before, remaining, limit)?;
+        // A writable inline entry already covers the whole RAM page, has
+        // marked it dirty, and excludes watched code and translation tables.
+        // The owner's exact window ends before another core or device runs.
+        let words = unsafe { page.add(offset).cast::<u32>() };
+        let value = advanced.value.to_le();
+        for index in 0..advanced.words {
+            unsafe { words.add(index).write(value) };
+        }
+        Some((advanced.state, advanced.entries))
     }
 }

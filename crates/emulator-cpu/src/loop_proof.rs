@@ -1,17 +1,19 @@
 //! Conservative instruction-set loop proofs, shared by execution backends.
 //!
 //! A proof is decoded from permission-checked instruction bytes that end in a
-//! short backward branch. It models only register, flag and load effects; any
-//! store, system, PC-writing or unlisted instruction fails the decode. The
-//! execution owner supplies the inputs (RAM and device-declared stable reads)
-//! and bounds the window at every event or peer boundary. No firmware
+//! short backward branch. General proofs model register, flag and load
+//! effects. Word-fill proofs require a caller-checked writable RAM span.
+//! The execution owner supplies the inputs (RAM and device-declared stable
+//! reads) and bounds the window at every event or peer boundary. No firmware
 //! addresses, task names or software structures take part.
 use crate::arm;
 
 mod a32;
+mod fill;
 mod register;
 mod t32;
 
+pub use fill::{WordFillAdvance, WordFillLoop};
 pub use register::{RegisterLoop, ShiftCountLoop};
 
 /// The instruction set a loop branch was fetched in.
