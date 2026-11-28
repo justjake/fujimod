@@ -9,6 +9,7 @@ use std::cell::{Cell, RefCell};
 use std::ptr::NonNull;
 
 const REGIONS: usize = 16;
+pub(super) type Regions = [armv7r::Region; REGIONS];
 
 #[derive(Clone, Copy, Default)]
 pub struct Config {
@@ -167,7 +168,7 @@ fn check_tcm_mmio(
 #[derive(Clone, Default, Deserialize, Serialize)]
 pub(super) struct Mpu {
     selected: u8,
-    regions: [armv7r::Region; REGIONS],
+    pub(super) regions: Regions,
 }
 
 #[derive(Clone, Copy)]
@@ -238,7 +239,7 @@ impl Mpu {
         }
     }
 
-    fn write(&mut self, register: MpuRegister, value: u32) -> Result<bool, String> {
+    fn write(&mut self, register: MpuRegister, value: u32) -> Result<(), String> {
         let region = &mut self.regions[usize::from(self.selected)];
         let field = match register {
             MpuRegister::Type => return Err("MPUIR is read-only".into()),
@@ -247,13 +248,14 @@ impl Mpu {
                     return Err(format!("MPU region {value} is outside the Cortex-R5F"));
                 }
                 self.selected = value as u8;
-                return Ok(false);
+                return Ok(());
             }
             MpuRegister::Base => &mut region.base,
             MpuRegister::Size => &mut region.size,
             MpuRegister::Attributes => &mut region.attributes,
         };
-        Ok(std::mem::replace(field, value) != value)
+        *field = value;
+        Ok(())
     }
 
     /// Check both ends and every region boundary inside one guest page.
@@ -321,10 +323,8 @@ impl Core {
             .ok_or("Dynarmic has no R-profile")?;
         match register {
             SystemRegister::Mpu(register) => {
-                if let Some(value) = value
-                    && profile.mpu.borrow_mut().write(register, value)?
-                {
-                    self.shared.mapping_changed();
+                if let Some(value) = value {
+                    profile.mpu.borrow_mut().write(register, value)?;
                 }
                 Ok(profile.mpu.borrow().read(register))
             }
@@ -543,6 +543,45 @@ mod tests {
         cpu.restore(imported.as_ref()).unwrap();
         run(0x2000, 1);
         assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 3) }, 7);
+    }
+
+    #[test]
+    fn switching_mpu_permissions_disables_cached_writes_until_restored() {
+        let cpu = Core::new(Model::CortexR5F).unwrap();
+        cpu.map_zeroed(0, 0x4000, 7).unwrap();
+        cpu.coprocessor(cp15(6, 1, 0), Some(0x2000)).unwrap();
+        cpu.coprocessor(cp15(6, 1, 2), Some(0x17)).unwrap();
+        cpu.coprocessor(cp15(1, 0, 0), Some((1 << 17) | 1)).unwrap();
+        cpu.write_register(arm::CORE[1], &0x2000u32.to_le_bytes())
+            .unwrap();
+        for (index, word) in [0xe280_0001u32, 0xe581_0000, 0xeaff_fffc]
+            .into_iter()
+            .enumerate()
+        {
+            cpu.write_memory(0x1000 + index as u64 * 4, &word.to_le_bytes())
+                .unwrap();
+        }
+        let run = |ap: u64| {
+            cpu.coprocessor(cp15(6, 1, 4), Some(ap << 8)).unwrap();
+            cpu.set_loop_window(true).unwrap();
+            cpu.run(Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(12),
+            })
+            .unwrap();
+            let mut value = [0; 4];
+            cpu.read_memory(0x2000, &mut value).unwrap();
+            u32::from_le_bytes(value)
+        };
+        assert_eq!(run(3), 4);
+        assert_eq!(run(6), 4);
+        assert_eq!(cpu.coprocessor(cp15(5, 0, 0), None).unwrap(), 0x80d);
+        assert_eq!(run(3), 9);
+        if cfg!(target_arch = "aarch64") {
+            assert_eq!(cpu.shared.contexts.borrow().len(), 2);
+        }
     }
 
     #[test]

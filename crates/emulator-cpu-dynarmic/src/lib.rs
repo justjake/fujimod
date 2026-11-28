@@ -383,8 +383,8 @@ struct CoreShared {
     compiled_words: RefCell<HashMap<usize, BTreeSet<u32>>>,
     compiled_descriptors: RefCell<HashMap<usize, BTreeSet<u32>>>,
     control_flushes: Cell<u64>,
-    mmu_context: Cell<Option<ffi::DynarmicMemoryControl>>,
-    contexts: RefCell<Vec<ffi::DynarmicMemoryControl>>,
+    mmu_context: Cell<Option<TranslationContext>>,
+    contexts: RefCell<Vec<TranslationContext>>,
     fault_hooks: RefCell<Vec<FaultHook>>,
     next_hook_id: Cell<usize>,
     observers: RefCell<Vec<(usize, Hook)>>,
@@ -412,6 +412,12 @@ struct CoreShared {
     fault: RefCell<Option<ExecutionError>>,
     abort: Cell<Option<(u32, u32, Access)>>,
     inst: Cell<*mut ffi::DynarmicInstance>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct TranslationContext {
+    control: ffi::DynarmicMemoryControl,
+    protection_regions: Option<rprofile::Regions>,
 }
 
 fn contains(range: HookRange, address: u64) -> bool {
@@ -739,7 +745,15 @@ impl CoreShared {
                     ..Default::default()
                 };
             }
-            if self.mmu_context.replace(Some(control)) != Some(control) {
+            let context = TranslationContext {
+                control,
+                protection_regions: self
+                    .rprofile
+                    .as_ref()
+                    .filter(|_| control.sctlr & 1 != 0)
+                    .map(|profile| profile.mpu.borrow().regions),
+            };
+            if self.mmu_context.replace(Some(context)) != Some(context) {
                 self.clear_inline_pages();
                 self.control_flushes.set(self.control_flushes.get() + 1);
                 if cfg!(target_arch = "aarch64") {
@@ -747,14 +761,14 @@ impl CoreShared {
                     let position =
                         contexts
                             .iter()
-                            .position(|c| *c == control)
+                            .position(|c| *c == context)
                             .unwrap_or_else(|| {
                                 if contexts.len() == 32 {
                                     contexts.clear();
                                     recycle_contexts = true;
                                 }
                                 let id = contexts.len();
-                                contexts.push(control);
+                                contexts.push(context);
                                 id
                             });
                     unsafe {
