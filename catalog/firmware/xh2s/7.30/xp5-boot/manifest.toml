@@ -17,18 +17,27 @@ base = 0
 size = 0x80000000
 dram = true
 
-# Movie buffers use DRAM behind the two high bus-drain ports (0x100000000 and 0x180000000, the
-# body's bus drains). The extents follow the X-T5 channel layout, a functional model: the
-# installed capacity is unmeasured. The first 16 KiB granule of each port stays with its
-# bus-drain read.
+# The firmware's DRAM remap table at 0x1c11b70 declares three high apertures after the first
+# region: 0x80000000+0x70000000, 0x100000000+0x80000000 and 0x180000000+0x80000000 (the last
+# remapped by 0x16cd050 from the base and size at 0x1c11b90). Movie recording keeps its buffers
+# there: the H.264 stream starts at 0x100001000, and the recorder's SD DMA reaches the high
+# apertures through the address-high words. Installed capacity is unmeasured; the apertures are
+# the firmware's. The first 16 KiB granule at 0x80000000 and at 0x180000000 stays with the body's
+# bus-drain read; at 0x100000000 the stream's own page follows the drain port, so the whole
+# aperture is RAM and that bus drain is not built.
 [[ram]]
-base = 0x100004000
-size = 0x3fffc000
+base = 0x80004000
+size = 0x6fffc000
+dram = true
+
+[[ram]]
+base = 0x100000000
+size = 0x80000000
 dram = true
 
 [[ram]]
 base = 0x180004000
-size = 0x3fffc000
+size = 0x7fffc000
 dram = true
 
 # M-core SRAM (same XP5 SoC window as the X-T5 4.31 manifest).

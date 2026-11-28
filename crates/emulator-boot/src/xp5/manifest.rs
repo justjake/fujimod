@@ -398,6 +398,82 @@ mod tests {
         assert_eq!(dma.options["a53_irq_base"].as_integer(), Some(237));
     }
 
+    fn xh2s_catalog_state() -> BootState {
+        BootState::for_firmware("xh2s-730", None)
+            .unwrap()
+            .with_catalog_windows(
+                &fujimod_catalog_resolution::ResolvedConfiguration::bundled("xh2s-730").unwrap(),
+            )
+            .unwrap()
+    }
+
+    #[test]
+    fn xh2s_sd_dma_can_reach_the_recorder_dram_window() {
+        let state = xh2s_catalog_state();
+        assert!(state.ram.iter().any(|region| region.dram
+            && region.base == 0x1_8000_4000
+            && region.base + region.size == 0x2_0000_0000));
+        for (base, address_high) in [(0xff9b_0000, 0xff90_e7d8), (0xff9b_4000, 0xff90_e7e4)] {
+            let host = state
+                .device
+                .iter()
+                .find(|window| window.base == base && window.kind == "sdhci")
+                .unwrap();
+            let controller = &host.options["controller"];
+            assert_eq!(controller["address_high"].as_integer(), Some(address_high));
+            let banks = controller["ram_banks"].as_array().unwrap();
+            for (bank_base, bank_size) in [
+                (0x8000_4000, 0x6fff_c000),
+                (0x1_0000_0000, 0x8000_0000),
+                (0x1_8000_4000, 0x7fff_c000),
+            ] {
+                assert!(
+                    banks.iter().any(|bank| {
+                        let bank = bank.as_array().unwrap();
+                        bank[0].as_integer() == Some(bank_base)
+                            && bank[1].as_integer() == Some(bank_size)
+                    }),
+                    "{bank_base:#x}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn xh2s_movie_stream_starts_in_ram() {
+        // The H.264 stream starts at 0x100001000, inside the bus-drain port's first granule:
+        // the whole aperture is RAM and no device serves its base.
+        let state = xh2s_catalog_state();
+        assert!(state.ram.iter().any(|region| {
+            region.dram && region.base == 0x1_0000_0000 && region.base + region.size == 0x1_8000_0000
+        }));
+        assert!(
+            state
+                .device
+                .iter()
+                .all(|device| !(device.base..device.base + device.size).contains(&0x1_0000_1000))
+        );
+    }
+
+    #[test]
+    fn xh2s_first_sd_host_reads_the_slot_two_contact() {
+        // The SD socket (labeled slot 2) is the first host; its card detect is GPIO 11.12,
+        // active low. The second host has no socket contact.
+        let state = xh2s_catalog_state();
+        let host = |base: u64| {
+            state
+                .device
+                .iter()
+                .find(|window| window.base == base && window.kind == "sdhci")
+                .unwrap()
+        };
+        let detect = &host(0xff9b_0000).options["detect_gpio"];
+        assert_eq!(detect["port"].as_integer(), Some(11));
+        assert_eq!(detect["pin"].as_integer(), Some(12));
+        assert_eq!(detect["active_high"].as_bool(), Some(false));
+        assert!(!host(0xff9b_4000).options.contains_key("detect_gpio"));
+    }
+
     #[test]
     fn xh2s_movie_statistics_are_in_boot_sram() {
         // The Movie exposure task reads its statistics banks from boot SRAM (first read at
