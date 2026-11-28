@@ -754,17 +754,17 @@ impl CoreShared {
         let revision = self.code_visibility.0.watch_revision.get().wrapping_add(1);
         self.code_visibility.0.watch_revision.set(revision);
         self.seen_watch_revision.set(revision);
-        for slot in self.touched_pages.borrow().iter().copied() {
-            if self.inline_page(slot << 12).addr() & !4095 == page {
-                self.clear_inline_page(slot);
-            }
-        }
+        self.revoke_inline_stores(|backing| backing == page);
     }
 
     fn before_run(&self, inline_allowed: bool) {
         let revision = self.code_visibility.0.watch_revision.get();
-        if self.seen_watch_revision.replace(revision) != revision || !inline_allowed {
+        let changed = self.seen_watch_revision.replace(revision) != revision;
+        if !inline_allowed {
             self.clear_inline_pages();
+        } else if changed {
+            let watched = self.code_visibility.0.pages.borrow();
+            self.revoke_inline_stores(|page| watched.contains_key(&page));
         }
     }
 
@@ -1047,6 +1047,28 @@ impl CoreShared {
                 .add(page as usize)
                 .write(std::ptr::null_mut())
         }
+    }
+
+    fn revoke_inline_stores(&self, watched: impl Fn(usize) -> bool) {
+        self.touched_pages.borrow_mut().retain(|&page| {
+            let pointer = self.inline_page(page << 12);
+            if pointer.is_null() {
+                return false;
+            }
+            if pointer.addr() & 1 != 0 || !watched(pointer.addr() & !4095) {
+                return true;
+            }
+            if cfg!(target_arch = "aarch64") {
+                // A new code watch changes store handling only. Reuse the
+                // read translation while keeping stores on the checked path.
+                let entry = unsafe { self.direct_pages.get().add(page as usize) };
+                unsafe { entry.write(entry.read().map_addr(|bias| bias | 1)) };
+                true
+            } else {
+                self.clear_inline_page(page);
+                false
+            }
+        });
     }
 
     fn clear_inline_pages(&self) {
@@ -3049,6 +3071,39 @@ mod tests {
         .unwrap();
         assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 0) }, 0x7856_3412);
     }
+    #[test]
+    fn new_peer_code_watch_keeps_unrelated_inline_pages() {
+        let backing = Backing::aligned_zeros(8192, 4096).unwrap();
+        let first = backing.as_ptr();
+        let second = unsafe { first.add(4096) };
+        let visibility = CodeVisibility::default();
+        let reader = Core::new_with_code_visibility(Model::CortexA7, visibility.clone()).unwrap();
+        let writer = Core::new_with_code_visibility(Model::CortexA7, visibility).unwrap();
+        unsafe {
+            writer
+                .map_backing(0x3000, 8192, 7, NonNull::new(first).unwrap())
+                .unwrap();
+        }
+        writer
+            .shared
+            .install_inline_page(0x3000, first, Access::Write);
+        writer
+            .shared
+            .install_inline_page(0x4000, second, Access::Write);
+        assert_eq!(writer.shared.inline_page(0x3000), first);
+        assert_eq!(writer.shared.inline_page(0x4000), second);
+
+        reader.shared.watch_code_backing(first);
+        writer.shared.before_run(true);
+        assert_eq!(writer.shared.inline_page(0x4000), second);
+        let watched = writer.shared.inline_page(0x3000);
+        if cfg!(target_arch = "aarch64") {
+            assert_eq!(watched, first.map_addr(|addr| addr | 1));
+        } else {
+            assert!(watched.is_null());
+        }
+    }
+
     #[test]
     fn peer_alias_write_is_visible_after_translation() {
         for allow_native in [false, true] {
