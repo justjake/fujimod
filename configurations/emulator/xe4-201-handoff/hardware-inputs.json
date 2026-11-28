@@ -170,10 +170,6 @@
       "basis": "Declared virtual X-E4 sensor and statistics scene, with native statistics defaults made explicit.",
       "frame_period_ticks": 4000000,
       "frame_active_ticks": 10000,
-      "read_gate": {
-        "register": 81,
-        "mask": 8
-      },
       "statistics_scene": {
         "name": "diagnostic-flat-linear-statistics",
         "luma": 4096,

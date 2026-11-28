@@ -59,6 +59,9 @@ pub struct Catalog {
     body: Value,
     firmware: Value,
     configuration: Value,
+    /// The read and standby gates of each image-sensor part the body installs, as
+    /// `[register, mask]` pairs or null.
+    image_sensors: Vec<Value>,
     pub board: Value,
 }
 impl Catalog {
@@ -135,6 +138,27 @@ impl Catalog {
             serde_json::to_value(&resolved.reference.firmware).map_err(|e| e.to_string())?;
         let configuration =
             serde_json::to_value(&resolved.configuration).map_err(|e| e.to_string())?;
+        let image_sensors = resolved
+            .reference
+            .parts
+            .iter()
+            .filter_map(|part| match &part.model {
+                fujimod_catalog::reference::PartModel::Peripheral {
+                    interface:
+                        fujimod_catalog::assembly::PeripheralPart::ImageSensor {
+                            read_gate,
+                            standby_gate,
+                            ..
+                        },
+                } => {
+                    let pair = |gate: &Option<fujimod_catalog::assembly::SensorRegisterBits>| {
+                        gate.map_or(Value::Null, |gate| json!([gate.register, gate.mask]))
+                    };
+                    Some(json!([pair(read_gate), pair(standby_gate)]))
+                }
+                _ => None,
+            })
+            .collect();
         Ok(Self {
             soc,
             rows,
@@ -142,6 +166,7 @@ impl Catalog {
             body,
             firmware,
             configuration,
+            image_sensors,
             board,
         })
     }
@@ -436,6 +461,14 @@ impl Catalog {
                 .device("imaging_receiver")
                 .ok_or("the sensor command block needs a receiver")?;
             let sensor = &board["sensor_input"];
+            // The sensor chip's gates are the body's one image-sensor part.
+            let [gates] = self.image_sensors.as_slice() else {
+                return Err(format!(
+                    "the sensor command block needs exactly one image-sensor part; the body \
+                     installs {}",
+                    self.image_sensors.len()
+                ));
+            };
             let lines = |block: Block<'_>, prefix: &str| -> Vec<Value> {
                 block
                     .interrupts()
@@ -485,7 +518,7 @@ impl Catalog {
                         command.number("command_ticks")?,
                         command.number("reset_ticks")?
                     ],
-                    [sensor["read_gate"]["register"], sensor["read_gate"]["mask"]],
+                    gates,
                     buffer
                 ]),
             );

@@ -2026,7 +2026,7 @@ mod tests {
         let mut movie = resz().with_movie_path(shared.clone());
         movie.rifp = Some(shared.clone());
         let mut cx = Cx::new(&mut host, 0, 0, 0);
-        let sensor = fujimod_emulator_sensor_input::sensor::Sensor::new(None, (0, 0));
+        let sensor = fujimod_emulator_sensor_input::sensor::Sensor::new(None, Default::default());
         let mut rifp = rifp_device(&mut cx, sensor, &shared, true);
         for (o, v) in words {
             movie.write(&mut cx, 0xffd0c000 + o, 4, u64::from(v));
@@ -2144,7 +2144,7 @@ mod tests {
             ram,
             ..Default::default()
         };
-        let sensor = fujimod_emulator_sensor_input::sensor::Sensor::new(None, (0, 0));
+        let sensor = fujimod_emulator_sensor_input::sensor::Sensor::new(None, Default::default());
         sensor.0.lock().unwrap().still_raw = Some(StillRaw {
             address: RAM,
             pitch: 64,
@@ -2233,7 +2233,7 @@ mod tests {
             );
             xtrans::pack12_line(&samples, &mut ram[y * 40..y * 40 + 36]);
         }
-        let sensor = fujimod_emulator_sensor_input::sensor::Sensor::new(None, (0, 0));
+        let sensor = fujimod_emulator_sensor_input::sensor::Sensor::new(None, Default::default());
         sensor.0.lock().unwrap().still_raw = Some(StillRaw {
             address: RAM,
             pitch: 40,
@@ -2411,7 +2411,7 @@ mod tests {
             ram,
             ..Default::default()
         };
-        let sensor = fujimod_emulator_sensor_input::sensor::Sensor::new(None, (0, 0));
+        let sensor = fujimod_emulator_sensor_input::sensor::Sensor::new(None, Default::default());
         sensor.0.lock().unwrap().still_raw = Some(StillRaw {
             address: RAM,
             pitch: 64,

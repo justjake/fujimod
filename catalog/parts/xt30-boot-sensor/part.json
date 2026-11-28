@@ -5,9 +5,16 @@
   "model": {
     "kind": "peripheral",
     "interface": {
-      "kind": "imaging-sensor",
-      "read_gate_register": 81,
-      "read_gate_mask": 8
+      "kind": "image-sensor",
+      "read_gate": {
+        "register": 81,
+        "mask": 8
+      },
+      "standby_gate": {
+        "register": 0,
+        "mask": 1
+      },
+      "basis": "The X-T30 boot run's sensor on the XP4 sensor interface. Read gate: register 0x51 bit 3, the gate its run declared. Standby: register 0 bit 0 set at reset, the model the run used; not measured on this sensor."
     }
   }
 }

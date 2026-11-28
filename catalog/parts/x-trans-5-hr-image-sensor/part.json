@@ -1,0 +1,24 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "x-trans-5-hr-image-sensor",
+  "model": {
+    "kind": "peripheral",
+    "interface": {
+      "kind": "image-sensor",
+      "read_gate": {
+        "register": 89,
+        "mask": 4
+      },
+      "standby_gate": {
+        "register": 0,
+        "mask": 1
+      },
+      "fast_readout": {
+        "readout": 7,
+        "line_ns": 6000
+      },
+      "basis": "The 40 MP X-Trans CMOS 5 HR of the X-T5, X-H2, X-E5 and X100VI. Read gate: register 0x59 bit 2, which the X100VI and X-T5 boots set before they read sensor registers. Standby: register 0 bit 0, set at reset and cleared by the stock wake programming. Fast readout: X-T5 4.31 contrast AF selects register 0x01 = 7, a readout of 6 us lines (432 clocks at 72 MHz, mode table 0x36d9fb8 row 96). The X-H2, X-E5 and X100VI share the chip; these facts are not measured on them."
+    }
+  }
+}

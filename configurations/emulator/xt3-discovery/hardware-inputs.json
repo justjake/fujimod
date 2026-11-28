@@ -134,10 +134,6 @@
     "sensor_input": {
       "frame_period_ticks": 900900,
       "frame_active_ticks": 450450,
-      "read_gate": {
-        "register": 81,
-        "mask": 8
-      },
       "statistics_scene": {
         "name": "functional uniform grey",
         "luma": 2048,

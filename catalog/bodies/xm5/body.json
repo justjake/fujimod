@@ -120,7 +120,8 @@
     "winbond-w35n01jw",
     "control-bus-device-66",
     "control-bus-device-68",
-    "serial-command-8-mode3"
+    "serial-command-8-mode3",
+    "xm5-image-sensor"
   ],
   "wiring": [
     {

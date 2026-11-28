@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "xm5-image-sensor",
+  "model": {
+    "kind": "peripheral",
+    "interface": {
+      "kind": "image-sensor",
+      "read_gate": {
+        "register": 89,
+        "mask": 4
+      },
+      "standby_gate": {
+        "register": 0,
+        "mask": 1
+      },
+      "basis": "The 26 MP X-Trans CMOS 4 of the X-M5. UNVERIFIED: both gates are carried over from the X100VI (X-Trans CMOS 5 HR) model that the X-M5 1.30 boot ran with, not measured on this sensor; the X-T3 record of the same sensor family on the XP4 interface gates reads on register 0x51 bit 3 instead. Its fast readout is not decoded."
+    }
+  }
+}

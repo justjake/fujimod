@@ -326,19 +326,24 @@ pub enum PeripheralPart {
     AudioSerialOutput,
     /// Imaging serial output endpoint.
     ImagingSerialOutput,
-    /// Image sensor whose serial register selects the readout gate.
-    ImagingSensor {
-        /// Sensor register controlling readout.
-        read_gate_register: u16,
-        /// Bits enabling the readout gate.
-        read_gate_mask: u8,
-    },
-    /// Image sensor with a fast autofocus readout of known line length.
-    TimedReadoutSensor {
-        /// Value of sensor register 0x01 that selects the fast readout.
-        fast_readout: u8,
-        /// Length of one line of that readout.
-        line_ns: u64,
+    /// Image sensor programmed through eight-byte register command packets, streaming to the
+    /// processor's image receiver. Every field is a fact of the sensor chip.
+    ImageSensor {
+        /// Register bits that must be set before the sensor answers a register read; absent,
+        /// reads are not gated.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        read_gate: Option<SensorRegisterBits>,
+        /// Register bits that hold the sensor in standby: it streams once it has been
+        /// programmed and these bits are clear. They are set at reset. Absent, the sensor
+        /// streams once programmed.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        standby_gate: Option<SensorRegisterBits>,
+        /// A readout whose frame length follows the sensor's frame-length register, when
+        /// decoded.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        fast_readout: Option<SensorFastReadout>,
+        /// How these facts were established.
+        basis: String,
     },
     /// Full-duplex framed peer whose frame repeats the last command frame it received.
     FramedCommandPeer {
@@ -474,6 +479,40 @@ pub enum PeripheralPart {
         #[serde(skip_serializing_if = "Option::is_none")]
         spare_bytes: Option<u64>,
     },
+}
+
+/// Bits of one image-sensor register.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct SensorRegisterBits {
+    /// Sensor register address.
+    pub register: u16,
+    /// Bits of that register; nonzero.
+    pub mask: u8,
+}
+
+/// An image-sensor readout of decoded line length.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct SensorFastReadout {
+    /// Value of sensor register 0x01 that selects the readout.
+    pub readout: u8,
+    /// Length of one line of that readout.
+    pub line_ns: u64,
 }
 
 /// One register range a power controller answers.

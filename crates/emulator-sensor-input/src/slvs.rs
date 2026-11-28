@@ -317,13 +317,20 @@ impl Device for Receiver {
 mod tests {
     use super::*;
     use fujimod_emulator_devices::test_host::recording::RecordingHost;
+    /// The register-0 bit-0 standby gate and a read gate on `read`.
+    fn gates(read: (u16, u8)) -> super::super::sensor::Gates {
+        super::super::sensor::Gates {
+            read: Some(read),
+            standby: Some((0, 1)),
+        }
+    }
     const BASE: u64 = 0xff940000;
     const PERIOD: u64 = 16_667_000;
     const ACTIVE: u64 = PERIOD / 2;
     #[test]
     fn reset_pulse_stop_level_exact_phases_and_ack_do_not_depend_on_program() {
         for (cpu, pc) in [(0, 0), (3, 0x12345678)] {
-            let sensor = Sensor::new(None, (0x51, 8));
+            let sensor = Sensor::new(None, gates((0x51, 8)));
             {
                 let mut s = sensor.0.lock().unwrap();
                 s.writes = 1;
@@ -393,6 +400,9 @@ mod tests {
         }
     }
     fn rig(streaming: bool) -> (Sensor, Receiver, RecordingHost) {
+        rig_gated(streaming, Some((0, 1)))
+    }
+    fn rig_gated(streaming: bool, standby: Option<(u16, u8)>) -> (Sensor, Receiver, RecordingHost) {
         let sensor = Sensor::new(
             Some(super::super::sensor::ImageRoutes {
                 dma: Some([162, 163]),
@@ -400,7 +410,10 @@ mod tests {
                 line_stride: false,
                 frame_start_pulse: Some(165),
             }),
-            (0x59, 4),
+            super::super::sensor::Gates {
+                read: Some((0x59, 4)),
+                standby,
+            },
         );
         {
             let mut s = sensor.0.lock().unwrap();
@@ -457,22 +470,34 @@ mod tests {
         assert!(cx.refusal().is_none());
     }
     #[test]
-    fn no_standby_gate_option_arms_without_register_zero_write() {
-        // Sensor programmed (writes != 0) but register 0 never written (reset value 1 = standby).
-        for (option, armed) in [(false, false), (true, true)] {
-            let (sensor, mut receiver, mut host) = rig(false);
+    fn a_programmed_sensor_streams_once_its_standby_bits_are_clear() {
+        // Programmed (writes != 0): a standby gate holds the receiver until its bits clear;
+        // without one the sensor streams at once.
+        for (standby, armed) in [
+            (Some((0, 1)), false),
+            (Some((0x40, 6)), false),
+            (None, true),
+        ] {
+            let (sensor, mut receiver, mut host) = rig_gated(false, standby);
             sensor.0.lock().unwrap().writes = 1;
-            sensor.set_no_standby_gate(option);
             enable(&mut receiver, &mut host);
             assert_eq!(
                 receiver.next_deadline(0).is_some(),
                 armed,
-                "option {option}"
+                "standby {standby:?}"
             );
         }
-        // The option does not stream an unprogrammed sensor.
-        let (sensor, mut receiver, mut host) = rig(false);
-        sensor.set_no_standby_gate(true);
+        // Clearing the gate's bits (and only them) releases it.
+        let (sensor, mut receiver, mut host) = rig_gated(false, Some((0x40, 6)));
+        {
+            let mut s = sensor.0.lock().unwrap();
+            s.writes = 1;
+            s.registers.insert(0x40, 0xf9);
+        }
+        enable(&mut receiver, &mut host);
+        assert!(receiver.next_deadline(0).is_some());
+        // No gate does not stream an unprogrammed sensor.
+        let (_, mut receiver, mut host) = rig_gated(false, None);
         enable(&mut receiver, &mut host);
         assert_eq!(receiver.next_deadline(0), None);
     }
@@ -480,11 +505,12 @@ mod tests {
     #[test]
     fn frames_of_the_decoded_readout_follow_the_frame_length_register() {
         // X-T5 4.31: readout 0x07 (sensor register 0x01) lasts (0x18/0x19 + 2) x 2 lines.
-        let sensor =
-            Sensor::new(None, (0x59, 4)).with_frame_timing(super::super::sensor::FrameTiming {
+        let sensor = Sensor::new(None, gates((0x59, 4))).with_frame_timing(
+            super::super::sensor::FrameTiming {
                 readout: 7,
                 line_ticks: 6000,
-            });
+            },
+        );
         {
             let mut s = sensor.0.lock().unwrap();
             s.registers
@@ -537,7 +563,7 @@ mod tests {
             Some(2 * PERIOD + 2_592_000)
         );
         // Without the opt-in the same registers keep the stand-in period.
-        let plain = Sensor::new(None, (0x59, 4));
+        let plain = Sensor::new(None, gates((0x59, 4)));
         plain
             .0
             .lock()

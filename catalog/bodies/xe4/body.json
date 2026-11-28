@@ -206,5 +206,8 @@
         "kind": "stand-in"
       }
     }
+  ],
+  "parts": [
+    "xt3-image-sensor"
   ]
 }

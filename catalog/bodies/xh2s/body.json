@@ -376,7 +376,8 @@
     "lsm6ds",
     "framed-command-peer",
     "unidentified-serial-device",
-    "xf18-55-lens"
+    "xf18-55-lens",
+    "x-trans-5-hs-image-sensor"
   ],
   "wiring": [
     {

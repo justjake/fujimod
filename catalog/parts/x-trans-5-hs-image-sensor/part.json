@@ -1,0 +1,12 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "x-trans-5-hs-image-sensor",
+  "model": {
+    "kind": "peripheral",
+    "interface": {
+      "kind": "image-sensor",
+      "basis": "The 26 MP stacked X-Trans CMOS 5 HS of the X-H2S. The stock 7.30 boot reads sensor registers without writing register 0x59 and never writes register 0, so neither the X-Trans 5 HR read gate nor its standby gate applies: the sensor answers reads and streams once programmed (observed on the strict boot; the gates themselves are unmeasured). Its fast readout is not decoded."
+    }
+  }
+}

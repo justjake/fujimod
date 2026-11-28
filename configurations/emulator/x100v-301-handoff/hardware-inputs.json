@@ -34,10 +34,6 @@
       "basis": "Declared virtual X100V sensor-statistics scene; physical sensor timing is unmeasured.",
       "frame_period_ticks": 4000000,
       "frame_active_ticks": 10000,
-      "read_gate": {
-        "register": 81,
-        "mask": 8
-      },
       "statistics_scene": {
         "name": "diagnostic-flat-linear-statistics",
         "luma": 4096,

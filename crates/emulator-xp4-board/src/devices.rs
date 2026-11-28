@@ -928,7 +928,7 @@ impl Devices {
         &mut self,
         map: (u64, u64, Vec<u32>, Vec<u32>, Vec<u32>, Option<Vec<u32>>),
         timing: (u64, u64, u64, u64),
-        read_gate: (u16, u8),
+        gates: (Option<(u16, u8)>, Option<(u16, u8)>),
         ibuf: Option<(u64, u32, u64, u64, u64, String)>,
         statistics_in_memory: bool,
         frame_start_pulse: Option<u32>,
@@ -969,7 +969,10 @@ impl Devices {
                 // with a +0x140 cause bit is not read.
                 frame_start_pulse,
             }),
-            read_gate,
+            sensor::Gates {
+                read: gates.0,
+                standby: gates.1,
+            },
         );
         let command = sensor::Command::new(command_base, sensor.clone(), command_ticks)?
             .with_retained_words();
@@ -2080,7 +2083,14 @@ mod imaging_admission_tests {
             let mut devices = Devices::empty();
             assert!(
                 devices
-                    .imaging(map(raw_dma), (100, 50, 10, 8), (0x59, 4), None, false, None)
+                    .imaging(
+                        map(raw_dma),
+                        (100, 50, 10, 8),
+                        (Some((0x59, 4)), Some((0, 1))),
+                        None,
+                        false,
+                        None
+                    )
                     .is_err()
             );
             assert!(devices.models.is_empty() && devices.windows.is_empty());
@@ -2088,7 +2098,14 @@ mod imaging_admission_tests {
         for raw_dma in [None, Some(vec![97, 98])] {
             let mut devices = Devices::empty();
             devices
-                .imaging(map(raw_dma), (100, 50, 10, 8), (0x59, 4), None, false, None)
+                .imaging(
+                    map(raw_dma),
+                    (100, 50, 10, 8),
+                    (Some((0x59, 4)), Some((0, 1))),
+                    None,
+                    false,
+                    None,
+                )
                 .unwrap();
             assert_eq!(devices.windows.len(), 2);
         }
@@ -2102,7 +2119,7 @@ mod imaging_admission_tests {
                     .imaging(
                         map(None),
                         (100, 50, 10, 8),
-                        (0x59, 4),
+                        (Some((0x59, 4)), Some((0, 1))),
                         None,
                         false,
                         Some(line)
@@ -2120,7 +2137,14 @@ mod imaging_admission_tests {
         use fujimod_emulator_devices::test_host::recording::RecordingHost;
         let mut devices = Devices::empty();
         devices
-            .imaging(map(None), (100, 50, 10, 8), (0x59, 4), None, false, pulse)
+            .imaging(
+                map(None),
+                (100, 50, 10, 8),
+                (Some((0x59, 4)), Some((0, 1))),
+                None,
+                false,
+                pulse,
+            )
             .unwrap();
         let mut command = devices.models[0].take().unwrap();
         let mut receiver = devices.models[1].take().unwrap();

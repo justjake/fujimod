@@ -2485,6 +2485,21 @@ impl Part {
                     }
                     sampling.evidence.validate()?;
                 }
+                crate::assembly::PeripheralPart::ImageSensor {
+                    read_gate,
+                    standby_gate,
+                    fast_readout,
+                    basis,
+                } if read_gate
+                    .iter()
+                    .chain(standby_gate)
+                    .any(|gate| gate.mask == 0)
+                    || fast_readout
+                        .is_some_and(|readout| readout.readout == 0 || readout.line_ns == 0)
+                    || basis.trim().is_empty() =>
+                {
+                    return Err(format!("image sensor part {} is invalid", self.id));
+                }
                 _ => {}
             }
         }
