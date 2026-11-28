@@ -398,6 +398,34 @@ struct NativeReadWindow {
     additional_reads: u64,
 }
 
+/// Most translated backing words have a single guest address. Allocate a
+/// list only when another mapping actually translates the same word.
+enum CompiledAddresses {
+    One(u32),
+    Aliases(Vec<u32>),
+}
+
+impl CompiledAddresses {
+    fn insert(&mut self, address: u32) {
+        match self {
+            Self::One(first) if *first != address => {
+                *self = Self::Aliases(vec![*first, address]);
+            }
+            Self::Aliases(addresses) if !addresses.contains(&address) => {
+                addresses.push(address);
+            }
+            _ => {}
+        }
+    }
+
+    fn addresses(&self) -> &[u32] {
+        match self {
+            Self::One(address) => std::slice::from_ref(address),
+            Self::Aliases(addresses) => addresses,
+        }
+    }
+}
+
 struct CoreShared {
     rprofile: Option<rprofile::Profile>,
     exclusive: RefCell<Option<BoardExclusive>>,
@@ -410,7 +438,7 @@ struct CoreShared {
     seen_watch_revision: Cell<u64>,
     memory_flushes: Cell<u64>,
     selective_pages: Cell<u64>,
-    compiled_words: RefCell<HashMap<usize, BTreeSet<u32>>>,
+    compiled_words: RefCell<HashMap<usize, CompiledAddresses>>,
     compiled_descriptors: RefCell<HashMap<usize, BTreeSet<u32>>>,
     control_flushes: Cell<u64>,
     mmu_context: Cell<Option<TranslationContext>>,
@@ -828,7 +856,7 @@ impl CoreShared {
                 let mut descriptors = self.compiled_descriptors.borrow_mut();
                 let complete = self.code_visibility.changed_since(previous, |word| {
                     if let Some(targets) = compiled.remove(&word) {
-                        words.extend(targets);
+                        words.extend(targets.addresses().iter().copied());
                     }
                     if let Some(targets) = descriptors.remove(&word) {
                         pages.extend(targets);
@@ -868,8 +896,8 @@ impl CoreShared {
         self.compiled_words
             .borrow_mut()
             .entry(pointer.addr() & !3)
-            .or_default()
-            .insert(address);
+            .and_modify(|compiled| compiled.insert(address))
+            .or_insert(CompiledAddresses::One(address));
     }
 
     fn fetch_code(&self, address: u32, compiled: bool) -> Result<Result<u32, u32>, String> {
@@ -3021,6 +3049,7 @@ mod tests {
             let writer = Core::new_with_code_visibility(Model::CortexA7, visibility).unwrap();
             unsafe {
                 reader.map_backing(0x1000, 4096, 7, ptr).unwrap();
+                reader.map_backing(0x2000, 4096, 7, ptr).unwrap();
                 writer.map_backing(0x3000, 4096, 7, ptr).unwrap();
             }
             reader
@@ -3041,8 +3070,10 @@ mod tests {
                 .unwrap();
             for (cpu, begin, count, window) in [
                 (&reader, 0x1000, 40, allow_native),
+                (&reader, 0x2000, 40, allow_native),
                 (&writer, 0x8000, 1, false),
                 (&reader, 0x1000, 40, allow_native),
+                (&reader, 0x2000, 40, allow_native),
             ] {
                 cpu.set_loop_window(window).unwrap();
                 cpu.run(Run {
@@ -3055,7 +3086,7 @@ mod tests {
             }
             let mut bytes = [0; 4];
             reader.read_register(arm::CORE[0], &mut bytes).unwrap();
-            assert_eq!(u32::from_le_bytes(bytes), 60, "native={allow_native}");
+            assert_eq!(u32::from_le_bytes(bytes), 120, "native={allow_native}");
         }
     }
     #[test]
