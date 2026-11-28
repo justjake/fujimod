@@ -315,9 +315,26 @@ export function Choice(props: {
       props.pick(best);
     },
   });
-  /* The chosen cell always sits under the fixed plate in the middle. */
-  const offset = createMemo(() => at(dial.shown(), 'center') - props.width / 2);
+  /* Left-aligned clamped scroll: starts flush left with no empty void when item 0
+     is selected, then scrolls smoothly to keep later items centered until the end. */
+  const maxScroll = createMemo(() => {
+    const c = cells();
+    if (c.length === 0) return 0;
+    const last = c[c.length - 1];
+    return Math.max(0, last.center + last.width / 2 + 8 - props.width);
+  });
+  const offset = createMemo(() => {
+    const raw = at(dial.shown(), 'center') - props.width / 2;
+    return Math.max(0, Math.min(maxScroll(), raw));
+  });
   const plate = createMemo(() => at(dial.shown(), 'width'));
+  const plateLeft = createMemo(() => at(dial.shown(), 'center') - offset() - plate() / 2);
+  const mask = createMemo(() => {
+    const leftFade = offset() > 2 ? 'transparent, #000 22px' : '#000 0px';
+    const rightFade =
+      offset() < maxScroll() - 2 ? '#000 calc(100% - 22px), transparent' : '#000 100%';
+    return `linear-gradient(to right, ${leftFade}, ${rightFade})`;
+  });
   const motion = () => (dial.active() ? 'none' : 'transform 150ms ease-out, width 150ms ease-out');
   return (
     <RowCard
@@ -330,25 +347,22 @@ export function Choice(props: {
       atEnd={props.value >= props.items.length - 1}
       handlers={dial.handlers}
     >
-      {/* The fixed plate: it stays in the middle and takes the chosen cell's width. */}
-      <span
-        class="absolute inset-y-[5px] left-1/2 -translate-x-1/2 rounded-[9px]"
-        style={{
-          width: `${plate()}px`,
-          ...CHOSEN,
-          transition: dial.active() ? 'none' : 'width 150ms ease-out',
-        }}
-      />
-      <div
-        class="absolute inset-0"
-        style={{
-          'mask-image':
-            'linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent)',
-        }}
-      >
+      {/* Chosen cell plate, tracking the chosen cell cleanly. */}
+      <Show when={cells().length > 0}>
+        <span
+          class="absolute inset-y-[5px] rounded-[9px]"
+          style={{
+            left: `${plateLeft()}px`,
+            width: `${plate()}px`,
+            ...CHOSEN,
+            transition: dial.active() ? 'none' : 'left 150ms ease-out, width 150ms ease-out',
+          }}
+        />
+      </Show>
+      <div class="absolute inset-0" style={{ 'mask-image': mask() }}>
         <div
           ref={(element) => (track = element)}
-          class="absolute inset-y-0 left-0 flex items-stretch gap-[2px] py-[5px]"
+          class="absolute inset-y-0 left-0 flex items-stretch gap-[2px] py-[5px] pl-[6px]"
           style={{
             transform: `translateX(${-offset()}px)`,
             transition: motion(),
@@ -358,10 +372,10 @@ export function Choice(props: {
           <For each={[...props.items]}>
             {(item, i) => {
               const distance = () => Math.abs(i() - dial.shown());
-              const ink = () => (distance() < 0.5 ? CHOSEN_INK : 'rgb(255 255 255 / 0.7)');
+              const ink = () => (distance() < 0.5 ? CHOSEN_INK : 'rgb(255 255 255 / 0.72)');
               return (
                 <span
-                  class={`relative flex shrink-0 items-center justify-center font-medium whitespace-nowrap ${TEXT} ${typeof item === 'string' ? 'px-[7px]' : 'px-[3px]'}`}
+                  class={`relative flex shrink-0 items-center justify-center text-[18px] leading-none font-semibold whitespace-nowrap ${typeof item === 'string' ? 'px-[7px]' : 'px-[4px]'}`}
                   style={{ color: ink() }}
                 >
                   {typeof item === 'string' ? item : item.art(ink())}

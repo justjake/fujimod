@@ -5,8 +5,8 @@ import { reveal } from './column';
 import { Chevron } from './controls';
 import { ACCENT } from './materials';
 
-/** A fly-out row's height: the camera menu's row pitch. */
-const FLY_ROW = 57;
+/** A fly-out row's height, scaled to match menu row text. */
+const FLY_ROW = 44;
 
 /** One choice in a picker: its name, and artwork drawn in the given ink. */
 export interface PickerOption {
@@ -57,7 +57,7 @@ export function PickerList(props: {
             class={
               props.columns
                 ? 'relative flex aspect-square items-center justify-center rounded-[10px]'
-                : `flex w-full items-center gap-[10px] pr-[16px] pl-[12px] text-left text-[35px] leading-none font-normal whitespace-nowrap`
+                : `flex w-full items-center gap-[8px] pr-[14px] pl-[10px] text-left text-[22px] leading-none font-medium whitespace-nowrap`
             }
             style={
               props.columns
@@ -84,7 +84,7 @@ export function PickerList(props: {
           >
             <Show when={!props.columns}>
               <span
-                class="-mr-[10px] w-[36px] shrink-0 text-[25px]"
+                class="-mr-[6px] w-[24px] shrink-0 text-[18px]"
                 style={{ color: 'var(--m-check)' }}
               >
                 {props.current === i() ? '✓' : ''}

@@ -29,6 +29,8 @@ export const GLASS: JSX.CSSProperties = {
 export const COLUMN: JSX.CSSProperties = {
   background: 'var(--m-column)',
   'box-shadow': 'var(--m-column-edge)',
+  'backdrop-filter': 'var(--m-column-blur, none)',
+  '-webkit-backdrop-filter': 'var(--m-column-blur, none)',
   color: '#fff',
 };
 
