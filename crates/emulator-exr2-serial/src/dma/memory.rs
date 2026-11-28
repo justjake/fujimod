@@ -301,6 +301,12 @@ impl Device for MemoryDma {
     fn name(&self) -> &'static str {
         "exr2-memory-dma"
     }
+    fn read_without_advance(&self, address: u64, size: u8, now: u64) -> Option<u64> {
+        (self.offset(address, size) == Some(STATUS * 4)
+            && self.state.pending.as_ref().is_none_or(|p| p.due > now))
+        .then(|| u64::from(self.state.registers[STATUS]))
+    }
+
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         self.advance(cx);
         let Some(offset) = self.offset(address, size) else {
