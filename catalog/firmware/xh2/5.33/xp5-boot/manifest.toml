@@ -1,0 +1,96 @@
+# X-H2 5.33: the X-H2 5.30 board with this update's streams and profile. Code addresses
+# cited below are 5.30's; 5.30 and 5.33 share the pre-handoff kernel code (0x58420..0x58480).
+#
+# Cold OS boot: EL3 -> EL1t handoff at 0x5847c, after stock 0x58420..0x58478
+# (the X-T5 4.31 kernel shape; loader tail 0x2318..0x232c passes x0 = [0x13008] =
+# 0x14d8c7c and x1 = 0x18250).
+version = 1
+firmware = "xh2-533"
+load_firmware = true
+# Host execution only: the companion computes (the IBIS servo's 16 kHz sample frames) far
+# more than it waits in delay loops, so it runs in block execution. The guest state is the
+# same either way.
+mprofile_block_execution = true
+
+# Stage one leaves the MT35XU flash reading with 20 dummy cycles: the loader's first aperture
+# read (octal I/O 0xfd at PC 0x457c8) comes before any volatile configuration write.
+[flash]
+volatile_dummy_cycles = 20
+
+# The body's DRAM extent: the stock bus-drain classifier 0x14d1a1c splits memory at
+# 0x80000000 (body hardware.bus_drain). PROVISIONAL: installed capacity is unmeasured.
+[[ram]]
+base = 0
+size = 0x80000000
+dram = true
+
+# The firmware uses DRAM past the body's 0x80000000: the still subject-detection arena is
+# 0x80001000+0x13ff000 (0x2e1f63c; the AI task 0x2ea34d8 clears 0x10c1000 bytes of it,
+# 0x2ea367c). The DDR setup 0x13af5a0 maps the four regions of the table 0x18f49f8 (mask
+# 0xf at 0x18f49f4): 0+0x80000000, 0x80000000+0x70000000, 0x100000000+0x80000000 and
+# 0x180000000+0x80000000. The drain helper's 0x80000000 read (0x14d1c44) therefore reads
+# RAM, as the X-T5's slot 1 does: the body's bus drain there lies in DRAM and is not built.
+# Installed capacity is unmeasured; the two regions above 4 GiB are not declared until the
+# firmware reaches them.
+[[ram]]
+base = 0x80000000
+size = 0x70000000
+dram = true
+
+# Companion SRAM, main view (the SoC's companion-sram region): 0x13fb120 copies the
+# companion image from flash 0xf01c0000 to 0xfa200000 and the shared configuration
+# lies at 0xfa2fa000..0xfa300000. Before that, the interrupt-configuration helper
+# 0x5dcd0 read-modify-writes 0xfa270e00 for INTIDs 0xf0..0xff.
+[[ram]]
+base = 0xfa200000
+size = 0x100000
+
+# DDR PHY register and firmware space, RAM as on the X-T5 (xt5/4.31 manifest.toml): the firmware
+# stores halfword PHY registers at 0xfb000000 / 0xfb400000 + 2 * APB index. The interactive run
+# of a half press stopped at write2 0xfb440120 (CPU0 PC 0x5de1c, LR 0x13bd4ec, the training drain
+# of 0x13bd764); the SD card start's stock setup also writes them (card-handoff.toml, 2026-11-23).
+# The mailbox pages above each region are the stubs of manifest.d/48-ddr-phy.toml. Plain RAM
+# is the X-T5's model; the X-H2's register meanings are UNVERIFIED.
+[[ram]]
+base = 0xfb000000
+size = 0x1a0000
+
+[[ram]]
+base = 0xfb400000
+size = 0x1a0000
+
+# Boot SRAM, 256 KiB. The SoC profile maps it only for ROM and SD starts, but the application
+# keeps the AE statistics banks here, as the X-T5 does: the AE setup 0x2f50bbc (X-T5 0x2e8c6b8)
+# stores the bank pointers 0xff800000 and 0xff8075a0 (0x2f50bf8, 0x2f50c00) with 0x75a0 bytes
+# each, 0x2f79de0 (0x2eb5e74) sets four planes 0x400 apart from 0xff80eb40 (0x2f79de8), and
+# 0x2eec5c4 (0x2e2943c) increments the counter 0xff82c008. The statistics model writes its
+# frames into this RAM.
+[[ram]]
+base = 0xff800000
+size = 0x40000
+
+# The SD slot (host 0xff9b0000, 25-sd.toml) is empty. The format describes the volume a
+# run that inserts a card without an image would see; it is unused while the slot is empty.
+[[sd]]
+base = 0xff9b0000
+present = false
+protected = false
+files = []
+[sd.format]
+sectors = 0x3b9e000
+max_dirty_sectors = 65536
+partition_start = 8192
+sectors_per_cluster = 64
+label = "NO NAME"
+
+[[sd]]
+base = 0xff9b4000
+present = false
+protected = false
+files = []
+[sd.format]
+sectors = 0x3b9e000
+max_dirty_sectors = 65536
+partition_start = 8192
+sectors_per_cluster = 64
+label = "NO NAME"
