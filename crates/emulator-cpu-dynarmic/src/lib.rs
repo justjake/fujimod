@@ -3453,7 +3453,7 @@ mod tests {
     fn native_run_and_step_discard_cached_code_after_a_host_write() {
         let cpu = Core::new(Model::CortexA7).unwrap();
         cpu.map_zeroed(0x1000, 4096, 7).unwrap();
-        let set_increment = |increment| {
+        let set_increment = |increment: u32| {
             let add = 0xe280_0000u32 | increment;
             cpu.write_memory(0x1000, &add.to_le_bytes()).unwrap();
         };
@@ -3557,6 +3557,43 @@ mod tests {
             assert_eq!(run(true, count), run(false, count), "budget {count}");
         }
         assert_eq!(run(true, 9), ([6, 9, 44, 0x1024], 8));
+    }
+
+    #[test]
+    fn flags_before_a_memory_fault_remain_visible_after_a_predicated_select() {
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+        for (index, word) in [
+            0xe150_0000u32, // cmp r0, r0
+            0x03a0_0005,    // moveq r0, #5
+            0xe591_2000,    // ldr r2, [r1]
+            0xe350_0000,    // cmp r0, #0
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            cpu.write_memory(0x1000 + index as u64 * 4, &word.to_le_bytes())
+                .unwrap();
+        }
+        cpu.write_register(arm::CORE[1], &0x2000u32.to_le_bytes())
+            .unwrap();
+        cpu.set_loop_window(true).unwrap();
+        let result = cpu.run(Run {
+            begin: 0x1000,
+            until: None,
+            watchdog_us: 0,
+            instructions: Some(4),
+        });
+        assert!(matches!(
+            result,
+            Err(ExecutionError::Memory {
+                fault: Fault::ReadUnmapped,
+                ..
+            })
+        ));
+        assert_eq!(cpu.instruction_progress(), Some(2));
+        assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 0) }, 5);
+        assert_eq!(unsafe { ffi::dynarmic_get_cpsr(cpu.inst) } >> 28, 6);
     }
 
     #[test]
