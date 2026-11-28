@@ -127,8 +127,6 @@
             }
           ]
         },
-        "browser_configuration_id": "xm1-150-browser-camera",
-        "camera_configuration_id": "xm1-150-runtime",
         "control_bus_tables_id": "control-bus-xm1-150",
         "execution_scope": "offline-boot-development",
         "fe80_programs": [

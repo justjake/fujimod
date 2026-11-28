@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "xe2-411-browser-usb",
+  "configuration_id": "xe2-411-driver",
+  "change": {
+    "kind": "preset",
+    "preset": {
+      "factory_options": {
+        "secondary_bus_profile": "disabled"
+      },
+      "limits": [],
+      "usb_connected": true,
+      "firmware_inputs_id": "xe2-411-browser-usb-catalog-inputs",
+      "hardware_selection": {
+        "body_profile_id": "xe2-411-browser-usb"
+      }
+    }
+  }
+}

@@ -107,7 +107,6 @@
   "layouts": {
     "profiles": {
       "xe2-411": {
-        "camera_configuration_id": "xe2-411-runtime",
         "execution_scope": "offline-boot-development",
         "limits": [],
         "rom_basis": "Declared catalog input."

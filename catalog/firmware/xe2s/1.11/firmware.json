@@ -127,7 +127,6 @@
             }
           ]
         },
-        "camera_configuration_id": "xe2s-111-runtime",
         "execution_scope": "offline-boot-development",
         "limits": [],
         "rom_basis": "Declared catalog input.",

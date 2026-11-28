@@ -1,0 +1,16 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "xe2s-111-rec-hardware",
+  "configuration_id": "xe2s-111-driver",
+  "change": {
+    "kind": "preset",
+    "preset": {
+      "factory_options": {},
+      "hardware_selection": {
+        "body_profile_id": "xe2s-rec"
+      },
+      "hardware_inputs_id": "xe2s-rec"
+    }
+  }
+}

@@ -107,7 +107,6 @@
   "layouts": {
     "profiles": {
       "xt10-131": {
-        "camera_configuration_id": "xt10-131-runtime",
         "execution_scope": "offline-boot-development",
         "limits": [],
         "rom_basis": "Declared catalog input."

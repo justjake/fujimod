@@ -337,7 +337,6 @@
   "layouts": {
     "profiles": {
       "x70-110": {
-        "browser_configuration_id": "x70-110-browser-camera",
         "fixture_layouts": {
           "status": "Existing X70 module contracts retained; address extraction proceeds in steps4/5/9"
         },
