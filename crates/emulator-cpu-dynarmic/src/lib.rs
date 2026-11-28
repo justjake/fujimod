@@ -10,6 +10,8 @@ mod rprofile;
 mod snapshot;
 mod status;
 
+pub use rprofile::Config as RProfileConfig;
+
 use fujimod_emulator_cpu::{memory::Backing, *};
 use std::cell::{Cell, RefCell, UnsafeCell};
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
@@ -333,7 +335,7 @@ struct NativeReadWindow {
 const NATIVE_PAGE_SLOTS: usize = 32;
 
 struct CoreShared {
-    mpu: Option<RefCell<rprofile::Mpu>>,
+    rprofile: Option<rprofile::Profile>,
     exclusive: RefCell<Option<BoardExclusive>>,
     observe_exclusive_stores: Cell<bool>,
     #[cfg(test)]
@@ -508,6 +510,11 @@ impl CoreShared {
     }
 
     fn mapping(&self, address: u64, bytes: usize) -> Option<(Mapping, usize)> {
+        if let Some(profile) = &self.rprofile
+            && profile.overlaps_tcm(address, bytes)
+        {
+            return profile.tcm_region(address, bytes);
+        }
         let mappings = self.mappings.borrow();
         let (&base, &mapping) = mappings.range(..=address).next_back()?;
         let size = match mapping {
@@ -515,6 +522,13 @@ impl CoreShared {
         };
         let offset = usize::try_from(address - base).ok()?;
         (offset.checked_add(bytes)? <= size).then_some((mapping, offset))
+    }
+
+    fn has_mmio(&self, address: u64, bytes: usize) -> bool {
+        self.mappings.borrow().iter().any(|(&base, mapping)| {
+            matches!(mapping, Mapping::Mmio { bytes: length, .. }
+                if base < address + bytes as u64 && address < base + *length as u64)
+        })
     }
 
     fn translate(&self, address: u32, access: Access) -> Result<u64, String> {
@@ -533,7 +547,7 @@ impl CoreShared {
         access: Access,
         descriptor: impl FnMut(*const [u8; 4], u32),
     ) -> Result<Result<u64, u32>, String> {
-        if self.mpu.is_some() {
+        if self.rprofile.is_some() {
             let begin = address & !4095;
             // The MPU can change permissions inside a page. Cache a pointer
             // only after checking the entire page for the requested access.
@@ -563,8 +577,9 @@ impl CoreShared {
             fcseidr,
             cpsr,
         } = control;
-        if let Some(mpu) = &self.mpu {
-            return Ok(mpu
+        if let Some(profile) = &self.rprofile {
+            return Ok(profile
+                .mpu
                 .borrow()
                 .check(sctlr, cpsr, address, bytes, access)
                 .map(|()| u64::from(address)));
@@ -655,7 +670,7 @@ impl CoreShared {
             // Key the native translations by the inputs the short-descriptor
             // walker uses. Guest reads still see unmodified CP15 registers.
             control.cpsr = u32::from(control.cpsr & 31 == 0x10);
-            let rprofile = self.mpu.is_some();
+            let rprofile = self.rprofile.is_some();
             control.sctlr &= if rprofile {
                 (1 << 17) | (1 << 13) | 1
             } else {
@@ -941,7 +956,7 @@ impl CoreShared {
         let write_allowed = (access == Access::Write || self.observed_backings.borrow().is_empty())
             && !self.code_visibility.watched(pointer)
             && permissions & 2 != 0
-            && (self.mpu.is_none() && access == Access::Write
+            && (self.rprofile.is_none() && access == Access::Write
                 || self
                     .walk_native_page(address, Access::Write, |_, _| {})
                     .ok()
@@ -1479,11 +1494,28 @@ impl Core {
         model: Model,
         code_visibility: CodeVisibility,
     ) -> Result<Self, String> {
-        if !matches!(model, Model::CortexA7 | Model::CortexR5F) {
-            return Err("Dynarmic requires a Cortex-A7 or Cortex-R5F processor".into());
-        }
+        let profile = match model {
+            Model::CortexA7 => None,
+            Model::CortexR5F => Some(RProfileConfig::default()),
+            _ => return Err("Dynarmic requires a Cortex-A7 or Cortex-R5F processor".into()),
+        };
+        Self::construct(model, code_visibility, profile)
+    }
+
+    pub fn new_rprofile(
+        config: RProfileConfig,
+        code_visibility: CodeVisibility,
+    ) -> Result<Self, String> {
+        Self::construct(Model::CortexR5F, code_visibility, Some(config))
+    }
+
+    fn construct(
+        model: Model,
+        code_visibility: CodeVisibility,
+        profile: Option<RProfileConfig>,
+    ) -> Result<Self, String> {
         let shared = Box::new(CoreShared {
-            mpu: (model == Model::CortexR5F).then(RefCell::default),
+            rprofile: profile.map(rprofile::Profile::new).transpose()?,
             exclusive: RefCell::new(None),
             observe_exclusive_stores: Cell::new(false),
             #[cfg(test)]
@@ -1553,6 +1585,9 @@ impl Core {
             .direct_pages
             .set(unsafe { ffi::dynarmic_data_pages(inst) });
         unsafe { ffi::dynarmic_set_cpsr(inst, 0xd3) };
+        if profile.is_some_and(|config| config.high_vectors) {
+            unsafe { ffi::dynarmic_set_cp15(inst, 0, 1, 0, 0, 1 << 13) };
+        }
 
         Ok(Self {
             inst,
@@ -1583,6 +1618,14 @@ impl Core {
         callbacks: Mmio,
         project: Option<DeviceReadProjection>,
     ) -> Result<(), String> {
+        if self
+            .shared
+            .rprofile
+            .as_ref()
+            .is_some_and(|profile| profile.overlaps_tcm(address, bytes))
+        {
+            return Err("TCM overlay of MMIO is unmodeled".into());
+        }
         self.shared.mapping_changed();
         self.shared.mappings.borrow_mut().insert(
             address,
@@ -1871,17 +1914,17 @@ impl Cpu for Core {
     }
 
     fn coprocessor(&self, register: arm::Coprocessor, value: Option<u64>) -> Result<u64, String> {
-        if register.cp != 15 || register.wide {
-            return Err("Dynarmic only supports 32-bit CP15 accesses".into());
-        }
-        if self.shared.mpu.is_some()
-            && let Some(register) = rprofile::MpuRegister::decode(register)
+        if self.shared.rprofile.is_some()
+            && let Some(register) = rprofile::SystemRegister::decode(register)
         {
             let value = value
                 .map(u32::try_from)
                 .transpose()
                 .map_err(|_| "CP15 value exceeds 32 bits")?;
-            return self.mpu_register(register, value).map(u64::from);
+            return self.rprofile_register(register, value).map(u64::from);
+        }
+        if register.cp != 15 || register.wide {
+            return Err("Dynarmic only supports modeled 32-bit system accesses".into());
         }
         if let Some(val) = value {
             let word = u32::try_from(val).map_err(|_| "CP15 value exceeds 32 bits")?;
@@ -1911,44 +1954,25 @@ impl Cpu for Core {
     }
 
     fn read_memory(&self, address: u64, bytes: &mut [u8]) -> Result<(), String> {
-        let mappings = self.shared.mappings.borrow();
-        if let Some((&base, mapping)) = mappings.range(..=address).next_back() {
-            match mapping {
-                Mapping::Backing {
-                    bytes: m_bytes,
-                    ptr,
-                    ..
-                } => {
-                    let offset = (address - base) as usize;
-                    if offset + bytes.len() <= *m_bytes {
-                        unsafe {
-                            std::ptr::copy_nonoverlapping(
-                                ptr.as_ptr().add(offset),
-                                bytes.as_mut_ptr(),
-                                bytes.len(),
-                            );
-                        }
-                        return Ok(());
-                    }
-                }
-                Mapping::Mmio {
-                    bytes: m_bytes,
-                    callbacks,
-                    ..
-                } => {
-                    let offset = address - base;
-                    if offset + (bytes.len() as u64) <= *m_bytes as u64 {
-                        for (i, b) in bytes.iter_mut().enumerate() {
-                            *b = unsafe {
-                                (callbacks.read)(offset + (i as u64), 1, callbacks.data) as u8
-                            };
-                        }
-                        return Ok(());
-                    }
+        let (mapping, offset) = self
+            .shared
+            .mapping(address, bytes.len())
+            .ok_or_else(|| format!("unmapped read at {address:#x}"))?;
+        match mapping {
+            Mapping::Backing { ptr, .. } => unsafe {
+                std::ptr::copy_nonoverlapping(
+                    ptr.as_ptr().add(offset),
+                    bytes.as_mut_ptr(),
+                    bytes.len(),
+                );
+            },
+            Mapping::Mmio { callbacks, .. } => {
+                for (i, b) in bytes.iter_mut().enumerate() {
+                    *b = unsafe { (callbacks.read)((offset + i) as u64, 1, callbacks.data) as u8 };
                 }
             }
         }
-        Err(format!("unmapped read at {address:#x}"))
+        Ok(())
     }
 
     fn translate(&self, address: u64, access: Access) -> Result<u64, String> {
@@ -2004,53 +2028,51 @@ impl Cpu for Core {
     }
 
     fn write_memory(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
-        let mappings = self.shared.mappings.borrow();
-        if let Some((&base, mapping)) = mappings.range(..=address).next_back() {
-            match mapping {
-                Mapping::Backing {
-                    bytes: m_bytes,
-                    ptr,
-                    ..
-                } => {
-                    let offset = (address - base) as usize;
-                    if offset + bytes.len() <= *m_bytes {
-                        let pointer = unsafe { ptr.as_ptr().add(offset) };
-                        unsafe {
-                            std::ptr::copy_nonoverlapping(bytes.as_ptr(), pointer, bytes.len());
-                            ffi::dynarmic_invalidate_cache(self.inst, address as u32, bytes.len());
-                        }
-                        self.shared.code_visibility.note_write(pointer, bytes.len());
-                        self.shared.mark_backing_write(pointer, bytes.len());
-                        return Ok(());
-                    }
+        if bytes.is_empty() {
+            return Ok(());
+        }
+        let (mapping, offset) = self
+            .shared
+            .mapping(address, bytes.len())
+            .ok_or_else(|| format!("unmapped write at {address:#x}"))?;
+        match mapping {
+            Mapping::Backing { ptr, .. } => {
+                let pointer = unsafe { ptr.as_ptr().add(offset) };
+                unsafe {
+                    std::ptr::copy_nonoverlapping(bytes.as_ptr(), pointer, bytes.len());
+                    ffi::dynarmic_invalidate_cache(self.inst, address as u32, bytes.len());
                 }
-                Mapping::Mmio {
-                    bytes: m_bytes,
-                    callbacks,
-                    ..
-                } => {
-                    let offset = address - base;
-                    if offset + (bytes.len() as u64) <= *m_bytes as u64 {
-                        for (i, &b) in bytes.iter().enumerate() {
-                            unsafe {
-                                (callbacks.write)(
-                                    offset + (i as u64),
-                                    1,
-                                    u64::from(b),
-                                    callbacks.data,
-                                )
-                            };
-                        }
-                        return Ok(());
-                    }
+                self.shared.code_visibility.note_write(pointer, bytes.len());
+                self.shared.mark_backing_write(pointer, bytes.len());
+            }
+            Mapping::Mmio { callbacks, .. } => {
+                for (i, &b) in bytes.iter().enumerate() {
+                    unsafe {
+                        (callbacks.write)((offset + i) as u64, 1, u64::from(b), callbacks.data)
+                    };
                 }
             }
         }
-        Err(format!("unmapped write at {address:#x}"))
+        Ok(())
     }
 
     fn memory_regions(&self) -> Result<Vec<MemoryRegion>, String> {
         Ok(self.memory_regions.borrow().clone())
+    }
+
+    fn rprofile_identity(&self, value: Option<u32>) -> Result<u32, String> {
+        let profile = self
+            .shared
+            .rprofile
+            .as_ref()
+            .ok_or("Dynarmic has no R-profile")?;
+        if let Some(value) = value {
+            if self.run_limit.get().is_some() {
+                return Err("identity changes require a stopped processor".into());
+            }
+            profile.cp14_identity.set(value);
+        }
+        Ok(profile.cp14_identity.get())
     }
 
     unsafe fn map_backing(

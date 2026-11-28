@@ -1,9 +1,147 @@
 //! Cortex-R5F memory-protection state that does not exist in the A32 JIT.
-use super::{Core, ffi};
-use fujimod_emulator_cpu::{Access, arm, armv7r};
+use super::{Core, Mapping, ffi};
+use fujimod_emulator_cpu::{
+    Access, arm,
+    armv7r::{self, tcm},
+};
 use serde::{Deserialize, Serialize};
+use std::cell::{Cell, RefCell};
+use std::ptr::NonNull;
 
 const REGIONS: usize = 16;
+
+#[derive(Clone, Copy, Default)]
+pub struct Config {
+    pub tcm: tcm::Options,
+    pub high_vectors: bool,
+    pub cp14_identity: u32,
+}
+
+pub(super) struct Profile {
+    pub mpu: RefCell<Mpu>,
+    tcm: [tcm::Bank; 2],
+    pub cp14_identity: Cell<u32>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub(super) struct Saved {
+    mpu: Mpu,
+    tcm: [SavedBank; 2],
+    cp14_identity: u32,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SavedBank {
+    register: u32,
+    bytes: Vec<u8>,
+}
+
+impl Profile {
+    pub fn new(config: Config) -> Result<Self, String> {
+        Ok(Self {
+            mpu: Default::default(),
+            tcm: tcm::banks(config.tcm)?,
+            cp14_identity: Cell::new(config.cp14_identity),
+        })
+    }
+
+    pub fn tcm_region(&self, address: u64, bytes: usize) -> Option<(Mapping, usize)> {
+        let end = address.checked_add(bytes as u64)?;
+        self.tcm.iter().find_map(|bank| {
+            let (base, size) = bank.extent()?;
+            (base <= address && end <= base + size as u64).then(|| {
+                (
+                    Mapping::Backing {
+                        bytes: size,
+                        permissions: 7,
+                        ptr: NonNull::new(bank.memory.as_ptr()).unwrap(),
+                    },
+                    (address - base) as usize,
+                )
+            })
+        })
+    }
+
+    pub fn overlaps_tcm(&self, address: u64, bytes: usize) -> bool {
+        self.tcm
+            .iter()
+            .filter_map(|bank| bank.extent())
+            .any(|(base, size)| {
+                base < address.saturating_add(bytes as u64) && address < base + size as u64
+            })
+    }
+
+    pub fn capture(&self) -> Saved {
+        Saved {
+            mpu: self.mpu.borrow().clone(),
+            cp14_identity: self.cp14_identity.get(),
+            tcm: std::array::from_fn(|index| {
+                let bank = &self.tcm[index];
+                // The core is stopped, and each allocation contains every
+                // byte of the bank regardless of its current window.
+                let bytes =
+                    unsafe { std::slice::from_raw_parts(bank.memory.as_ptr(), bank.memory.len()) }
+                        .to_vec();
+                SavedBank {
+                    register: bank.register.get(),
+                    bytes,
+                }
+            }),
+        }
+    }
+
+    pub fn validate(
+        &self,
+        saved: &Saved,
+        has_mmio: impl Fn(u64, usize) -> bool,
+    ) -> Result<(), String> {
+        if !saved.mpu.valid() {
+            return Err("invalid saved MPU selector".into());
+        }
+        for (bank, saved) in self.tcm.iter().zip(&saved.tcm) {
+            let length = bank.memory.len();
+            if saved.bytes.len() != length
+                || tcm::normalize(length, saved.register)? != saved.register
+            {
+                return Err("invalid saved TCM bank geometry".into());
+            }
+            check_tcm_mmio(saved.register, length, &has_mmio)?;
+        }
+        tcm::validate_disjoint(
+            saved.tcm[0].bytes.len(),
+            saved.tcm[0].register,
+            saved.tcm[1].bytes.len(),
+            saved.tcm[1].register,
+        )
+    }
+
+    pub fn restore(&self, saved: &Saved) {
+        self.mpu.borrow_mut().clone_from(&saved.mpu);
+        self.cp14_identity.set(saved.cp14_identity);
+        for (bank, saved) in self.tcm.iter().zip(&saved.tcm) {
+            bank.register.set(saved.register);
+            // Validation checked the length while the core was stopped.
+            unsafe {
+                std::ptr::copy_nonoverlapping(
+                    saved.bytes.as_ptr(),
+                    bank.memory.as_ptr(),
+                    saved.bytes.len(),
+                );
+            }
+        }
+    }
+}
+
+fn check_tcm_mmio(
+    register: u32,
+    length: usize,
+    has_mmio: impl Fn(u64, usize) -> bool,
+) -> Result<(), String> {
+    if register & 1 != 0 && has_mmio(u64::from(register & 0xffff_f000), length) {
+        return Err("TCM overlay of MMIO is unmodeled".into());
+    }
+    Ok(())
+}
 
 #[derive(Clone, Default, Deserialize, Serialize)]
 pub(super) struct Mpu {
@@ -18,6 +156,29 @@ pub(super) enum MpuRegister {
     Base,
     Size,
     Attributes,
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum SystemRegister {
+    Mpu(MpuRegister),
+    Tcm(usize),
+    Identity,
+}
+
+impl SystemRegister {
+    pub fn decode(cp: arm::Coprocessor) -> Option<Self> {
+        if let Some(reg) = MpuRegister::decode(cp) {
+            return Some(Self::Mpu(reg));
+        }
+        if cp.wide || cp.opc1 != 0 {
+            return None;
+        }
+        match (cp.cp, cp.crn, cp.crm, cp.opc2) {
+            (15, 9, 1, 0 | 1) => Some(Self::Tcm(cp.opc2 as usize)),
+            (14, 2, 0, 0) => Some(Self::Identity),
+            _ => None,
+        }
+    }
 }
 
 impl MpuRegister {
@@ -106,12 +267,12 @@ impl Mpu {
     }
 }
 
-pub(super) fn transfer(word: u32) -> Option<(MpuRegister, u32, bool)> {
-    if word & 0x0f00_0f10 != 0x0e00_0f10 {
+fn transfer(word: u32) -> Option<(SystemRegister, u32, bool)> {
+    if word & 0x0f00_0010 != 0x0e00_0010 {
         return None;
     }
-    let register = MpuRegister::decode(arm::Coprocessor {
-        cp: 15,
+    let register = SystemRegister::decode(arm::Coprocessor {
+        cp: (word >> 8) & 15,
         opc1: (word >> 21) & 7,
         crn: (word >> 16) & 15,
         crm: word & 15,
@@ -123,23 +284,56 @@ pub(super) fn transfer(word: u32) -> Option<(MpuRegister, u32, bool)> {
 }
 
 impl Core {
-    pub(super) fn mpu_register(
+    pub(super) fn rprofile_register(
         &self,
-        register: MpuRegister,
+        register: SystemRegister,
         value: Option<u32>,
     ) -> Result<u32, String> {
-        let mpu = self.shared.mpu.as_ref().ok_or("Dynarmic has no MPU")?;
-        if let Some(value) = value {
-            let changed = mpu.borrow_mut().write(register, value)?;
-            if changed {
-                self.shared.mapping_changed();
+        let profile = self
+            .shared
+            .rprofile
+            .as_ref()
+            .ok_or("Dynarmic has no R-profile")?;
+        match register {
+            SystemRegister::Mpu(register) => {
+                if let Some(value) = value
+                    && profile.mpu.borrow_mut().write(register, value)?
+                {
+                    self.shared.mapping_changed();
+                }
+                Ok(profile.mpu.borrow().read(register))
+            }
+            SystemRegister::Tcm(index) => {
+                let bank = &profile.tcm[index];
+                if let Some(value) = value {
+                    let value = tcm::normalize(bank.memory.len(), value)?;
+                    let other = &profile.tcm[1 - index];
+                    tcm::validate_disjoint(
+                        bank.memory.len(),
+                        value,
+                        other.memory.len(),
+                        other.register.get(),
+                    )?;
+                    check_tcm_mmio(value, bank.memory.len(), |base, length| {
+                        self.shared.has_mmio(base, length)
+                    })?;
+                    if bank.register.replace(value) != value {
+                        self.shared.mapping_changed();
+                    }
+                }
+                Ok(bank.register.get())
+            }
+            SystemRegister::Identity => {
+                if value.is_some() {
+                    return Err("CP14 processor identity is read-only".into());
+                }
+                Ok(profile.cp14_identity.get())
             }
         }
-        Ok(mpu.borrow().read(register))
     }
 
-    pub(super) fn mpu_instruction(&self, word: u32, user: bool) -> Result<bool, String> {
-        if self.shared.mpu.is_none() {
+    pub(super) fn rprofile_instruction(&self, word: u32, user: bool) -> Result<bool, String> {
+        if self.shared.rprofile.is_none() {
             return Ok(false);
         }
         let Some((register, gpr, read)) = transfer(word) else {
@@ -147,15 +341,16 @@ impl Core {
         };
         if user || gpr == 15 {
             return Err(
-                "MPU transfer requires privileged mode and a general-purpose register".into(),
+                "R-profile system transfer requires privileged mode and a general-purpose register"
+                    .into(),
             );
         }
         if read {
-            let value = self.mpu_register(register, None)?;
+            let value = self.rprofile_register(register, None)?;
             unsafe { ffi::dynarmic_set_reg(self.inst, gpr, value) };
         } else {
             let value = unsafe { ffi::dynarmic_get_reg(self.inst, gpr) };
-            self.mpu_register(register, Some(value))?;
+            self.rprofile_register(register, Some(value))?;
         }
         Ok(true)
     }
@@ -240,5 +435,64 @@ mod tests {
         let mut bytes = [1; 4];
         cpu.read_memory(0x2000, &mut bytes).unwrap();
         assert_eq!(bytes, [0; 4]);
+    }
+
+    #[test]
+    fn moving_atcm_preserves_private_code_and_reveals_the_underlying_ram() {
+        let cpu = Core::new_rprofile(
+            Config {
+                cp14_identity: 0x4321,
+                tcm: tcm::Options {
+                    atcm: tcm::BankOptions {
+                        bytes: 4096,
+                        reset: 0x2000,
+                    },
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            Default::default(),
+        )
+        .unwrap();
+        cpu.set_armv7a_owner_exclusives(true).unwrap();
+        cpu.map_zeroed(0, 0x4000, 7).unwrap();
+        cpu.write_memory(0x2000, &0x12345678u32.to_le_bytes())
+            .unwrap();
+        cpu.write_memory(0x1000, &0xee09_0f31u32.to_le_bytes())
+            .unwrap(); // MCR ATCM.
+        cpu.write_memory(0x1004, &0xee12_2e10u32.to_le_bytes())
+            .unwrap(); // MRC CP14 identity.
+        let run = |begin, count| {
+            cpu.set_loop_window(true).unwrap();
+            cpu.run(Run {
+                begin,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(count),
+            })
+            .unwrap();
+        };
+        let remap = |address: u32| {
+            cpu.write_register(arm::CORE[0], &address.to_le_bytes())
+                .unwrap();
+            run(0x1000, 2);
+        };
+        remap(0x2001);
+        assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 2) }, 0x4321);
+        cpu.write_memory(0x2000, &0xe3a0_3007u32.to_le_bytes())
+            .unwrap(); // mov r3, #7
+        let saved = cpu.snapshot(None).unwrap().export().unwrap();
+        remap(0x3001);
+        run(0x3000, 1);
+        assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 3) }, 7);
+        let mut bytes = [0; 4];
+        cpu.read_memory(0x2000, &mut bytes).unwrap();
+        assert_eq!(u32::from_le_bytes(bytes), 0x12345678);
+        cpu.write_memory(0x3000, &0xe3a0_3009u32.to_le_bytes())
+            .unwrap(); // mov r3, #9
+        let imported = cpu.import_snapshot(&saved).unwrap();
+        cpu.restore(imported.as_ref()).unwrap();
+        run(0x2000, 1);
+        assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 3) }, 7);
     }
 }
