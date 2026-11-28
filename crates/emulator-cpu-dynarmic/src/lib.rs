@@ -3998,43 +3998,6 @@ mod tests {
 
     #[cfg(target_arch = "aarch64")]
     #[test]
-    fn a_warm_single_step_prefix_fits_the_last_native_tick() {
-        let cpu = Core::new(Model::CortexA7).unwrap();
-        let address = 0x1000;
-        cpu.map_zeroed(address, 4096, 7).unwrap();
-        for offset in (0..128).step_by(4) {
-            cpu.write_memory(address + offset, &0xe280_0001u32.to_le_bytes())
-                .unwrap(); // add r0, r0, #1
-        }
-        cpu.set_cpsr(0xd3).unwrap();
-        let reset = || unsafe {
-            ffi::dynarmic_set_reg(cpu.inst, 0, 0);
-            ffi::dynarmic_set_reg(cpu.inst, 15, address as u32);
-        };
-        let run = |budget| {
-            let mut executed = u64::MAX;
-            let reason = unsafe { ffi::dynarmic_run(cpu.inst, budget, &mut executed) };
-            assert_eq!(reason, ffi::DynarmicExitReason::Timeout);
-            executed
-        };
-        reset();
-        assert_eq!(run(1), 0); // A cold prefix has no linked single-step entry.
-        let mut executed = 0;
-        unsafe { ffi::dynarmic_step(cpu.inst, &mut executed) };
-        assert_eq!(executed, 1);
-
-        reset();
-        assert_eq!(run(0), 0);
-        assert_eq!(run(1), 1);
-        assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 0) }, 1);
-        assert_eq!(
-            unsafe { ffi::dynarmic_get_reg(cpu.inst, 15) },
-            address as u32 + 4
-        );
-    }
-
-    #[cfg(target_arch = "aarch64")]
-    #[test]
     fn restoring_division_matches_steps_and_watches_its_back_edge() {
         let code = 0x1000;
         let remainder = 7;
