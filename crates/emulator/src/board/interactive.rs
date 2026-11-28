@@ -69,14 +69,11 @@ impl Epoch {
     pub(super) fn room(&self, core: usize) -> u64 {
         self.limit.saturating_sub(self.progress[core])
     }
-    /// Whether the cohort runs another segment: until every core reaches the
-    /// limit. A core that reached it parks while the others catch up, so a
-    /// processor whose host thread was descheduled still gets its share of
-    /// the epoch instead of forfeiting it. A peer left spinning on a flag
-    /// rendezvous that an exhausted core already cleared spins only to its
-    /// own limit; the next epoch starts every core together at the frontier.
+    /// End the epoch when the first core reaches the limit. The rest of the
+    /// cohort starts its next turn together so one peer cannot remain parked
+    /// while another is waiting for it in a memory rendezvous.
     pub(super) fn open(&self, cores: &[usize]) -> bool {
-        cores.iter().any(|&core| self.room(core) > 0)
+        cores.iter().all(|&core| self.room(core) > 0)
     }
     pub(super) fn limit(&self) -> u64 {
         self.limit
@@ -250,17 +247,6 @@ impl Board {
                     return Ok(());
                 }
             }
-            // Cores that reached the epoch limit park until the others do.
-            let runnable: Vec<usize> = {
-                let state = self.state.borrow();
-                let epoch = state.parallel.as_ref().unwrap();
-                cores
-                    .iter()
-                    .copied()
-                    .filter(|&core| epoch.room(core) > 0)
-                    .collect()
-            };
-            let mprofile = mprofile.filter(|core| runnable.contains(core));
             let (blocks, _thumb_slice) = if let Some(core) = mprofile {
                 let room = self.state.borrow().parallel.as_ref().unwrap().room(core);
                 self.prepare_mprofile_segment(core, room)?
@@ -269,7 +255,7 @@ impl Board {
             };
             {
                 let mut state = self.state.borrow_mut();
-                for &core in &runnable {
+                for &core in cores {
                     let epoch = state.parallel.as_ref().unwrap();
                     let room = epoch.room(core);
                     // Cohorts that rendezvous on every callback still give
@@ -495,14 +481,7 @@ impl Board {
                 }
             }
             let mut callback_serviced = false;
-            let exit_barrier = entries.iter().any(|entry| {
-                entry.done
-                    && (!in_place
-                        || entry.watch_or_observer_stop
-                        || entry
-                            .exit
-                            .is_some_and(|exit| !matches!(exit, Exit::Stopped)))
-            });
+            let exit_barrier = entries.iter().any(|entry| entry.done);
             if in_place
                 && !barrier
                 && error.is_none()
