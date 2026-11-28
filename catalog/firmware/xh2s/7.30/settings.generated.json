@@ -17,7 +17,110 @@
   },
   "defaults": null,
   "fields": [],
-  "profile": null,
-  "settings": {},
+  "profile": {
+    "header": {
+      "address": 31338496,
+      "size": 8,
+      "sha256": "7eeba9e49bc4bd278d85741e360aabcb5a57e17c0d14d9ccc68f95f355e348d9"
+    },
+    "loader_offset": 344,
+    "power_register": 31,
+    "records": {
+      "system": {
+        "block": 1896,
+        "bytes": 8192,
+        "defaults": {
+          "address": 31338504,
+          "size": 7168,
+          "sha256": "b49c8cad0fb76c15fd22121bf4a71555cf1b8c9e8d0415c373f39c9df83fc367"
+        },
+        "defaults_offset": 260,
+        "parity_offset": 7932,
+        "fields": []
+      },
+      "settings": {
+        "block": 1892,
+        "bytes": 65536,
+        "defaults": {
+          "address": 31664856,
+          "size": 63188,
+          "sha256": "60a6ba76a421607c3360029ec32aafeb1376cbfb996e8458513be8ccf7780357"
+        },
+        "defaults_offset": 260,
+        "parity_offset": 63484,
+        "fields": [
+          {
+            "offset": 756,
+            "bytes": [
+              33
+            ],
+            "basis": "UI_SETP_BKUP_VER: the stock migration settings_boot_load_migrate 0x1604724 migrates a profile whose stored version is 0x20 or less and then stores version 0x21 (0x16047f4); a current profile carries 0x21."
+          },
+          {
+            "offset": 1734,
+            "bytes": [
+              1
+            ],
+            "basis": "UI_SETP_APP_INTRODUCTION_SET (store 0x5ca, getter 0x15c8db8): the stock first-start check reopens its page while it is zero."
+          },
+          {
+            "offset": 1735,
+            "bytes": [
+              1
+            ],
+            "basis": "UI_SETP_PAIRING_SET (store 0x5cb, getter 0x15c8db8): the stock first-start check reopens its page while it is zero."
+          },
+          {
+            "offset": 30632,
+            "bytes": [
+              1
+            ],
+            "basis": "UI_SETP_POWER_OFF_TEMPERATURE_SET (store 0x76ac, getter 0x15c8db8): the stock first-start check reopens its page while it is zero."
+          },
+          {
+            "offset": 63480,
+            "bytes": [
+              7,
+              48
+            ],
+            "basis": "Stock writer service_exit_settings_append 0x17c0724 stamps the version bytes at 0x1de25ee/0x1de25ef into record +0xf7f8/+0xf7f9; the store validator 0x17c0c6c refuses a record whose stamp is zero."
+          }
+        ]
+      },
+      "mark": {
+        "block": 1926,
+        "bytes": 4096,
+        "defaults": {
+          "address": 33043488,
+          "size": 8,
+          "sha256": "ec243aa91cf1dcd155864e695f721f7dd309c6edbd142b36a340718d5c4f5f72"
+        },
+        "defaults_offset": 0,
+        "parity_offset": 8,
+        "fields": []
+      }
+    },
+    "derived_fields": []
+  },
+  "settings": {
+    "setup": {
+      "store": "header",
+      "offset": 4,
+      "values": {
+        "done": [
+          14
+        ]
+      }
+    },
+    "language": {
+      "store": "settings",
+      "offset": 883,
+      "values": {
+        "en": [
+          1
+        ]
+      }
+    }
+  },
   "sections": []
 }
