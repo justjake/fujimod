@@ -2059,8 +2059,14 @@ fn block_window(
                 else {
                     return Err(format!("part {} is not a control-bus peripheral", part.id));
                 };
-                let interface =
+                let mut interface =
                     toml::Value::try_from(interface).map_err(|error| error.to_string())?;
+                if let Some(line) = target_interrupt(selection, &block.id, address)? {
+                    interface
+                        .as_table_mut()
+                        .ok_or_else(|| format!("part {} has no interface table", part.id))?
+                        .insert("interrupt".into(), integer(u64::from(line)));
+                }
                 let mut row = toml::Table::new();
                 row.insert("address".into(), integer(u64::from(address)));
                 row.insert("part".into(), interface);
@@ -2093,6 +2099,54 @@ fn block_window(
         }
     };
     Ok(Some((kind, options)))
+}
+
+/// The interrupt line of the control-bus target at `address` on `bus`: a body connection that
+/// routes that serial target and an interrupt-controller input carries it.
+fn target_interrupt(
+    selection: &ResolvedSelection,
+    bus: &str,
+    address: u8,
+) -> Result<Option<u32>, String> {
+    let mut lines = selection
+        .body
+        .connections
+        .iter()
+        .filter(|connection| {
+            connection.signals.iter().any(|signal| {
+                matches!(signal, ConnectionSignal::Serial { block_id, address: a, .. }
+                    if block_id == bus && *a == address)
+            })
+        })
+        .flat_map(|connection| {
+            connection.signals.iter().filter_map(|signal| match signal {
+                ConnectionSignal::Interrupt {
+                    controller_id,
+                    line,
+                } => Some((controller_id, *line)),
+                _ => None,
+            })
+        });
+    let Some((controller, line)) = lines.next() else {
+        return Ok(None);
+    };
+    if lines.next().is_some() {
+        return Err(format!(
+            "control-bus target {address:#x} on {bus} has more than one interrupt"
+        ));
+    }
+    if !selection
+        .soc
+        .blocks
+        .iter()
+        .any(|block| &block.id == controller && block.kind == SocBlockKind::InterruptController)
+    {
+        return Err(format!(
+            "control-bus target {address:#x} on {bus} interrupts {controller}, not an \
+             interrupt controller"
+        ));
+    }
+    Ok(Some(line))
 }
 
 /// The body's GPIO feedback wires: each drives an input pad from the output

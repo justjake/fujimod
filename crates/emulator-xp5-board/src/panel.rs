@@ -42,6 +42,9 @@ pub struct Names {
     pub positions: BTreeMap<String, (String, String)>,
     /// The shutter button and its half- and full-press pads.
     pub shutter: Option<((String, String), [Pin; 2])>,
+    /// The eye sensor control and the control bus node and target address of its proximity
+    /// sensor.
+    pub eye_sensor: Option<((String, String), (String, u8))>,
     pub rear_dial: Option<(String, String)>,
     pub front_dial: Option<(String, String)>,
 }
@@ -391,6 +394,32 @@ pub fn compile(
             .collect(),
         });
     }
+    if let Some(((id, label), (bus, address))) = &names.eye_sensor {
+        controls.push(Control {
+            id: id.clone(),
+            label: label.clone(),
+            kind: "switch".into(),
+            positions: vec!["away".into(), "near".into()],
+            initial: "away".into(),
+            unavailable: None,
+        });
+        circuits.push(Circuit {
+            controls: vec![id.clone()],
+            // Simulate the endpoints of the 10-bit proximity ADC range.
+            // The firmware programs its own thresholds on the attached part.
+            cases: [("away", 0), ("near", 1023)]
+                .into_iter()
+                .map(|(position, sample)| Case {
+                    positions: vec![position.into()],
+                    signals: vec![Signal::Proximity {
+                        node: bus.clone(),
+                        address: *address,
+                        sample,
+                    }],
+                })
+                .collect(),
+        });
+    }
     // Firmware scanner records are not located for these controls, so a
     // press holds for a few key scans instead of waiting for an acknowledgment.
     let hold_ticks = (ticks_per_second / 10).max(1);
@@ -517,11 +546,28 @@ pub fn connect(
     session: &mut fujimod_emulator_session::Session,
     inputs: &mut crate::session::Inputs,
     options: Options,
-    names: Names,
+    mut names: Names,
     gpio: String,
     ticks_per_second: u64,
 ) -> Result<(), String> {
+    use fujimod_emulator_devices::capability::ProximityInput;
     use fujimod_emulator_xp5_io::spi::Spi;
+
+    // The eye control needs proximity input on the sensor's bus target, which only a sensor
+    // with a wired interrupt offers; without one the body keeps a fixed empty finder.
+    if let Some((_, (bus, address))) = &names.eye_sensor {
+        let wired = session.nodes.get(bus).is_some_and(|&node| {
+            session
+                .board
+                .inspect_capability::<dyn ProximityInput, _>(node, |input| {
+                    input.admit_sample(*address, 0)
+                })
+                .is_ok()
+        });
+        if !wired {
+            names.eye_sensor = None;
+        }
+    }
     let adc = format!("{:#x}", fujimod_emulator_xp5_io::adc::BASE);
     let mut power: Option<(usize, String, usize)> = None;
     for (name, &id) in &session.nodes {
@@ -798,6 +844,47 @@ mod tests {
                 ("rear_command_dial", "rear-dial", 4),
                 ("front_command_dial", "front-dial", -1),
             ]
+        );
+    }
+
+    #[test]
+    fn xh2s_declares_two_eye_sensor_poses() {
+        let resolved = ResolvedConfiguration::bundled("xh2s-730").unwrap();
+        let options = crate::ladder_controls::ladders(&resolved).unwrap().unwrap();
+        let names = crate::ladder_controls::panel_names(&resolved).unwrap();
+        let nodes = Nodes {
+            adc: "adc".into(),
+            gpio: "gpio".into(),
+            power: ("spi".into(), 0),
+            rear_dial: None,
+            front_dial: None,
+        };
+        let panel = compile(
+            &options,
+            &names,
+            &nodes,
+            &Idle {
+                adc: &[4095; 15],
+                register: &|_| Ok(0),
+            },
+            1_000_000_000,
+        )
+        .unwrap();
+        let switches = SwitchPanel::new(panel.wiring).unwrap();
+        assert_eq!(switches.positions()["eye_sensor"], "away");
+        let near = switches.transition("eye_sensor", "near").unwrap();
+        assert!(near.signals().unwrap().contains(&Signal::Proximity {
+            node: "0xff925000".into(),
+            address: 0x39,
+            sample: 1023,
+        }));
+        assert!(near.transition("eye_sensor", "invalid").is_err());
+        assert!(
+            panel
+                .confirmation
+                .actuators
+                .iter()
+                .any(|actuator| actuator.id == "eye_sensor")
         );
     }
 

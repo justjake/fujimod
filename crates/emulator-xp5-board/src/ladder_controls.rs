@@ -819,13 +819,55 @@ pub fn panel_names(resolved: &ResolvedConfiguration) -> Result<crate::panel::Nam
             false => None,
         })
     };
+    let eye_sensor = match dial("eye_sensor")? {
+        Some(names) => proximity_target(resolved)?.map(|target| (names, target)),
+        None => None,
+    };
     Ok(crate::panel::Names {
         keys,
         positions,
         shutter,
+        eye_sensor,
         rear_dial: dial("rear_command_dial")?,
         front_dial: dial("front_command_dial")?,
     })
+}
+
+/// The control bus (named by its block base, as the session names device nodes) and target
+/// address of the body's proximity sensor, if one is wired.
+fn proximity_target(resolved: &ResolvedConfiguration) -> Result<Option<(String, u8)>, String> {
+    use fujimod_catalog::{assembly::PeripheralPart, reference::PartModel};
+    let selection = &resolved.reference;
+    let mut targets = selection.body.wiring.iter().filter(|wire| {
+        selection.parts.iter().any(|part| {
+            part.id == wire.target_id
+                && matches!(
+                    part.model,
+                    PartModel::Peripheral {
+                        interface: PeripheralPart::Tmd2772Proximity
+                    }
+                )
+        })
+    });
+    let Some(wire) = targets.next() else {
+        return Ok(None);
+    };
+    if targets.next().is_some() {
+        return Err(format!(
+            "body {} wires more than one proximity sensor",
+            selection.body.id
+        ));
+    }
+    let bus = selection
+        .soc
+        .blocks
+        .iter()
+        .find(|block| block.id == wire.source_id)
+        .ok_or_else(|| format!("proximity sensor bus {} is not a block", wire.source_id))?;
+    let address = wire
+        .address
+        .ok_or_else(|| format!("proximity sensor wire from {} has no address", bus.id))?;
+    Ok(Some((format!("{:#x}", bus.base), address)))
 }
 
 /// The run's sample on one channel of its single ADC block input.
