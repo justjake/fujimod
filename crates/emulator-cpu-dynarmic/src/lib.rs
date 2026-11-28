@@ -3580,6 +3580,37 @@ mod tests {
     }
 
     #[test]
+    fn native_branches_test_each_saved_flag_and_its_inverse() {
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+        cpu.write_memory(0x1000, &0xe1a0_0000u32.to_le_bytes())
+            .unwrap(); // mov r0, r0
+        for condition in 0..=7 {
+            let word = (condition << 28) | 0x0a00_0000u32;
+            cpu.write_memory(0x1004, &word.to_le_bytes()).unwrap();
+            for flags in [0, 1 << 28, 1 << 29, 1 << 30, 1 << 31] {
+                let cpsr = flags | 0xd3;
+                cpu.set_cpsr(cpsr).unwrap();
+                cpu.set_loop_window(true).unwrap();
+                cpu.run(Run {
+                    begin: 0x1000,
+                    until: None,
+                    watchdog_us: 0,
+                    instructions: Some(2),
+                })
+                .unwrap();
+                let target = if arm::condition_passes(condition, cpsr) {
+                    0x100c
+                } else {
+                    0x1008
+                };
+                assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 15) }, target);
+                assert_eq!(unsafe { ffi::dynarmic_get_cpsr(cpu.inst) }, cpsr);
+            }
+        }
+    }
+
+    #[test]
     fn same_guest_pc_uses_the_current_translation_context() {
         let core = Core::new(Model::CortexA7).unwrap();
         core.map_zeroed(0, 0x102000, 7).unwrap();

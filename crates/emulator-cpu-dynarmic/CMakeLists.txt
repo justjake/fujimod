@@ -15,6 +15,7 @@ set(DYNARMIC_PATCHES
     "${CMAKE_CURRENT_SOURCE_DIR}/patches/a32-decoder-fixed-bits.patch"
     "${CMAKE_CURRENT_SOURCE_DIR}/patches/a32-predicated-alu.patch"
     "${CMAKE_CURRENT_SOURCE_DIR}/patches/a32-predicated-branch.patch"
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-a32-branch-flags.patch"
     "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-embedder.patch"
     "${CMAKE_CURRENT_SOURCE_DIR}/patches/x64-exact-budget.patch")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${DYNARMIC_PATCHES})

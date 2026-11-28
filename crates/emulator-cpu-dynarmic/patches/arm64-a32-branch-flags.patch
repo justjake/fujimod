@@ -1,0 +1,39 @@
+diff --git a/src/dynarmic/backend/arm64/emit_arm64_a32.cpp b/src/dynarmic/backend/arm64/emit_arm64_a32.cpp
+--- a/src/dynarmic/backend/arm64/emit_arm64_a32.cpp
++++ b/src/dynarmic/backend/arm64/emit_arm64_a32.cpp
+@@ -5,6 +5,8 @@
+ 
+ #include <mcl/bit/bit_field.hpp>
+ #include <oaknut/oaknut.hpp>
++
++#include <array>
+ 
+ #include "dynarmic/backend/arm64/a32_jitstate.h"
+ #include "dynarmic/backend/arm64/abi.h"
+@@ -24,9 +26,23 @@
+ 
+ oaknut::Label EmitA32Cond(oaknut::CodeGenerator& code, EmitContext&, IR::Cond cond) {
+     oaknut::Label pass;
+-    // TODO: Flags in host flags
+     code.LDR(Wscratch0, Xstate, offsetof(A32JitState, cpsr_nzcv));
+-    code.MSR(oaknut::SystemReg::NZCV, Xscratch0);
+-    code.B(static_cast<oaknut::Cond>(cond), pass);
++    // Conditions that use one guest flag can branch on its saved bit.
++    // Composite conditions use the host's full NZCV test.
++    static constexpr std::array single_flag_bit{30, 30, 29, 29, 31, 31, 28, 28};
++    const auto which = static_cast<size_t>(cond);
++    if (which < single_flag_bit.size()) {
++        const auto bit = single_flag_bit[which];
++        const bool set = cond == IR::Cond::EQ || cond == IR::Cond::CS
++            || cond == IR::Cond::MI || cond == IR::Cond::VS;
++        if (set) {
++            code.TBNZ(Xscratch0, bit, pass);
++        } else {
++            code.TBZ(Xscratch0, bit, pass);
++        }
++    } else {
++        code.MSR(oaknut::SystemReg::NZCV, Xscratch0);
++        code.B(static_cast<oaknut::Cond>(cond), pass);
++    }
+     return pass;
+ }
