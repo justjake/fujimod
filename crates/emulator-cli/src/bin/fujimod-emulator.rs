@@ -396,6 +396,13 @@ impl Boot {
         }
         if let Some(backend) = self.text("--cpu-backend")? {
             resolved.override_cpu_backend(backend.parse()?)?;
+        } else if !self.discovery
+            && self
+                .values
+                .get("--execution-policy")
+                .is_none_or(|value| value != "interactive")
+        {
+            boot::application::prefer_dynarmic(&mut resolved)?;
         }
         Ok(resolved)
     }
@@ -1583,5 +1590,42 @@ mod tests {
             boot.execution_policy(false).unwrap_err(),
             "unknown CPU execution policy: approximate"
         );
+    }
+
+    #[test]
+    fn native_application_default_honors_explicit_cpu_and_policy_overrides() {
+        let default = if cfg!(all(
+            feature = "dynarmic",
+            any(target_arch = "aarch64", target_arch = "x86_64"),
+            any(target_os = "linux", target_os = "macos")
+        )) {
+            RunCpuBackend::Dynarmic
+        } else {
+            RunCpuBackend::Unicorn
+        };
+        for (configuration, flags, expected) in [
+            ("xt3-511", &["boot"][..], default),
+            ("xt20-211", &["boot"], default),
+            ("x70-110-rec", &["boot"], RunCpuBackend::Unicorn),
+            ("xt5-431", &["boot"], RunCpuBackend::Unicorn),
+            (
+                "xt3-511",
+                &["boot", "--cpu-backend", "unicorn"],
+                RunCpuBackend::Unicorn,
+            ),
+            (
+                "xt20-211",
+                &["boot", "--execution-policy", "interactive"],
+                RunCpuBackend::Unicorn,
+            ),
+            ("xt3-511", &["boot", "--discovery"], RunCpuBackend::Unicorn),
+        ] {
+            let resolved = parse(args(flags))
+                .unwrap()
+                .unwrap()
+                .resolve(configuration)
+                .unwrap();
+            assert_eq!(resolved.configuration.cpu_backend(), expected, "{flags:?}");
+        }
     }
 }

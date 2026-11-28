@@ -24,7 +24,7 @@ pub struct RunFactoryOptions {
     /// Explicit H.264 backend; absence selects the local platform default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub video_encoder_backend: Option<fujimod_catalog_construction::VideoEncoderBackend>,
-    /// CPU backend for Cortex-A7 and Cortex-R5F processors. Absence selects Unicorn.
+    /// CPU backend override for Cortex-A7 and Cortex-R5F processors.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cpu_backend: Option<RunCpuBackend>,
     /// Selected auxiliary control profile. Absence preserves the base selection.

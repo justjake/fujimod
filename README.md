@@ -48,6 +48,11 @@ definitions USB uses through `fujimod::catalog_service`.
 Enable the `emulator` feature for `fujimod::emulator`; execution, device models
 and processor backends live in separate crates under `crates/emulator*`.
 The Python package exposes the same execution core through `fujimod.emulator`.
+On ARM64 and x86-64 Linux and macOS, `fujimod-emulator boot` uses Dynarmic for
+strict XP4 and X-Processor Pro runs by default. Use `--cpu-backend unicorn` to
+select Unicorn, or `--execution-policy interactive` for Unicorn's interactive
+scheduler. The native JIT build needs the recursive Git submodules, CMake,
+Ninja, and Boost headers. `--no-default-features` builds the CLI with Unicorn.
 Every emulator change follows [program-independent emulation](crates/emulator/PROGRAM_INDEPENDENCE.md):
 devices, scheduling and the CPU backend never infer what the emulated program
 is doing from its code, addresses or state.
