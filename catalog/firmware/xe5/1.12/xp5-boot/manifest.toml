@@ -5,6 +5,12 @@ load_firmware = true
 # waits in delay loops, so it runs in block execution. The guest state is the same either way.
 mprofile_block_execution = true
 
+# The loader start reaches its first aperture read (0xcc, 20 dummy cycles) with no write to the
+# part's volatile dummy-cycle register, which an earlier boot stage leaves selecting 20 cycles, as
+# on the X-H2 5.30. INFERRED for the X-E5 from that read; the setup start programs it itself.
+[flash]
+volatile_dummy_cycles = 20
+
 # The XP5 device tree maps Linux DRAM and shared arenas below 0x67f00000, but the application also
 # uses DRAM up to 0x80000000: CPU1 writes 0x7ec00000 (a memset from 0x3271124, as on the X-T5, whose
 # still subject-detection arena is 0x7ec00000 + 0x1400000), and the drain routine reads 0x68000000
@@ -12,6 +18,23 @@ mprofile_block_execution = true
 [[ram]]
 base = 0
 size = 0x80000000
+dram = true
+
+# DRAM channel 2. A half-press trains channels 2 and 3, and 0.19 s after S2 the still sequence
+# reaches 0xbb00f6b0, the address the X-T5 4.31 still sequence writes after the same boost
+# (its manifest.toml). Declared as on the X-T5: 0x80000000 + 1 GiB, with the run's DRAM space
+# ending at 0xc0000000 (run.json). The SoC's 0x80000000 bus drain lies in it and is not built.
+# The X-E5 channel table is UNVERIFIED.
+[[ram]]
+base = 0x80000000
+size = 0x40000000
+dram = true
+
+# DRAM channel 3, as on the X-T5 (0x1c0000000 + 1 GiB). The first 16 KiB granule stays with the
+# discarded bus-drain read at 0x1c0000000. UNVERIFIED for the X-E5.
+[[ram]]
+base = 0x1c0004000
+size = 0x3fffc000
 dram = true
 
 # M-core SRAM, as on the other XP5 bodies. The extent and the source of the
@@ -29,6 +52,18 @@ size = 0x1a0000
 [[ram]]
 base = 0xfb400000
 size = 0x1a0000
+
+# The rest of each PHY's register file, plain memory as in the ROM start (rom-start.toml). A
+# half-press (S1) in the shooting screen reads 0xfb640032 (APB register 0x120019 of the second PHY,
+# the register the ROM start's stock setup reads first on 0xfb240032) through the halfword reader
+# 0x9edb0 (caller 0x14cd000). A store reads back; nothing is modeled.
+[[ram]]
+base = 0xfb1a4000
+size = 0x25c000
+
+[[ram]]
+base = 0xfb5a4000
+size = 0x25c000
 
 # Boot SRAM (the SoC profile's boot-sram region). The ROM start loads the setup stage here; in the
 # loader start the application's live-view path still reaches it once the shooting screen starts
@@ -71,3 +106,22 @@ max_dirty_sectors = 65536
 partition_start = 8192
 sectors_per_cluster = 64
 label = "NO NAME"
+
+# Boot control: source_straps = 0 is the value of the setup handoff (setup-handoff.toml). With
+# bit 0 set, boot setup takes the serial-NAND path (0xff811bbc) and issues NAND get-feature 0xf to
+# the serial NOR. UNVERIFIED as the physical strap level of the X-E5, as there.
+[[window_options]]
+base = 0xff90e000
+set = { source_straps = 0 }
+
+# Input engine: +0x17c bit 31 reads as busy, the opposite of the X-T5 idle bit, so the run does not
+# list this block in idle_status_blocks. The idle check 0x034f0070 succeeds when +0x140 bit 0 and
+# +0x17c bit 31 are both clear (accessors 0x030eb548, 0x030eb9f8, 0x034f3498, 0x034f4664). The
+# live-view stop check 0x034e1e60 (from 0x034a4a58, called at 0x034a861c) reports stopped when
+# +0x140 bit 0 is set or bit 31 is clear, and only the not-stopped path unregisters the frame
+# callbacks, so a bit 31 that always reads 0 leaks them on every live-view stop. INFERRED: bit 31
+# reads set while the engine is enabled (the last +0x4 write had bit 0 set) and +0x140 bit 0 is
+# clear. The firmware never writes +0x17c; reading it on a body would settle the timing.
+[[window_options]]
+base = 0xff946000
+set = { busy_status = true }
