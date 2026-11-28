@@ -98,6 +98,14 @@ impl PanelInputs {
     }
     fn position(&self, dial: &str, position: &str) -> Result<Scheduled, String> {
         let wanted = dial.trim();
+        if let Some(((id, _), _)) = self.names.eye_sensor.as_ref().filter(|((id, _), _)| {
+            wanted.eq_ignore_ascii_case(id) || wanted.eq_ignore_ascii_case("eye")
+        }) {
+            return Ok(Scheduled::Position {
+                id: id.clone(),
+                position: position.trim().to_ascii_lowercase(),
+            });
+        }
         let (model, label) = if let Some(found) = self.options.dials.iter().find(|d| {
             d.name.eq_ignore_ascii_case(wanted)
                 || d.aliases.iter().any(|a| a.eq_ignore_ascii_case(wanted))

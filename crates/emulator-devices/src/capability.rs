@@ -40,6 +40,20 @@ impl Capability for dyn GravityInput {
     }
 }
 
+/// External raw proximity counts supplied to a sensor on an I2C bus.
+pub trait ProximityInput {
+    fn admit_sample(&self, address: u8, sample: u16) -> Result<(), String>;
+    fn set_sample(&mut self, cx: &mut Cx<'_>, address: u8, sample: u16) -> Result<(), String>;
+}
+impl Capability for dyn ProximityInput {
+    fn of(device: &dyn Device) -> Option<&Self> {
+        device.proximity_input()
+    }
+    fn of_mut(device: &mut dyn Device) -> Option<&mut Self> {
+        device.proximity_input_mut()
+    }
+}
+
 /// External electrical levels on a GPIO controller's input pins.
 pub trait GpioInputs {
     /// Refuse changes the controller cannot accept, without applying any.

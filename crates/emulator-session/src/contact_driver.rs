@@ -1,6 +1,6 @@
 //! Host input automation over physical contacts and passive RAM observations.
 //! This is not a peripheral: firmware checks are generated host postconditions.
-//! Only the ordinary switch panel drives pins/voltages. No guest memory is written.
+//! The switch panel supplies electrical levels and raw sensor inputs. No guest memory is written.
 use super::Session;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 

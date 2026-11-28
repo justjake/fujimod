@@ -4,6 +4,9 @@
 //! status; a bus owns which parts answer and what they reply.
 use serde_json::Value;
 
+/// Deadline token reserved by controllers that support timed target peripherals.
+pub const TARGET_EVENT: u64 = 1 << 63;
+
 /// Targets on the wires of one controller.
 pub trait Bus: Send + 'static {
     /// The address byte of a START or repeated START; `false` is a NACK.
@@ -13,6 +16,16 @@ pub trait Bus: Send + 'static {
     fn write(&mut self, byte: u8) -> Result<(), String>;
     fn read(&mut self) -> Result<u8, String>;
     fn stop(&mut self);
+    /// Advance peripherals with clocks or sideband outputs of their own.
+    fn update_targets(&mut self, _cx: &mut crate::Cx<'_>, _conversion: bool) {}
+    fn proximity_input(&self) -> Option<&(dyn crate::capability::ProximityInput + 'static)> {
+        None
+    }
+    fn proximity_input_mut(
+        &mut self,
+    ) -> Option<&mut (dyn crate::capability::ProximityInput + 'static)> {
+        None
+    }
     fn save(&self) -> Value;
     fn restore(&mut self, value: &Value) -> Result<(), String>;
     /// Complete typed target state; targets without one refuse.

@@ -29,7 +29,7 @@
 //! bus errors and clock stretching are not modeled, and the commands that
 //! would need them refuse, as does any command while a byte is in flight.
 use fujimod_emulator_devices::checkpoint::Checkpoint;
-use fujimod_emulator_devices::parts::i2c::Bus;
+use fujimod_emulator_devices::parts::i2c::{Bus, TARGET_EVENT};
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -144,7 +144,8 @@ pub struct Controller<B: Bus> {
 
 impl<B: Bus> Controller<B> {
     fn validate_state(state: &State) -> Result<(), String> {
-        if state.low_drives & !(BC2R_SCLL | BC2R_SDAL) != 0
+        if state.generation >= TARGET_EVENT
+            || state.low_drives & !(BC2R_SCLL | BC2R_SDAL) != 0
             || state.ccr & CCR_RESERVED != 0
             || state.bcr & (BCR_INT | BCR_GCAA | BCR_BER) != 0
             || (state.phase == Phase::Idle) != (state.bsr & BSR_BB == 0)
@@ -257,7 +258,7 @@ impl<B: Bus> Controller<B> {
             s.phase = Phase::Addressing;
         }
         s.pending = Some(operation);
-        s.generation += 1;
+        s.generation = (s.generation + 1) & !TARGET_EVENT;
         cx.schedule(cx.now() + self.options.byte_ns, s.generation);
         Ok(())
     }
@@ -323,6 +324,7 @@ impl<B: Bus> Controller<B> {
             }
             Operation::Write(byte) => {
                 self.bus.write(byte)?;
+                self.bus.update_targets(cx, false);
                 s.bsr = BSR_BB | BSR_TRX;
             }
             Operation::Read { ack } => {
@@ -396,7 +398,21 @@ impl<B: Bus> Device for Controller<B> {
     fn pollable(&self, address: u64, size: u8) -> bool {
         matches!(self.offset(address, size), Ok(BSR | BCR | BC2R))
     }
+    fn proximity_input(
+        &self,
+    ) -> Option<&(dyn fujimod_emulator_devices::capability::ProximityInput + 'static)> {
+        self.bus.proximity_input()
+    }
+    fn proximity_input_mut(
+        &mut self,
+    ) -> Option<&mut (dyn fujimod_emulator_devices::capability::ProximityInput + 'static)> {
+        self.bus.proximity_input_mut()
+    }
     fn event(&mut self, cx: &mut Cx<'_>, token: u64) {
+        if token == TARGET_EVENT {
+            self.bus.update_targets(cx, true);
+            return;
+        }
         if token != self.state.generation {
             return;
         }

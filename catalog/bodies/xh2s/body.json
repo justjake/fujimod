@@ -31,10 +31,10 @@
         "select_connection_id": "serial-command-16-spi5-select"
       },
       {
-        "part_id": "serial-command-8-mode2",
+        "part_id": "serial-command-8",
         "controller_id": "spi5",
-        "connection_id": "serial-command-8-mode2-spi5-bus",
-        "select_connection_id": "serial-command-8-mode2-spi5-select"
+        "connection_id": "serial-command-8-spi5-bus",
+        "select_connection_id": "serial-command-8-spi5-select"
       },
       {
         "part_id": "bis-configuration",
@@ -181,11 +181,11 @@
       ]
     },
     {
-      "id": "serial-command-8-mode2-spi5-bus",
+      "id": "serial-command-8-spi5-bus",
       "kind": "control"
     },
     {
-      "id": "serial-command-8-mode2-spi5-select",
+      "id": "serial-command-8-spi5-select",
       "kind": "control",
       "signals": [
         {
@@ -343,6 +343,23 @@
           "active_level": true
         }
       ]
+    },
+    {
+      "id": "proximity-sensor-bus",
+      "kind": "sensor",
+      "signals": [
+        {
+          "kind": "serial",
+          "block_id": "i2c1",
+          "channel": 0,
+          "address": 57
+        },
+        {
+          "kind": "interrupt",
+          "controller_id": "gic-distributor",
+          "line": 122
+        }
+      ]
     }
   ],
   "parts": [
@@ -354,7 +371,7 @@
     "control-bus-device-68",
     "serial-command-16-read",
     "serial-command-16",
-    "serial-command-8-mode2",
+    "serial-command-8",
     "bis-configuration",
     "lsm6ds",
     "framed-command-peer",

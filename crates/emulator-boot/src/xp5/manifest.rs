@@ -292,6 +292,54 @@ pub(crate) fn preload_length(preload: &Preload) -> Result<u64, String> {
 mod tests {
     use super::{BootState, Dram};
 
+    fn xh2s_windows() -> Vec<fujimod_emulator_devices::graph::DeviceWindow> {
+        BootState::for_firmware("xh2s-730", None)
+            .unwrap()
+            .with_catalog_windows(
+                &fujimod_catalog_resolution::ResolvedConfiguration::bundled("xh2s-730").unwrap(),
+            )
+            .unwrap()
+            .device
+    }
+
+    #[test]
+    fn xh2s_viewfinder_writes_use_spi_mode_zero() {
+        let windows = xh2s_windows();
+        let spi = windows
+            .iter()
+            .find(|device| device.base == 0xff91_5000)
+            .unwrap();
+        let endpoints = spi.options["endpoints"].as_array().unwrap();
+        let evf = endpoints
+            .iter()
+            .find(|endpoint| {
+                endpoint["select"]["port"].as_integer() == Some(12)
+                    && endpoint["select"]["pin"].as_integer() == Some(10)
+            })
+            .unwrap();
+        assert_eq!(evf["part"]["bits"].as_integer(), Some(8));
+        assert_eq!(evf["part"]["mode"].as_integer(), Some(0));
+    }
+
+    #[test]
+    fn xh2s_proximity_sensor_raises_its_body_interrupt() {
+        let windows = xh2s_windows();
+        let bus = windows
+            .iter()
+            .find(|device| device.base == 0xff92_5000)
+            .unwrap();
+        let targets = bus.options["targets"].as_array().unwrap();
+        let part = |address| {
+            &targets
+                .iter()
+                .find(|target| target["address"].as_integer() == Some(address))
+                .unwrap()["part"]
+        };
+        assert_eq!(part(0x39)["kind"].as_str(), Some("tmd2772-proximity"));
+        assert_eq!(part(0x39)["interrupt"].as_integer(), Some(122));
+        assert!(part(0x36).get("interrupt").is_none());
+    }
+
     #[test]
     fn xh2s_mode_transitions_include_the_mixer_and_filter_scaler() {
         let state = BootState::for_firmware("xh2s-730", None)

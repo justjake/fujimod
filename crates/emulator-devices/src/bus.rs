@@ -352,6 +352,14 @@ pub trait Device: Send + std::any::Any {
     ) -> Option<&mut (dyn crate::capability::GravityInput + 'static)> {
         None
     }
+    fn proximity_input(&self) -> Option<&(dyn crate::capability::ProximityInput + 'static)> {
+        None
+    }
+    fn proximity_input_mut(
+        &mut self,
+    ) -> Option<&mut (dyn crate::capability::ProximityInput + 'static)> {
+        None
+    }
     fn gpio_inputs(&self) -> Option<&(dyn crate::capability::GpioInputs + 'static)> {
         None
     }
