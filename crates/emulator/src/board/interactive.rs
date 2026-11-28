@@ -113,6 +113,40 @@ struct Entry {
 }
 
 impl State {
+    /// Attribute every core's executed entries at a barrier, before any
+    /// callback settles timers or publishes DMA. A core that ended its
+    /// segment parked in a callback still retired instructions, and those
+    /// entries are part of the cohort's elapsed guest time; leaving them out
+    /// makes the frontier advance past a core that never ran them.
+    pub(super) fn account_processor(
+        &mut self,
+        cpus: &[Rc<dyn Cpu>],
+        cores: &[usize],
+    ) -> Result<(), String> {
+        for &core in cores {
+            let cpu = &*cpus[core];
+            let Some(progress) = cpu.instruction_progress() else {
+                continue;
+            };
+            let delta = progress
+                .checked_sub(self.accounted[core])
+                .ok_or_else(|| {
+                    format!(
+                        "CPU{core} entry count moved backward: {progress} < {}",
+                        self.accounted[core]
+                    )
+                })?;
+            if delta == 0 {
+                continue;
+            }
+            self.account_interactive(core, delta)?;
+            self.instructions[core] = self.instructions[core]
+                .checked_add(delta)
+                .ok_or("instruction counter overflow")?;
+            self.accounted[core] = progress;
+        }
+        Ok(())
+    }
     pub(super) fn account_interactive(&mut self, core: usize, delta: u64) -> Result<(), String> {
         let epoch = self
             .parallel
@@ -459,6 +493,10 @@ impl Board {
                 // All assembly execution is stopped. Account the whole cluster
                 // before a callback can settle timers or publish DMA.
                 let mut state = self.state.borrow_mut();
+                let cohort: Vec<usize> = entries.iter().map(|entry| entry.core).collect();
+                if let Err(e) = state.account_processor(&self.cpus, &cohort) {
+                    error.get_or_insert(e);
+                }
                 for entry in &mut entries {
                     if let Err(e) = self.settle_interactive_entry(&mut state, entry, mprofile) {
                         error.get_or_insert(e);
