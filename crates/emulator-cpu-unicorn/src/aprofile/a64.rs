@@ -849,12 +849,15 @@ impl Proof {
                     let step = i64::try_from(value).ok()?;
                     let delta = if subtract { -step } else { step };
                     let candidate = Step::Immediate(delta);
-                    match moving {
-                        Some((register, seen, total))
-                            if register == dst && seen == width && total == candidate => {}
-                        Some(_) => return None,
-                        None => moving = Some((dst, width, candidate)),
+                    // One move of the counted register. A second move is a
+                    // different step count than `at` models: it would apply
+                    // the delta once while the body applies it twice, so both
+                    // the trip count and the range's first address would be
+                    // wrong.
+                    if moving.is_some() {
+                        return None;
                     }
+                    moving = Some((dst, width, candidate));
                     written[dst] = true;
                     if sets_flags {
                         flags = Some(Compare::Update { subtract });
@@ -874,12 +877,11 @@ impl Proof {
                         register: rhs,
                         subtract,
                     };
-                    match moving {
-                        Some((register, seen, total))
-                            if register == dst && seen == width && total == candidate => {}
-                        Some(_) => return None,
-                        None => moving = Some((dst, width, candidate)),
+                    // As above: exactly one move of the counted register.
+                    if moving.is_some() {
+                        return None;
                     }
+                    moving = Some((dst, width, candidate));
                     written[dst] = true;
                 }
                 Op::AddSub {
@@ -1634,6 +1636,30 @@ mod tests {
         let p = proof(
             0x1000,
             &[dc_civac(4), dc_civac(4), ADD_X4_X4_X3, CMP_X4_X1, b_ne(4)],
+        );
+        assert!(p.maintenance().is_none());
+        let mut state = State::default();
+        state.registers[4] = 0x2000;
+        state.registers[3] = 64;
+        state.registers[1] = 0x2400;
+        state.flags = 1 << 29;
+        assert!(p.advance_range(state, 100, 4, Some(64)).is_none());
+    }
+
+    #[test]
+    fn a_body_that_steps_its_counter_twice_is_refused() {
+        // `dc civac,x4 ; add x4,x4,x3 ; add x4,x4,x3 ; cmp x4,x1 ; b.ne`. The
+        // counted model applies one step per round, so a second move would
+        // double the real advance and misplace every round's address.
+        let p = proof(
+            0x1000,
+            &[
+                dc_civac(4),
+                ADD_X4_X4_X3,
+                ADD_X4_X4_X3,
+                CMP_X4_X1,
+                b_ne(4),
+            ],
         );
         assert!(p.maintenance().is_none());
         let mut state = State::default();

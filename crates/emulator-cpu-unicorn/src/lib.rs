@@ -780,7 +780,6 @@ impl Core {
         );
         Ok(())
     }
-
     /// The mapped device window `[begin, end)` holding `address`, if any.
     ///
     /// A batched cache-maintenance range must refuse rather than run through a

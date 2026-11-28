@@ -1609,6 +1609,38 @@ mod interactive_tests {
     }
 
     #[test]
+    fn a_cache_range_loop_that_steps_twice_matches_plain_execution() {
+        // `dc civac,x4 ; add x4,x4,x3 ; add x4,x4,x3 ; cmp x4,x1 ; b.ne`: the
+        // counted model applies one step per round, so the body is refused and
+        // runs plainly. The two modes must still agree.
+        let code = [dc_civac(4), ADD_X4_X4_X3, ADD_X4_X4_X3, CMP_X4_X1, b_ne(4)];
+        let set_up = |cpu: &Core| {
+            set_x(cpu, 4, 0x2000);
+            set_x(cpu, 3, 64);
+            set_x(cpu, 1, 0x2400);
+        };
+        for budget in [5, 6, 12, 40] {
+            parity(&code, set_up, budget);
+        }
+        let cpu = core();
+        cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
+        let mut words = code.to_vec();
+        words.push(0x1400_0000);
+        cpu.write_memory(
+            0x1000,
+            &words.iter().flat_map(|word| word.to_le_bytes()).collect::<Vec<_>>(),
+        )
+        .unwrap();
+        set_up(&cpu);
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)
+            .unwrap();
+        cpu.set_loop_mode(loops::LoopMode::Accelerate).unwrap();
+        cpu.set_loop_window(true).unwrap();
+        run(&cpu, 0x1000, 40);
+        assert_eq!(cpu.execution.proofs.accelerated_instructions.get(), 0);
+    }
+
+    #[test]
     fn a_cache_range_loop_with_a_wide_step_matches_plain_execution() {
         // A 128-byte step over 64-byte lines skips every other line. The
         // batched form would maintain lines the loop never named, so it
