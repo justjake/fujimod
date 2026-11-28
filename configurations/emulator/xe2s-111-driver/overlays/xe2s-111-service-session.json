@@ -14,13 +14,13 @@
         "inputs": {
           "gpio": {
             "gpio_inputs": {
-              "0": 3104,
+              "0": 3680,
               "2": 4608,
               "3": 776,
               "12": 128,
               "11": 0
             },
-            "profile_name": "Synthetic static service entry: UP ADC8, S1/S2 GPIO0 pins2/3 active-low; switch GPIO0/5 high"
+            "profile_name": "Synthetic static service entry: UP ADC8, S1/S2 GPIO0 pins2/3 active-low; switch GPIO0/5 high; GPIO0.6 and GPIO0.9 read the closed acquisition contacts of the body's resting actuator"
           },
           "power": {
             "profile_name": "Synthetic loader boot reason0; remaining ADC borrowed; MCU runtime status still separate rehearsal input",
