@@ -782,6 +782,12 @@ a:focus-visible,
     height: auto;
     padding-top: 0;
   }
+  /* The idle launcher reserves the display and the bar under it. */
+  .stage.idle .viewer {
+    box-sizing: content-box;
+    aspect-ratio: 3 / 2;
+    padding-bottom: 28px;
+  }
   #lcd-source.flat {
     position: relative;
     inset: auto;
@@ -915,7 +921,8 @@ a:focus-visible,
   line-height: 1.5;
 }
 @media (min-width: 821px) {
-  .stage:not(.idle) {
+  /* The idle launcher reserves the running emulator's height. */
+  .stage {
     height: min(760px, calc(100svh - 48px));
     min-height: 520px;
   }
