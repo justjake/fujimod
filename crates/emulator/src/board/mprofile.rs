@@ -567,6 +567,25 @@ impl Profile {
             Entry::Execute
         })
     }
+    /// The NVIC's interrupt bits, priorities and interrupt status have no
+    /// peer effects. Reads still need a horizon before the next SysTick wrap.
+    pub(super) fn private_interrupt_access(address: u64, size: u8) -> bool {
+        match address {
+            0xe000_e100..=0xe000_e11c
+            | 0xe000_e180..=0xe000_e19c
+            | 0xe000_e200..=0xe000_e21c
+            | 0xe000_e280..=0xe000_e29c
+            | 0xe000_e300..=0xe000_e31c
+            | 0xe000_ed04 => size == 4 && address & 3 == 0,
+            0xe000_e400..=0xe000_e4ff | 0xe000_ed18..=0xe000_ed23 => {
+                matches!(size, 1 | 2 | 4)
+                    && address + u64::from(size)
+                        <= if address < 0xe000_e500 { 0xe000_e500 } else { 0xe000_ed24 }
+            }
+            _ => false,
+        }
+    }
+
     pub fn access(
         &mut self,
         cpu: &dyn Cpu,
@@ -579,7 +598,7 @@ impl Profile {
         if (0xe000e000..0xe000f000).contains(&address) {
             let offset = address - 0xe000e000;
             if let Some(v) = value {
-                let counter = self.counter(now);
+                let counter = (offset == 0xdfc).then(|| self.counter(now));
                 if offset == 0xd88 {
                     if size != 4 || v & !0x00f00000 != 0 {
                         return Err("unsupported M-profile coprocessor access control".into());
@@ -587,7 +606,7 @@ impl Profile {
                     set(cpu, special(arm::Register::Cpacr), v as u32)?;
                 }
                 self.nvic.write(offset, size as u32, v, ns)?;
-                if offset == 0xdfc {
+                if let Some(counter) = counter {
                     self.dwt_frozen = counter;
                     self.dwt_anchor = self.cycles(now);
                 }

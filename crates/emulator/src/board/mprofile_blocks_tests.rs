@@ -192,6 +192,50 @@ fn handler_blocks_run_inline_and_return_through_the_exception_controller() {
 }
 
 #[test]
+fn private_interrupt_access_delivers_a_newly_enabled_irq_before_the_next_instruction() {
+    fn run_private_interrupt_access(enabled: bool) -> Outcome {
+        let mut board = single_m4_board(
+            true,
+            &[
+                0x4807, 0x4908, // Load ISER0 and IPR0 addresses.
+                0x2201, 0x6803, // Read ISER0 while the line is disabled.
+                0x600a, 0x680b, // Write and read IPR0.
+                0x6002, 0x2609, // Enable IRQ0; handler must precede MOVS r6,#9.
+                0xe7fe, 0, 0, 0, 0, 0, 0, 0,
+                0xe100, 0xe000, 0xe400, 0xe000,
+            ],
+            0x17000,
+        );
+        board.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
+        board.set_poll_loops(false);
+        {
+            let mut state = board.state.borrow_mut();
+            state.settled.private_interrupt_access = enabled;
+            state.settled.verify = 1;
+        }
+        board.write_physical(0x10040, &0x101b9u32.to_le_bytes()).unwrap();
+        // MOV r5,r6; ADDS r4,#1; BX LR.
+        board.write_physical(0x101b8, &[0x35, 0x46, 0x01, 0x34, 0x70, 0x47]).unwrap();
+        board.run_until(2, 100).unwrap();
+        {
+            let mut state = board.state.borrow_mut();
+            state.mprofile[0].as_mut().unwrap().pulse(0).unwrap();
+            state.settled.clear();
+        }
+        board.run_until(100, 100).unwrap();
+        let result = outcome(&board);
+        assert_eq!(&result.registers[3..7], &[1, 1, 0, 9]);
+        assert_eq!(board.state.borrow().settled.private_interrupt_reuses > 0, enabled);
+        result
+    }
+    let reference = run_private_interrupt_access(false);
+    let local = run_private_interrupt_access(true);
+    assert_eq!(local.registers, reference.registers);
+    assert_eq!(local.memory, reference.memory);
+    assert_eq!(local.state, reference.state);
+}
+
+#[test]
 fn cached_status_reads_match_the_observer_across_exception_entry_and_return() {
     fn run_status_reads(blocks: bool) -> Outcome {
         let mut board = single_m4_board(blocks, &[], 0x17000);

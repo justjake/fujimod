@@ -377,6 +377,8 @@ struct Settled {
     skips: u64,
     full: u64,
     mmio_reuses: u64,
+    private_interrupt_reuses: u64,
+    private_interrupt_access: bool,
 }
 impl Settled {
     fn new() -> Self {
@@ -393,6 +395,9 @@ impl Settled {
             skips: 0,
             full: 0,
             mmio_reuses: 0,
+            private_interrupt_reuses: 0,
+            private_interrupt_access: std::env::var_os("FUJIMOD_PRIVATE_INTERRUPT_ACCESS")
+                .is_some_and(|value| value == "1"),
         }
     }
     #[inline]
@@ -3557,17 +3562,39 @@ impl State {
         if let Some(sample) = sample.as_deref_mut() {
             sample.begin_dispatch();
         }
-        if let Some(p) = &mut self.mprofile[core]
-            && (0xe0000000..0xe0100000).contains(&address)
-        {
-            self.settled.clear();
-            let result = p.access(&*cpus[core], address, size, value, self.timeline.now())?;
+        if self.mprofile[core].is_some() && (0xe0000000..0xe0100000).contains(&address) {
+            let now = self.timeline.now();
+            let local = self.settled.private_interrupt_access
+                && self.execution_policy == ExecutionPolicy::Interactive
+                && self.parallel.is_none()
+                && !self.release_state_changed
+                && mprofile::Profile::private_interrupt_access(address, size)
+                && self.processor_deadlines[core].is_none_or(|deadline| now < deadline)
+                && self.settled();
+            let p = self.mprofile[core].as_mut().unwrap();
+            let result = p.access(&*cpus[core], address, size, value, now)?;
             if let Some(sample) = sample {
                 sample.end_dispatch();
             }
-            self.refresh_processors()?;
-            self.push_pins(cpus)?;
-            self.settle_after_pin_push(core)?;
+            if local && !p.pending() {
+                // Only this core's inputs could have changed. Local level
+                // sampling finished above and found no exception to deliver.
+                // The existing deadline and all peer pin outputs still hold.
+                self.settled.idle = Some(core);
+                self.settled.private_interrupt_reuses += 1;
+                if self.settled.verifies() {
+                    let before = self.settled;
+                    self.verify_settled(cpus, true)?;
+                    self.verify_settled(cpus, false)?;
+                    self.verify_idle(core, true)?;
+                    self.settled.pass = before.pass;
+                }
+            } else {
+                self.settled.clear();
+                self.refresh_processors()?;
+                self.push_pins(cpus)?;
+                self.settle_after_pin_push(core)?;
+            }
             self.tighten(&*cpus[core], core)?;
             return Ok(result);
         }
