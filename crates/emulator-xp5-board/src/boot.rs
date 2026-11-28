@@ -1972,7 +1972,14 @@ fn block_window(
             "xp5-codec"
         }
         BlockDevice::ImagingBuffer { .. } => "imaging-buffer",
-        BlockDevice::Xp5ImagingStatistics { .. } => "imaging-statistics",
+        BlockDevice::Xp5ImagingStatistics { .. } => {
+            // Statistics banks in RAM the run declares are that RAM: the device writes them
+            // through the bus instead of serving a window over them.
+            if memory.in_ram(block.base, block.size) {
+                options.insert("ram".into(), toml::Value::Boolean(true));
+            }
+            "imaging-statistics"
+        }
         // A loader start is the direct-flash boot; a ROM start replaces the straps with its own.
         BlockDevice::BootControl {
             direct_flash_straps,
@@ -2497,6 +2504,10 @@ pub fn assemble_devices(
             // Clock banks are a sparse envelope: its base is not itself a
             // register device, and holes in the envelope must remain unmapped.
             Err(_) if window.kind == "clock-banks" => {}
+            // RAM-backed statistics register no device.
+            Err(_)
+                if window.kind == "imaging-statistics"
+                    && window.options.get("ram") == Some(&toml::Value::Boolean(true)) => {}
             Err(error) => return Err(error),
         }
     }
@@ -2751,6 +2762,32 @@ mod dram_tests {
         ] {
             let error = device_windows(&xt5, &memory(regions)).unwrap_err();
             assert!(error.contains("DRAM from address 0"), "{error}");
+        }
+    }
+
+    #[test]
+    fn statistics_in_declared_ram_are_ram_backed() {
+        let statistics = |memory: &RunMemory| {
+            let resolved = ResolvedConfiguration::bundled("xt5-431").unwrap();
+            device_windows(&resolved, memory)
+                .unwrap()
+                .into_iter()
+                .find(|window| window.kind == "imaging-statistics")
+                .unwrap()
+                .options
+        };
+        // Boot SRAM declared as (non-DRAM) RAM over the banks.
+        let ram = statistics(&memory(&[
+            (0, 0x8000_0000, true),
+            (0xff80_0000, 0x4_0000, false),
+        ]));
+        assert_eq!(ram.get("ram"), Some(&toml::Value::Boolean(true)));
+        // RAM that covers only part of the banks, or none, leaves the device window.
+        for regions in [
+            &[(0, 0x8000_0000, true), (0xff80_0000, 0x1000, false)][..],
+            &[(0, 0x8000_0000, true)][..],
+        ] {
+            assert!(!statistics(&memory(regions)).contains_key("ram"));
         }
     }
 

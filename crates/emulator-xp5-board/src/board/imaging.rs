@@ -222,21 +222,32 @@ pub fn register_all(
         }
     }
     let io = preview::Io::default();
-    // Without an imaging-statistics window (X-T5 4.31: 0xff800000 is boot SRAM in the SoC profile) the
-    // AE statistics banks are written into guest memory, where the stock code reads them.
-    let has_statistics_window = windows.iter().any(|w| w.kind == "imaging-statistics");
-    let statistics = if has_statistics_window {
-        statistics::Statistics::new(STATISTICS_BASE, STATISTICS_BANK_SIZE)?
-    } else {
-        statistics::Statistics::in_memory(STATISTICS_BASE, STATISTICS_BANK_SIZE)?
-    };
-    // AE/AWB statistics measure the host scene at the sensor's programmed exposure.
-    let statistics = statistics.with_sensor_scene(sensor.exposure());
+    // A statistics window marked `ram` (the catalog marks one that lies in the run's declared
+    // RAM, such as boot SRAM) registers no device: the banks are guest memory, the imaging DMA
+    // writes them through the bus, and the guest reads them back from RAM. Without any
+    // statistics window the banks are guest memory too.
+    let mut in_memory = true;
     for w in windows.iter().filter(|w| w.kind == "imaging-statistics") {
         if w.base != STATISTICS_BASE || w.size != (STATISTICS_BANK_SIZE * 2) as u64 {
             return Err("invalid statistics SRAM window".into());
         }
-        bus.register(w.base, w.size, Box::new(statistics.clone()))?;
+        match w.options.get("ram") {
+            None => in_memory = false,
+            Some(toml::Value::Boolean(ram)) => in_memory &= *ram,
+            Some(_) => return Err("imaging-statistics ram must be a boolean".into()),
+        }
+    }
+    let statistics = if in_memory {
+        statistics::Statistics::in_memory(STATISTICS_BASE, STATISTICS_BANK_SIZE)?
+    } else {
+        statistics::Statistics::new(STATISTICS_BASE, STATISTICS_BANK_SIZE)?
+    };
+    // AE/AWB statistics measure the host scene at the sensor's programmed exposure.
+    let statistics = statistics.with_sensor_scene(sensor.exposure());
+    if !in_memory {
+        for w in windows.iter().filter(|w| w.kind == "imaging-statistics") {
+            bus.register(w.base, w.size, Box::new(statistics.clone()))?;
+        }
     }
     for w in windows.iter().filter(|w| {
         matches!(
@@ -516,6 +527,27 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    /// A statistics window marked `ram` registers no device over the guest's RAM; an unmarked
+    /// one is the statistics device.
+    #[test]
+    fn a_ram_statistics_window_registers_no_device() {
+        let windows = crate::boot::xt5_windows(&["imaging-statistics"]);
+        assert_eq!(windows.len(), 1);
+        let pins = fujimod_emulator_devices::xp5::pins::Pins::shared();
+        let mut graph = DeviceGraph::new();
+        register_all(&mut graph, &windows, &pins).unwrap();
+        assert!(graph.at(STATISTICS_BASE).is_ok());
+        let mut ram = windows.clone();
+        ram[0]
+            .options
+            .insert("ram".into(), toml::Value::Boolean(true));
+        let mut graph = DeviceGraph::new();
+        register_all(&mut graph, &ram, &pins).unwrap();
+        assert!(graph.at(STATISTICS_BASE).is_err());
+        ram[0].options.insert("ram".into(), toml::Value::Integer(1));
+        assert!(register_all(&mut DeviceGraph::new(), &ram, &pins).is_err());
     }
 
     /// The sensor gates come only from `{register, mask}` tables on the window: no option is
