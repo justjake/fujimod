@@ -1,0 +1,72 @@
+--- a/src/dynarmic/interface/A32/config.h
++++ b/src/dynarmic/interface/A32/config.h
+@@ -130,4 +130,7 @@
+     ArchVersion arch_version = ArchVersion::v8;
+
++    /// Preserve bit 1 of an invalid exchange target for the Thumb-only caller.
++    bool thumb_only = false;
++
+     /// This selects other optimizations than can't otherwise be disabled by setting other
+     /// configuration options. This includes:
+--- a/src/dynarmic/backend/arm64/emit_arm64.h
++++ b/src/dynarmic/backend/arm64/emit_arm64.h
+@@ -144,4 +144,5 @@
+     // Endianness
+     bool always_little_endian;
++    bool thumb_only;
+
+     // Frontend specific callbacks
+--- a/src/dynarmic/backend/arm64/a32_address_space.cpp
++++ b/src/dynarmic/backend/arm64/a32_address_space.cpp
+@@ -398,4 +398,5 @@
+
+         .always_little_endian = conf.always_little_endian,
++        .thumb_only = conf.thumb_only,
+
+         .descriptor_to_fpcr = [](const IR::LocationDescriptor& location) { return FP::FPCR{A32::LocationDescriptor{location}.FPSCR().Value()}; },
+--- a/src/dynarmic/backend/arm64/emit_arm64_a32.cpp
++++ b/src/dynarmic/backend/arm64/emit_arm64_a32.cpp
+@@ -558,5 +558,5 @@
+     if (args[0].IsImmediate()) {
+         const u32 new_pc = args[0].GetImmediateU32();
+-        const u32 mask = mcl::bit::get_bit<0>(new_pc) ? 0xFFFFFFFE : 0xFFFFFFFC;
++        const u32 mask = ctx.conf.thumb_only || mcl::bit::get_bit<0>(new_pc) ? 0xFFFFFFFE : 0xFFFFFFFC;
+         const u32 new_upper = upper_without_t | (mcl::bit::get_bit<0>(new_pc) ? 1 : 0);
+
+@@ -569,7 +569,11 @@
+
+         code.ANDS(Wscratch0, Wpc, 1);
+-        code.MOV(Wscratch1, 3);
+-        code.CSEL(Wscratch1, Wscratch0, Wscratch1, NE);
+-        code.BIC(Wscratch1, Wpc, Wscratch1);
++        if (ctx.conf.thumb_only) {
++            code.AND(Wscratch1, Wpc, 0xFFFFFFFE);
++        } else {
++            code.MOV(Wscratch1, 3);
++            code.CSEL(Wscratch1, Wscratch0, Wscratch1, NE);
++            code.BIC(Wscratch1, Wpc, Wscratch1);
++        }
+         code.MOV(Wscratch0, upper_without_t);
+         code.CINC(Wscratch0, Wscratch0, NE);
+--- a/src/dynarmic/backend/x64/a32_emit_x64.cpp
++++ b/src/dynarmic/backend/x64/a32_emit_x64.cpp
+@@ -708,5 +708,5 @@
+     if (arg.IsImmediate()) {
+         const u32 new_pc = arg.GetImmediateU32();
+-        const u32 mask = mcl::bit::get_bit<0>(new_pc) ? 0xFFFFFFFE : 0xFFFFFFFC;
++        const u32 mask = conf.thumb_only || mcl::bit::get_bit<0>(new_pc) ? 0xFFFFFFFE : 0xFFFFFFFC;
+         const u32 new_upper = upper_without_t | (mcl::bit::get_bit<0>(new_pc) ? 1 : 0);
+
+@@ -721,6 +721,10 @@
+         code.and_(mask, 1);
+         code.lea(new_upper, ptr[mask.cvt64() + upper_without_t]);
+-        code.lea(mask, ptr[mask.cvt64() + mask.cvt64() * 1 - 4]);  // mask = pc & 1 ? 0xFFFFFFFE : 0xFFFFFFFC
+-        code.and_(new_pc, mask);
++        if (conf.thumb_only) {
++            code.and_(new_pc, -2);
++        } else {
++            code.lea(mask, ptr[mask.cvt64() + mask.cvt64() * 1 - 4]);  // mask = pc & 1 ? 0xFFFFFFFE : 0xFFFFFFFC
++            code.and_(new_pc, mask);
++        }
+         code.mov(MJitStateReg(A32::Reg::PC), new_pc);
+         code.mov(dword[r15 + offsetof(A32JitState, upper_location_descriptor)], new_upper);

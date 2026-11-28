@@ -2493,6 +2493,7 @@ version = "0.1.0"
 dependencies = [
  "cmake",
  "fujimod-emulator-cpu",
+ "fujimod-emulator-cpu-unicorn",
  "fujimod-workspace-hack",
 ]
 

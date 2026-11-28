@@ -44,7 +44,7 @@ typedef struct DynarmicMemoryControl {
 
 typedef struct DynarmicInstance DynarmicInstance;
 
-DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks);
+DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks, bool thumb_only);
 void dynarmic_destroy(DynarmicInstance* inst);
 
 void dynarmic_set_translation_context(DynarmicInstance* inst, uint32_t value);
@@ -62,6 +62,8 @@ void dynarmic_invalidate_cache(DynarmicInstance* inst, uint32_t vaddr, size_t le
 
 uint32_t dynarmic_get_reg(DynarmicInstance* inst, uint32_t reg);
 void dynarmic_set_reg(DynarmicInstance* inst, uint32_t reg, uint32_t val);
+uint32_t dynarmic_get_s(DynarmicInstance* inst, uint32_t reg);
+void dynarmic_set_s(DynarmicInstance* inst, uint32_t reg, uint32_t val);
 
 uint32_t dynarmic_get_cpsr(DynarmicInstance* inst);
 void dynarmic_set_cpsr(DynarmicInstance* inst, uint32_t val);

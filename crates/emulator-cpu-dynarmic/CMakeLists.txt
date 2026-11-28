@@ -13,7 +13,8 @@ find_package(Git REQUIRED)
 set(DYNARMIC_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/dynarmic-source")
 set(DYNARMIC_PATCHES
     "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-embedder.patch"
-    "${CMAKE_CURRENT_SOURCE_DIR}/patches/x64-exact-budget.patch")
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/x64-exact-budget.patch"
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/thumb-exchange-target.patch")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${DYNARMIC_PATCHES})
 file(REMOVE_RECURSE "${DYNARMIC_SOURCE}")
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/vendor/dynarmic/"

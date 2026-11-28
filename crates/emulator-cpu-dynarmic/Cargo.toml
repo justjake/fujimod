@@ -1,6 +1,6 @@
 [package]
 name = "fujimod-emulator-cpu-dynarmic"
-description = "Dynarmic A32 CPU backend"
+description = "Dynarmic ARM32 CPU backend"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -17,3 +17,6 @@ fujimod-workspace-hack.workspace = true
 
 [build-dependencies]
 cmake = { version = "0.1", optional = true }
+
+[target.'cfg(all(any(target_arch = "aarch64", target_arch = "x86_64"), any(target_os = "linux", target_os = "macos")))'.dev-dependencies]
+fujimod-emulator-cpu-unicorn.workspace = true

@@ -343,7 +343,7 @@ void UserCallbacksImpl::ExceptionRaised(VAddr pc, Exception exception) {
 
 extern "C" {
 
-DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks) {
+DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks, bool thumb_only) {
     auto inst = std::make_unique<DynarmicInstance>();
     inst->callbacks = *callbacks;
 
@@ -354,6 +354,8 @@ DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks) {
     conf.callbacks = inst->callbacks_impl.get();
     conf.global_monitor = &inst->monitor;
     conf.arch_version = ArchVersion::v7;
+    conf.thumb_only = thumb_only;
+    conf.always_little_endian = thumb_only;
     // ARM64's inline page table callback path checks MemoryAbort.
     conf.page_table = &inst->page_table;
     conf.timed_read32_cache = static_cast<Dynarmic::A32::TimedRead32Cache*>(callbacks->inline_read32);
@@ -371,7 +373,9 @@ DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks) {
     conf.hook_hint_instructions = true;
     conf.hook_isb = false;
 
-    conf.coprocessors[15] = inst->cp15_impl;
+    if (!thumb_only) {
+        conf.coprocessors[15] = inst->cp15_impl;
+    }
 
     inst->jit = std::make_unique<Jit>(conf);
     return inst.release();
@@ -474,6 +478,14 @@ void dynarmic_set_reg(DynarmicInstance* inst, uint32_t reg, uint32_t val) {
     if (inst && reg <= 15) {
         inst->jit->Regs()[reg] = val;
     }
+}
+
+uint32_t dynarmic_get_s(DynarmicInstance* inst, uint32_t reg) {
+    return inst->jit->ExtRegs()[reg];
+}
+
+void dynarmic_set_s(DynarmicInstance* inst, uint32_t reg, uint32_t val) {
+    inst->jit->ExtRegs()[reg] = val;
 }
 
 uint32_t dynarmic_get_cpsr(DynarmicInstance* inst) {

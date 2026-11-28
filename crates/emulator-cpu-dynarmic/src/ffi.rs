@@ -74,7 +74,10 @@ pub struct DynarmicMemoryControl {
 pub enum DynarmicInstance {}
 
 unsafe extern "C" {
-    pub fn dynarmic_create(callbacks: *const DynarmicCallbacks) -> *mut DynarmicInstance;
+    pub fn dynarmic_create(
+        callbacks: *const DynarmicCallbacks,
+        thumb_only: bool,
+    ) -> *mut DynarmicInstance;
     pub fn dynarmic_destroy(inst: *mut DynarmicInstance);
     pub fn dynarmic_set_translation_context(inst: *mut DynarmicInstance, value: u32);
     pub fn dynarmic_observe_stores(inst: *mut DynarmicInstance, enabled: bool);
@@ -96,6 +99,8 @@ unsafe extern "C" {
     pub fn dynarmic_invalidate_cache(inst: *mut DynarmicInstance, vaddr: u32, length: usize);
     pub fn dynarmic_get_reg(inst: *mut DynarmicInstance, reg: u32) -> u32;
     pub fn dynarmic_set_reg(inst: *mut DynarmicInstance, reg: u32, val: u32);
+    pub fn dynarmic_get_s(inst: *mut DynarmicInstance, reg: u32) -> u32;
+    pub fn dynarmic_set_s(inst: *mut DynarmicInstance, reg: u32, val: u32);
     pub fn dynarmic_get_cpsr(inst: *mut DynarmicInstance) -> u32;
     pub fn dynarmic_set_cpsr(inst: *mut DynarmicInstance, val: u32);
     pub fn dynarmic_get_fpscr(inst: *mut DynarmicInstance) -> u32;

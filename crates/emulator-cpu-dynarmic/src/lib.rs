@@ -6,6 +6,7 @@
 
 mod ffi;
 mod loops;
+mod mprofile;
 mod status;
 
 use fujimod_emulator_cpu::{memory::Backing, *};
@@ -440,7 +441,7 @@ impl CoreShared {
         }
     }
 
-    fn observe_instruction(&self, pc: u32) {
+    fn observe_instruction(&self, pc: u32, bytes: u32) {
         let single = {
             let hooks = self.observers.borrow();
             match hooks.as_slice() {
@@ -457,7 +458,7 @@ impl CoreShared {
             } = hook
                 && contains(range, pc.into())
             {
-                unsafe { callback(pc.into(), 4, data) };
+                unsafe { callback(pc.into(), bytes, data) };
             }
         };
         if let Some(hook) = single {
@@ -1374,6 +1375,7 @@ pub struct Core {
     owned: RefCell<BTreeMap<u64, Backing>>,
     banks: RefCell<status::Banks>,
     fpexc: Cell<u32>,
+    mprofile: Cell<mprofile::Registers>,
 }
 
 impl Core {
@@ -1385,9 +1387,10 @@ impl Core {
         model: Model,
         code_visibility: CodeVisibility,
     ) -> Result<Self, String> {
-        if model != Model::CortexA7 {
-            return Err("Dynarmic requires a Cortex-A7 processor".into());
+        if !matches!(model, Model::CortexA7 | Model::CortexM4) {
+            return Err("Dynarmic requires a Cortex-A7 or Cortex-M4 processor".into());
         }
+        let thumb_only = model == Model::CortexM4;
         let shared = Box::new(CoreShared {
             exclusive: RefCell::new(None),
             observe_exclusive_stores: Cell::new(false),
@@ -1448,7 +1451,7 @@ impl Core {
             write: Self::write,
         };
 
-        let inst = unsafe { ffi::dynarmic_create(&cb) };
+        let inst = unsafe { ffi::dynarmic_create(&cb, thumb_only) };
         if inst.is_null() {
             return Err("failed to create Dynarmic JIT instance".into());
         }
@@ -1456,7 +1459,7 @@ impl Core {
         shared
             .direct_pages
             .set(unsafe { ffi::dynarmic_data_pages(inst) });
-        unsafe { ffi::dynarmic_set_cpsr(inst, 0xd3) };
+        unsafe { ffi::dynarmic_set_cpsr(inst, 0xd3 | (u32::from(thumb_only) << 5)) };
 
         Ok(Self {
             inst,
@@ -1477,7 +1480,49 @@ impl Core {
             owned: RefCell::new(BTreeMap::new()),
             banks: RefCell::new(status::Banks::default()),
             fpexc: Cell::new(0),
+            mprofile: Cell::default(),
         })
+    }
+
+    fn reg(&self, r: u32) -> u32 {
+        unsafe { ffi::dynarmic_get_reg(self.inst, r) }
+    }
+
+    fn set_reg(&self, r: u32, value: u32) {
+        unsafe { ffi::dynarmic_set_reg(self.inst, r, value) };
+    }
+
+    fn cpsr(&self) -> u32 {
+        unsafe { ffi::dynarmic_get_cpsr(self.inst) }
+    }
+
+    fn finish_run(status: ffi::DynarmicExitReason) -> Result<Exit, ExecutionError> {
+        match status {
+            ffi::DynarmicExitReason::Timeout | ffi::DynarmicExitReason::Stopped => {
+                Ok(Exit::Stopped)
+            }
+            ffi::DynarmicExitReason::Wfi => {
+                Ok(Exit::Hint(fujimod_emulator_cpu::Hint::WaitForInterrupt))
+            }
+            ffi::DynarmicExitReason::Wfe => {
+                Ok(Exit::Hint(fujimod_emulator_cpu::Hint::WaitForEvent))
+            }
+            ffi::DynarmicExitReason::Sev => Ok(Exit::Hint(fujimod_emulator_cpu::Hint::SendEvent)),
+            ffi::DynarmicExitReason::Svc => Err(ExecutionError::Backend(
+                "Dynarmic cannot enter supervisor exceptions".into(),
+            )),
+            ffi::DynarmicExitReason::Undefined => Err(ExecutionError::InvalidInstruction(
+                "undefined instruction".into(),
+            )),
+            ffi::DynarmicExitReason::NoExecute => Err(ExecutionError::Memory {
+                fault: Fault::FetchUnmapped,
+                message: "execution fault on unmapped code page".into(),
+            }),
+            ffi::DynarmicExitReason::Breakpoint => Ok(Exit::Stopped),
+            ffi::DynarmicExitReason::Error | ffi::DynarmicExitReason::Replay => {
+                Err(ExecutionError::Backend("dynarmic execution error".into()))
+            }
+        }
     }
 
     fn install_mmio(
@@ -1640,6 +1685,7 @@ pub struct SnapshotData {
     fpscr: u32,
     banks: status::Banks,
     fpexc: u32,
+    mprofile: Option<mprofile::Snapshot>,
 }
 
 impl Snapshot for SnapshotData {
@@ -1709,7 +1755,7 @@ impl Cpu for Core {
     }
 
     fn supports_projected_device_reads(&self) -> bool {
-        cfg!(target_arch = "aarch64")
+        self.model == Model::CortexA7 && cfg!(target_arch = "aarch64")
     }
 
     fn set_device_read_anchor(&self, anchor: Option<DeviceReadAnchor>) {
@@ -1730,26 +1776,32 @@ impl Cpu for Core {
     }
 
     fn exception_entries(&self) -> Option<armv7a::Entries> {
-        Some(self.exception_entries.get())
+        (self.model == Model::CortexA7).then(|| self.exception_entries.get())
     }
 
     fn read_register(&self, register: Register, out: &mut [u8]) -> Result<usize, String> {
-        let val = match register {
-            Register::Pc => unsafe { ffi::dynarmic_get_reg(self.inst, 15) },
-            Register::Sp => unsafe { ffi::dynarmic_get_reg(self.inst, 13) },
-            Register::Arm32(arm::Register::R(n @ 0..=15)) => unsafe {
-                ffi::dynarmic_get_reg(self.inst, u32::from(n))
-            },
-            Register::Arm32(arm::Register::Cpsr) | Register::Pstate => unsafe {
-                ffi::dynarmic_get_cpsr(self.inst)
-            },
-            Register::Arm32(arm::Register::Spsr) => self.spsr()?,
-            Register::Arm32(arm::Register::Fpscr) => unsafe { ffi::dynarmic_get_fpscr(self.inst) },
-            Register::Arm32(arm::Register::Cpacr) => unsafe {
-                ffi::dynarmic_get_cp15(self.inst, 0, 1, 0, 2)
-            },
-            Register::Arm32(arm::Register::Fpexc) => self.fpexc.get(),
-            _ => return Err(format!("unsupported register {register:?}")),
+        let val = if self.model == Model::CortexM4 {
+            self.read_mprofile_register(register)?
+        } else {
+            match register {
+                Register::Pc => unsafe { ffi::dynarmic_get_reg(self.inst, 15) },
+                Register::Sp => unsafe { ffi::dynarmic_get_reg(self.inst, 13) },
+                Register::Arm32(arm::Register::R(n @ 0..=15)) => unsafe {
+                    ffi::dynarmic_get_reg(self.inst, u32::from(n))
+                },
+                Register::Arm32(arm::Register::Cpsr) | Register::Pstate => unsafe {
+                    ffi::dynarmic_get_cpsr(self.inst)
+                },
+                Register::Arm32(arm::Register::Spsr) => self.spsr()?,
+                Register::Arm32(arm::Register::Fpscr) => unsafe {
+                    ffi::dynarmic_get_fpscr(self.inst)
+                },
+                Register::Arm32(arm::Register::Cpacr) => unsafe {
+                    ffi::dynarmic_get_cp15(self.inst, 0, 1, 0, 2)
+                },
+                Register::Arm32(arm::Register::Fpexc) => self.fpexc.get(),
+                _ => return Err(format!("unsupported register {register:?}")),
+            }
         };
         let bytes = val.to_le_bytes();
         let len = bytes.len().min(out.len());
@@ -1762,6 +1814,9 @@ impl Cpu for Core {
             return Err("register write requires at least 4 bytes".into());
         }
         let val = u32::from_le_bytes(bytes[..4].try_into().unwrap());
+        if self.model == Model::CortexM4 {
+            return self.write_mprofile_register(register, val);
+        }
         match register {
             Register::Pc => unsafe { ffi::dynarmic_set_reg(self.inst, 15, val) },
             Register::Sp => unsafe { ffi::dynarmic_set_reg(self.inst, 13, val) },
@@ -1780,8 +1835,8 @@ impl Cpu for Core {
     }
 
     fn coprocessor(&self, register: arm::Coprocessor, value: Option<u64>) -> Result<u64, String> {
-        if register.cp != 15 || register.wide {
-            return Err("Dynarmic only supports 32-bit CP15 accesses".into());
+        if self.model != Model::CortexA7 || register.cp != 15 || register.wide {
+            return Err("Dynarmic only supports 32-bit CP15 accesses on Cortex-A7".into());
         }
         if let Some(val) = value {
             let word = u32::try_from(val).map_err(|_| "CP15 value exceeds 32 bits")?;
@@ -2087,6 +2142,9 @@ impl Cpu for Core {
         };
         self.shared.device_accessed.set(false);
         self.shared.stopped.set(false);
+        if self.model == Model::CortexM4 {
+            return self.run_thumb(request.until, remaining);
+        }
         let allow_batch = stable
             && request.until.is_none()
             && self.shared.observers.borrow().is_empty()
@@ -2182,7 +2240,7 @@ impl Cpu for Core {
                 }
             };
             self.shared.stopped.set(false);
-            self.shared.observe_instruction(pc);
+            self.shared.observe_instruction(pc, 4);
             if self.shared.stopped.get() || remaining() == 0 {
                 break ffi::DynarmicExitReason::Stopped;
             }
@@ -2275,32 +2333,7 @@ impl Cpu for Core {
             }
         };
 
-        match status {
-            ffi::DynarmicExitReason::Timeout | ffi::DynarmicExitReason::Stopped => {
-                Ok(Exit::Stopped)
-            }
-            ffi::DynarmicExitReason::Wfi => {
-                Ok(Exit::Hint(fujimod_emulator_cpu::Hint::WaitForInterrupt))
-            }
-            ffi::DynarmicExitReason::Wfe => {
-                Ok(Exit::Hint(fujimod_emulator_cpu::Hint::WaitForEvent))
-            }
-            ffi::DynarmicExitReason::Sev => Ok(Exit::Hint(fujimod_emulator_cpu::Hint::SendEvent)),
-            ffi::DynarmicExitReason::Svc => Err(ExecutionError::Backend(
-                "Dynarmic cannot enter ARMv7-A supervisor exceptions".into(),
-            )),
-            ffi::DynarmicExitReason::Undefined => Err(ExecutionError::InvalidInstruction(
-                "undefined instruction".into(),
-            )),
-            ffi::DynarmicExitReason::NoExecute => Err(ExecutionError::Memory {
-                fault: Fault::FetchUnmapped,
-                message: "execution fault on unmapped code page".into(),
-            }),
-            ffi::DynarmicExitReason::Breakpoint => Ok(Exit::Stopped),
-            ffi::DynarmicExitReason::Error | ffi::DynarmicExitReason::Replay => {
-                Err(ExecutionError::Backend("dynarmic execution error".into()))
-            }
-        }
+        Self::finish_run(status)
     }
 
     fn set_loop_window(&self, stable: bool) -> Result<(), String> {
@@ -2309,6 +2342,10 @@ impl Cpu for Core {
     }
 
     fn set_loop_mode(&self, mode: fujimod_emulator_cpu::loops::LoopMode) -> Result<(), String> {
+        if self.model == Model::CortexM4 && mode != fujimod_emulator_cpu::loops::LoopMode::Disabled
+        {
+            return Err("Dynarmic Cortex-M4 has no loop acceleration".into());
+        }
         self.loops.mode.set(mode);
         Ok(())
     }
@@ -2331,8 +2368,8 @@ impl Cpu for Core {
     }
 
     fn snapshot(&self, _previous: Option<&dyn Snapshot>) -> Result<Box<dyn Snapshot>, String> {
-        let regs = std::array::from_fn(|i| unsafe { ffi::dynarmic_get_reg(self.inst, i as u32) });
-        let cpsr = unsafe { ffi::dynarmic_get_cpsr(self.inst) };
+        let regs = std::array::from_fn(|i| self.reg(i as u32));
+        let cpsr = self.cpsr();
         let fpscr = unsafe { ffi::dynarmic_get_fpscr(self.inst) };
         Ok(Box::new(SnapshotData {
             owner: self.identity,
@@ -2341,6 +2378,7 @@ impl Cpu for Core {
             fpscr,
             banks: self.banks.borrow().clone(),
             fpexc: self.fpexc.get(),
+            mprofile: (self.model == Model::CortexM4).then(|| self.snapshot_mprofile()),
         }))
     }
 
@@ -2355,11 +2393,14 @@ impl Cpu for Core {
         *self.banks.borrow_mut() = state.banks.clone();
         self.fpexc.set(state.fpexc);
         for (i, &val) in state.regs.iter().enumerate() {
-            unsafe { ffi::dynarmic_set_reg(self.inst, i as u32, val) };
+            self.set_reg(i as u32, val);
         }
         unsafe {
             ffi::dynarmic_set_cpsr(self.inst, state.cpsr);
             ffi::dynarmic_set_fpscr(self.inst, state.fpscr);
+        }
+        if let Some(mprofile) = &state.mprofile {
+            self.restore_mprofile(mprofile);
         }
         Ok(())
     }
