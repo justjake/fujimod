@@ -25,18 +25,49 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  checks:
-    name: Checks
+  merge:
+    name: Merge into main
     # The rule PR CI requests applies: a ready pull request runs when opened
     # or marked ready, and on the ci:run label; a push waits for the label.
     if: >-
       !github.event.pull_request.draft && (
         github.event.action == 'opened' || github.event.action == 'ready_for_review' ||
         (github.event.action == 'labeled' && github.event.label.name == 'ci:run'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      sha: ${{ steps.merge.outputs.sha }}
+    steps:
+      # GitHub refreshes refs/pull/N/merge only when asked, so it can trail main
+      # by hours. Reading the pull request asks; wait for a merge onto main's head.
+      - id: merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          for _ in $(seq 60); do
+            main=$(gh api "repos/$REPO/commits/main" --jq .sha)
+            read -r mergeable sha < <(gh api "repos/$REPO/pulls/$NUMBER" --jq '"\(.mergeable) \(.merge_commit_sha)"')
+            if [ "$mergeable" = false ]; then
+              echo "::error::The pull request conflicts with main; rebase it"; exit 1
+            fi
+            if [ "$mergeable" = true ] &&
+              [ "$(gh api "repos/$REPO/commits/$sha" --jq '.parents[0].sha')" = "$main" ]; then
+              echo "sha=$sha" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::GitHub did not merge the pull request onto main's head"; exit 1
+
+  checks:
+    name: Checks
+    needs: merge
     permissions:
       contents: read
     uses: ./.github/workflows/ci.yml
     with:
-      # The pull request merged into the current main, which GitHub keeps up to
-      # date, so a stale branch is tested as it would land.
-      ref: refs/pull/${{ github.event.pull_request.number }}/merge
+      ref: ${{ needs.merge.outputs.sha }}
