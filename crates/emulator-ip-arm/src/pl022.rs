@@ -446,6 +446,9 @@ impl Device for Controller {
     fn name(&self) -> &'static str {
         "pl022"
     }
+    fn local_mmio_registers(&self) -> Vec<(u64, u8)> {
+        vec![(self.base + 8, 2), (self.base + 8, 4)]
+    }
     fn try_local_access(
         &mut self,
         address: u64,

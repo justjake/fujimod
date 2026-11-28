@@ -433,6 +433,7 @@ struct Binding {
     mmio_callback_counts: Rc<RefCell<Vec<u64>>>,
     core: usize,
     base: u64,
+    local_registers: Vec<bus::LocalRegister>,
     // This backend's clock is owned by the ordered board. Its descriptors
     // are evaluated after the access reaches the bus timeline.
     published_reads: Vec<fujimod_emulator_cpu::FastMmioRead>,
@@ -883,6 +884,7 @@ impl Board {
                 mmio_callback_counts: board.mmio_callback_counts.clone(),
                 core,
                 base: 0,
+                local_registers: vec![],
                 published_reads: vec![],
                 published_hits: Cell::new(0),
             });
@@ -1491,6 +1493,7 @@ impl Board {
             mmio_callback_counts: self.mmio_callback_counts.clone(),
             core,
             base: physical,
+            local_registers: self.state.borrow().bus.bind_local_registers(physical, bytes),
             published_reads,
             published_hits: Cell::new(0),
         });
@@ -3558,8 +3561,7 @@ impl State {
         core: usize,
         address: u64,
     ) -> Result<Option<(u64, u64)>, String> {
-        if !self.settled.local_mmio
-            || !self.settled.defer_local_mmio
+        if !self.settled.defer_local_mmio
             || self.execution_policy != ExecutionPolicy::Interactive
             || self.parallel.is_some()
             || self.release_state_changed
@@ -3602,11 +3604,23 @@ impl State {
         if self.decoders.pending() {
             return Err("MMIO requires committed memory decoding".into());
         }
-        if let Some((tick, entered)) = self.deferred_local_mmio_tick(core, address)? {
+        let mut local_register = if self.settled.local_mmio {
+            binding.local_registers.iter()
+                .find(|register| register.address == address && register.size == size)
+                .copied()
+        } else {
+            None
+        };
+        if let Some(register) = local_register
+            && let Some((tick, entered)) = self.deferred_local_mmio_tick(core, address)?
+        {
             if let Some(sample) = sample.as_deref_mut() {
                 sample.begin_dispatch();
             }
-            let local = self.bus.try_local_access(address, size, value, tick);
+            let local = self.bus.try_local_access(register, value, tick);
+            // Settling at the projected tick cannot change this device
+            // before dispatch. A decline belongs to the ordinary handler.
+            local_register = None;
             if let Some(sample) = sample.as_deref_mut() {
                 sample.end_dispatch();
             }
@@ -3703,14 +3717,14 @@ impl State {
             .then_some(self.settled);
         self.timeline.synchronize(core)?;
         let now = self.timeline.now();
-        let local = if self.settled.local_mmio
+        let local = if let Some(register) = local_register
             && self.execution_policy == ExecutionPolicy::Interactive
             && self.parallel.is_none()
             && self.timeline.next_event().is_none_or(|event| event.at > now)
             && !self.bus.needs_frontier_pcs()
             && !continuation::fired(&self.continuation)
         {
-            self.bus.try_local_access(address, size, value, now)
+            self.bus.try_local_access(register, value, now)
         } else {
             None
         };

@@ -451,6 +451,12 @@ pub trait Device: Send + std::any::Any {
     fn read_without_advance(&self, _address: u64, _size: u8, _now: u64) -> Option<u64> {
         None
     }
+    /// Absolute addresses and widths that may support a local access. This
+    /// declaration describes the device's register map and is stable for
+    /// the lifetime of the board mapping.
+    fn local_mmio_registers(&self) -> Vec<(u64, u8)> {
+        Vec::new()
+    }
     /// Complete an access while the board holds an ordered grant with no
     /// due events. Success applies the ordinary register effect, including
     /// published register values, but leaves deadlines, peer-visible

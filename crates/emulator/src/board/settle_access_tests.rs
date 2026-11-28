@@ -48,6 +48,9 @@ impl Device for Transfer {
     fn read(&mut self, cx: &mut Cx<'_>, _: u64, _: u8) -> u64 {
         self.0.lock().unwrap().read_at(cx.now())
     }
+    fn local_mmio_registers(&self) -> Vec<(u64, u8)> {
+        vec![(0xff91_0000, 4)]
+    }
     fn try_local_access(&mut self, _: u64, size: u8, value: Option<u64>, now: u64) -> Option<u64> {
         let mut p = self.0.lock().unwrap();
         if !p.local_reads || size != 4 || value.is_some() || p.due.is_some_and(|at| at <= now) {

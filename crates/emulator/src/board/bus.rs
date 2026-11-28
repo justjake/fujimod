@@ -117,6 +117,13 @@ struct Transactions {
     omitted: u64,
     ranges: Option<Vec<TransactionRange>>,
 }
+#[derive(Clone, Copy)]
+pub(super) struct LocalRegister {
+    pub address: u64,
+    pub size: u8,
+    device: usize,
+}
+
 pub struct Bus {
     transactions: Option<Transactions>,
     continuation: Option<std::rc::Rc<std::cell::RefCell<super::continuation::Stops>>>,
@@ -752,19 +759,39 @@ impl Bus {
         }
         result
     }
+    pub(super) fn bind_local_registers(&self, base: u64, bytes: usize) -> Vec<LocalRegister> {
+        let Some(limit) = base.checked_add(bytes as u64) else {
+            return Vec::new();
+        };
+        self.windows
+            .iter()
+            .enumerate()
+            .flat_map(|(device, window)| {
+                window.device.local_mmio_registers().into_iter().filter_map(
+                    move |(address, size)| {
+                        (matches!(size, 1 | 2 | 4 | 8)
+                            && address >= base
+                            && address.checked_add(u64::from(size)).is_some_and(|end| end <= limit)
+                            && self.window_at(address, size) == Some(device))
+                            .then_some(LocalRegister { address, size, device })
+                    },
+                )
+            })
+            .collect()
+    }
+
     pub(super) fn try_local_access(
         &mut self,
-        address: u64,
-        size: u8,
+        register: LocalRegister,
         value: Option<u64>,
         now: u64,
     ) -> Option<u64> {
-        if !self.loop_window() || !matches!(size, 1 | 2 | 4 | 8) {
+        if !self.loop_window() {
             return None;
         }
-        let id = self.window_at(address, size)?;
+        let LocalRegister { address, size, device } = register;
         let mask = u64::MAX >> (64 - u32::from(size) * 8);
-        self.windows[id]
+        self.windows[device]
             .device
             .try_local_access(address, size, value.map(|v| v & mask), now)
             .map(|v| v & mask)
@@ -1611,6 +1638,39 @@ mod tests {
         }
         assert!(bus.access(&mut host, 0, 0, 0x2000, 8, None).is_err());
         assert!(bus.register(0x2003, 1, Box::new(Register(0))).is_err());
+    }
+
+    #[test]
+    fn local_mmio_bindings_match_the_bus_owner_and_full_access_width() {
+        struct Local {
+            address: u64,
+        }
+        impl Device for Local {
+            fn name(&self) -> &'static str {
+                "local-register"
+            }
+            fn read(&mut self, _: &mut Cx<'_>, _: u64, _: u8) -> u64 {
+                0
+            }
+            fn write(&mut self, _: &mut Cx<'_>, _: u64, _: u8, _: u64) {}
+            fn local_mmio_registers(&self) -> Vec<(u64, u8)> {
+                vec![(self.address, 2), (self.address, 4)]
+            }
+            fn try_local_access(&mut self, _: u64, _: u8, value: Option<u64>, _: u64) -> Option<u64> {
+                value
+            }
+        }
+        let mut bus = Bus::new(Mode::Strict);
+        bus.register(0x1000, 2, Box::new(Local { address: 0x1002 })).unwrap();
+        let owner = bus.register(0x1002, 2, Box::new(Local { address: 0x1002 })).unwrap();
+        assert!(bus.bind_local_registers(0x1000, 3).is_empty());
+        let registers = bus.bind_local_registers(0x1000, 4);
+        assert_eq!(registers.len(), 1);
+        let register = registers[0];
+        assert_eq!((register.address, register.size, register.device), (0x1002, 2, owner));
+        assert_eq!(bus.try_local_access(register, Some(0x12_3456), 0), Some(0x3456));
+        bus.transaction_watch_begin(vec![(0x1000, 0x1004)], 1).unwrap();
+        assert_eq!(bus.try_local_access(register, Some(0x3456), 0), None);
     }
 
     #[test]
