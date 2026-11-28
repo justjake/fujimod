@@ -22917,7 +22917,7 @@
               "type": "null"
             }
           ],
-          "description": "What the stock power-off does with the request. Schema 3 publishes none:\nthat image holds no power-off to describe."
+          "description": "What the stock power-off does with the request. Schema 3 publishes one\nonly where the image holds the power-off the queued request reaches."
         },
         "queue": {
           "anyOf": [

@@ -1,4 +1,5 @@
-//! Schema 3: the X-Processor 4 message request, which publishes no power-off.
+//! Schema 3: the X-Processor 4 message request, and the power-off it reaches
+//! where the image holds one.
 //!
 //! The fixture carries the facts the public catalog publishes for the X-T30
 //! 2.01 update: the rewritten request word, the queue that carries it, the
@@ -203,4 +204,78 @@ fn an_xp4_callback_timer_must_pass_the_common_timer_checks() {
             .unwrap_err()
             .contains("matching code checks")
     );
+}
+
+/// A power-off shaped like the one X-E4 2.01 reaches from its queued request:
+/// it reads the deadline at payload offset 8 and arms the alarm through
+/// countdown register 37 and enable register 25.
+fn power_off() -> Value {
+    json!({
+        "entry": 0x021a_6508u32,
+        "halt": 0x021a_6598u32,
+        "power_cut": 0x011c_373cu32,
+        "request_deadline_offset": 8,
+        "alarm": {"seconds": [37], "enable": 25, "enable_value": 1},
+        "deadline_parameter": null,
+        "rollover_parameter": null,
+        "fixed_interval": null
+    })
+}
+
+#[test]
+fn a_message_request_publishes_the_power_off_it_reaches() {
+    let mut value = document();
+    value["mechanism"]["power_off"] = power_off();
+    let restart = parse(&value);
+    restart.validate().unwrap();
+    let published = restart.mechanism.power_off.as_ref().unwrap();
+    assert_eq!(published.halt, 0x021a_6598);
+    assert_eq!(published.alarm.seconds, [37]);
+    let text = serde_json::to_string(&restart).unwrap();
+    assert_eq!(
+        serde_json::from_str::<FirmwareRestart>(&text).unwrap(),
+        restart
+    );
+}
+
+#[test]
+fn a_message_power_off_arms_its_alarm_from_the_queued_deadline_alone() {
+    let refused = |path: &[&str], replacement: Value, reason: &str| {
+        let mut value = document();
+        value["mechanism"]["power_off"] = power_off();
+        let mut field = &mut value["mechanism"]["power_off"];
+        for key in path {
+            field = &mut field[*key];
+        }
+        *field = replacement;
+        let error = parse(&value).validate().unwrap_err();
+        assert!(error.contains(reason), "{path:?}: {error}");
+    };
+    refused(&["entry"], json!(0), "entry, halt and power cut");
+    refused(&["halt"], json!(0), "entry, halt and power cut");
+    refused(&["power_cut"], json!(0), "entry, halt and power cut");
+    refused(
+        &["fixed_interval"],
+        json!({"seconds": [30]}),
+        "queued deadline alone",
+    );
+    refused(&["deadline_parameter"], json!(4), "queued deadline alone");
+    refused(&["rollover_parameter"], json!(5), "queued deadline alone");
+    refused(
+        &["boot_flag"],
+        json!({"address": 4096, "mask": 1}),
+        "queued deadline alone",
+    );
+    refused(
+        &["request_deadline_offset"],
+        json!(4),
+        "deadline the queue carries",
+    );
+    refused(
+        &["request_deadline_offset"],
+        Value::Null,
+        "deadline the queue carries",
+    );
+    refused(&["alarm", "seconds"], json!([]), "apart from its enable");
+    refused(&["alarm", "seconds"], json!([25]), "apart from its enable");
 }
