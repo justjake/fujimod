@@ -1,6 +1,6 @@
 //! Per-core tightly coupled RAM. Region size is read-only; moving a region
 //! changes the window onto the same private bytes (ARM DDI0363E 4.2.21/22).
-use fujimod_emulator_cpu::memory::Backing;
+use crate::memory::Backing;
 use std::cell::Cell;
 
 #[derive(Clone, Copy, Default, serde::Deserialize)]
@@ -27,7 +27,7 @@ pub fn normalize(bytes: usize, word: u32) -> Result<u32, String> {
     }
     Ok((word & !(bytes as u32 - 1)) | ((bytes.trailing_zeros() - 9) << 2) | (word & 1))
 }
-pub(crate) fn validate_disjoint(
+pub fn validate_disjoint(
     first_size: usize,
     first: u32,
     second_size: usize,
@@ -42,10 +42,10 @@ pub(crate) fn validate_disjoint(
     }
     Ok(())
 }
-pub(super) struct Bank {
+pub struct Bank {
     pub memory: Backing,
     pub register: Cell<u32>,
-    pub tracker: fujimod_emulator_cpu::memory::pages::Tracker,
+    pub tracker: crate::memory::pages::Tracker,
 }
 impl Bank {
     pub fn extent(&self) -> Option<(u64, usize)> {
@@ -54,7 +54,7 @@ impl Bank {
             .then_some(((r & 0xfffff000) as u64, self.memory.len()))
     }
 }
-pub(super) fn banks(options: Options) -> Result<[Bank; 2], String> {
+pub fn banks(options: Options) -> Result<[Bank; 2], String> {
     let specs = [options.btcm, options.atcm];
     let regs = [
         normalize(specs[0].bytes, specs[0].reset)?,
@@ -70,7 +70,7 @@ pub(super) fn banks(options: Options) -> Result<[Bank; 2], String> {
                 Backing::aligned_zeros(bytes, 4096)?
             },
             register: Cell::new(regs[i]),
-            tracker: fujimod_emulator_cpu::memory::pages::Tracker::new(bytes),
+            tracker: crate::memory::pages::Tracker::new(bytes),
         })
     };
     Ok([make(0)?, make(1)?])

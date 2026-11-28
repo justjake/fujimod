@@ -224,7 +224,7 @@ impl Imported {
             .zip(&e.tcm)
             .map(|(saved, bank)| {
                 if saved.len != bank.memory.len()
-                    || super::super::super::tcm::normalize(saved.len, saved.register)?
+                    || fujimod_emulator_cpu::armv7r::tcm::normalize(saved.len, saved.register)?
                         != saved.register
                 {
                     return Err("R-profile snapshot TCM configuration differs".to_owned());
@@ -235,7 +235,7 @@ impl Imported {
                 ))
             })
             .collect::<Result<Vec<_>, String>>()?;
-        super::super::super::tcm::validate_disjoint(
+        fujimod_emulator_cpu::armv7r::tcm::validate_disjoint(
             state.tcm[0].len,
             state.tcm[0].register,
             state.tcm[1].len,

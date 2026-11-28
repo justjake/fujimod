@@ -2,6 +2,8 @@
 //! supplies the access permissions and memory attributes for its address.
 use crate::Access;
 
+pub mod tcm;
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Region {
     pub base: u32,

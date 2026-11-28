@@ -1,6 +1,6 @@
 //! TCM register transactions and stopped-processor mapping changes.
 use super::*;
-use crate::rprofile::tcm::{normalize, validate_disjoint};
+use fujimod_emulator_cpu::armv7r::tcm::{normalize, validate_disjoint};
 
 impl Execution {
     pub(super) fn tcm_physical(&self, bank: usize) -> Result<u64, String> {

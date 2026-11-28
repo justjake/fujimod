@@ -1,6 +1,6 @@
 use super::tests::{get, processor_with_options, resume, run, set, words};
 use super::*;
-use crate::rprofile::tcm::{BankOptions, Options as TcmOptions};
+use fujimod_emulator_cpu::armv7r::tcm::{BankOptions, Options as TcmOptions};
 fn region(bank: u32) -> arm::Coprocessor {
     arm::Coprocessor {
         cp: 15,

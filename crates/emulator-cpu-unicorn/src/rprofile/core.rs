@@ -6,8 +6,8 @@ use crate::{
     accounting::{Accounting, Span},
     memory::{Memory, OwnerBarrierLease},
 };
-use fujimod_emulator_cpu::memory::Backing;
 use fujimod_emulator_cpu::*;
+use fujimod_emulator_cpu::{armv7r::tcm as tcm_banks, memory::Backing};
 use std::cell::{Cell, RefCell, UnsafeCell};
 use std::collections::BTreeMap;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -54,7 +54,7 @@ const SCTLR_V: u64 = 1 << 13;
 #[serde(deny_unknown_fields)]
 pub struct Options {
     pub cp14_identity: u32,
-    pub tcm: super::tcm::Options,
+    pub tcm: tcm_banks::Options,
     /// The processor's VINITHI input: exception vectors start at 0xffff0000 (SCTLR.V set at reset).
     #[serde(default)]
     pub high_vectors: bool,
@@ -134,7 +134,7 @@ pub(super) struct Execution {
     policy: Cell<ExecutionPolicy>,
     parallel_tcg: bool,
     pmu: Cell<pmu::Counter>,
-    tcm: [super::tcm::Bank; 2],
+    tcm: [tcm_banks::Bank; 2],
     tcm_pending: Cell<Option<(usize, u32)>>,
     observed_backings: RefCell<Vec<BackingObserver>>,
     maps: RefCell<Vec<Mapping>>,
@@ -237,7 +237,7 @@ impl Core {
         let record = cpu
             .accounting()
             .ok_or("missing R-profile accounting record")?;
-        let tcm = super::tcm::banks(options.tcm)?;
+        let tcm = tcm_banks::banks(options.tcm)?;
         let monitor = wiring
             .memory
             .monitors
