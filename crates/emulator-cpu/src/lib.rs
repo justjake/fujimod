@@ -725,6 +725,16 @@ pub trait Cpu {
     fn exclusive_domain(&self) -> Option<exclusive::Shared> {
         None
     }
+    /// Reservation identity of a mapped address, shared by all bus aliases.
+    /// Private RAM must use a domain that no bus alias can name.
+    fn exclusive_address(
+        &self,
+        mapped: u64,
+        _bytes: usize,
+        _access: Access,
+    ) -> Result<u64, String> {
+        Ok(mapped)
+    }
     fn model(&self) -> Model;
     fn features(&self) -> Features;
     fn set_guest_clock(&self, _clock: Clock) -> Result<(), String> {

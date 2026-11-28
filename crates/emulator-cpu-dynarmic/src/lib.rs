@@ -26,6 +26,7 @@ enum Mapping {
         bytes: usize,
         permissions: u32,
         ptr: NonNull<u8>,
+        physical_base: u64,
     },
     Mmio {
         bytes: usize,
@@ -190,6 +191,7 @@ impl NativePage {
                 bytes,
                 permissions,
                 ptr,
+                physical_base,
             } if end <= bytes => {
                 let required = match access {
                     Access::Read => 1,
@@ -197,7 +199,10 @@ impl NativePage {
                     Access::Fetch => 4,
                 };
                 (permissions & required != 0).then(|| {
-                    NativeAccess::Ram(unsafe { ptr.as_ptr().add(mapped_offset) }, physical)
+                    NativeAccess::Ram(
+                        unsafe { ptr.as_ptr().add(mapped_offset) },
+                        physical_base + mapped_offset as u64,
+                    )
                 })
             }
             Mapping::Mmio {
@@ -386,6 +391,17 @@ fn contains(range: HookRange, address: u64) -> bool {
 }
 
 impl CoreShared {
+    fn clear_reservation(&self) -> Result<(), String> {
+        if let Some(context) = self.exclusive.borrow().as_ref() {
+            context
+                .monitors
+                .lock()
+                .map_err(|_| "exclusive monitors poisoned")?
+                .clear(context.owner);
+        }
+        Ok(())
+    }
+
     fn mark_backing_write(&self, pointer: *mut u8, bytes: usize) {
         let start = pointer.addr();
         let end = start + bytes;
@@ -425,6 +441,10 @@ impl CoreShared {
         };
         if self.observe_exclusive_stores.replace(observing) != observing {
             unsafe { ffi::dynarmic_observe_stores(self.inst.get(), observing) };
+            if !cfg!(target_arch = "aarch64") {
+                // Without a native store guard, revoke writable inline pages.
+                self.clear_inline_pages();
+            }
         }
         Ok(())
     }
@@ -866,14 +886,17 @@ impl CoreShared {
             else {
                 return 0;
             };
-            let Some((Mapping::Backing { ptr, permissions, .. }, offset)) = self.mapping(physical, count)
+            let Some((Mapping::Backing { ptr, permissions, physical_base, .. }, offset)) = self.mapping(physical, count)
                 .filter(|(mapping, _)| matches!(mapping, Mapping::Backing { permissions, .. } if permissions & needed != 0))
             else {
                 self.fail(protected, format!("Dynarmic cross-page {access:?} requires RAM at {virtual_address:#010x}"));
                 return 0;
             };
             debug_assert!(permissions & needed != 0);
-            addresses[index] = (unsafe { ptr.as_ptr().add(offset) }, physical);
+            addresses[index] = (
+                unsafe { ptr.as_ptr().add(offset) },
+                physical_base + offset as u64,
+            );
         }
         let mut bytes = output.unwrap_or(0).to_le_bytes();
         let (first, second) = bytes.split_at_mut(split);
@@ -961,7 +984,8 @@ impl CoreShared {
                     .and_then(Result::ok)
                     == Some(physical));
         // Only the ARM64 emitter checks the write-protection tag on stores.
-        if !write_allowed && !cfg!(target_arch = "aarch64") {
+        if !cfg!(target_arch = "aarch64") && (!write_allowed || self.observe_exclusive_stores.get())
+        {
             return;
         }
         let page = address >> 12;
@@ -1432,14 +1456,19 @@ impl CoreShared {
                 };
                 u64::from_le_bytes(bytes)
             }
-            (Mapping::Backing { ptr, .. }, Some(value)) => {
+            (
+                Mapping::Backing {
+                    ptr, physical_base, ..
+                },
+                Some(value),
+            ) => {
                 let pointer = unsafe { ptr.as_ptr().add(offset) };
                 unsafe {
                     std::ptr::copy_nonoverlapping(value.to_le_bytes().as_ptr(), pointer, size)
                 };
                 self.code_visibility.note_write(pointer, size);
                 self.mark_backing_write(pointer, size);
-                self.note_guest_store(physical, size);
+                self.note_guest_store(physical_base + offset as u64, size);
                 0
             }
             (Mapping::Mmio { callbacks, .. }, value) => {
@@ -1810,11 +1839,9 @@ impl Cpu for Core {
     }
 
     fn set_armv7a_exclusive_context(&self, monitors: exclusive::Shared, owner: exclusive::Owner) {
-        if cfg!(target_arch = "aarch64") {
-            self.shared
-                .exclusive
-                .replace(Some(BoardExclusive { monitors, owner }));
-        }
+        self.shared
+            .exclusive
+            .replace(Some(BoardExclusive { monitors, owner }));
     }
 
     fn exclusive_domain(&self) -> Option<exclusive::Shared> {
@@ -1823,6 +1850,23 @@ impl Cpu for Core {
             .borrow()
             .as_ref()
             .map(|context| context.monitors.clone())
+    }
+
+    fn exclusive_address(&self, mapped: u64, bytes: usize, access: Access) -> Result<u64, String> {
+        let required = if access == Access::Write { 2 } else { 1 };
+        match self.shared.mapping(mapped, bytes) {
+            Some((
+                Mapping::Backing {
+                    physical_base,
+                    permissions,
+                    ..
+                },
+                offset,
+            )) if permissions & required != 0 => Ok(physical_base + offset as u64),
+            _ => Err(format!(
+                "exclusive access requires permitted RAM at {mapped:#x}"
+            )),
+        }
     }
 
     fn features(&self) -> Features {
@@ -2086,11 +2130,23 @@ impl Cpu for Core {
         permissions: u32,
         backing: NonNull<u8>,
     ) -> Result<(), String> {
+        unsafe { self.map_physical(address, address, bytes, permissions, backing) }
+    }
+
+    unsafe fn map_physical(
+        &self,
+        address: u64,
+        physical: u64,
+        bytes: usize,
+        permissions: u32,
+        backing: NonNull<u8>,
+    ) -> Result<(), String> {
         let end = address
             .checked_add(bytes as u64)
             .ok_or("Dynarmic mapping overflows")?;
         if bytes == 0
             || end > 1 << 32
+            || physical.checked_add(bytes as u64).is_none()
             || !address.is_multiple_of(4096)
             || !bytes.is_multiple_of(4096)
         {
@@ -2103,6 +2159,7 @@ impl Cpu for Core {
                 bytes,
                 permissions,
                 ptr: backing,
+                physical_base: physical,
             },
         );
 
@@ -2232,6 +2289,7 @@ impl Cpu for Core {
             self.shared
                 .flush_changed_code(std::mem::take(&mut check_context));
             if std::mem::take(&mut check_irq) && self.irq.get() && armv7a::enter_irq(self)? {
+                self.shared.clear_reservation()?;
                 let mut entries = self.exception_entries.get();
                 entries.irq += 1;
                 self.exception_entries.set(entries);
@@ -2307,6 +2365,7 @@ impl Cpu for Core {
                 Ok(word) => word,
                 Err(status) => {
                     armv7a::abort::enter_reported(self, pc, status, Access::Fetch)?;
+                    self.shared.clear_reservation()?;
                     return Ok(Exit::Stopped);
                 }
             };
@@ -2322,8 +2381,7 @@ impl Cpu for Core {
             {
                 continue;
             }
-            if allow_batch
-                && remaining() > 1
+            if (self.shared.rprofile.is_some() || (allow_batch && remaining() > 1))
                 && self.board_owns_instructions.get()
                 && armv7a::exclusive_instruction(word)
                 && let Some(context) = self.shared.exclusive.borrow().clone()
@@ -2341,6 +2399,7 @@ impl Cpu for Core {
                 continue;
             }
             if self.board_owns_instructions.get()
+                && self.shared.rprofile.is_none()
                 && ((armv7a::framework_instruction(word) && !armv7a::mpidr_read(word))
                     || armv7a::exclusive_instruction(word))
             {
@@ -2390,6 +2449,7 @@ impl Cpu for Core {
             if let Some((address, status, access)) = self.shared.abort.take() {
                 armv7a::abort::enter_reported(self, address, status, access)
                     .map_err(|error| format!("ARMv7 abort at {pc:#010x}, {access:?} {address:#010x}, FSR {status:#04x}: {error}"))?;
+                self.shared.clear_reservation()?;
                 return Ok(Exit::Stopped);
             }
             if let Some(error) = self.shared.fault.take() {

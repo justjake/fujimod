@@ -103,7 +103,8 @@ pub fn execute_exclusive(
         return Err(format!("unaligned ARMv7-A exclusive at {address:#x}"));
     }
     let access = if load { Access::Read } else { Access::Write };
-    let physical = cpu.translate(address, access)?;
+    let mapped = cpu.translate(address, access)?;
+    let physical = cpu.exclusive_address(mapped, size, access)?;
     if load {
         let mut bytes = [0; 8];
         // This checks permissions and refuses MMIO without driving a device.
@@ -121,7 +122,7 @@ pub fn execute_exclusive(
             if size == 8 {
                 value |= (scalar(arm::CORE[rt + 1])? & 0xffff_ffff) << 32;
             }
-            cpu.write_memory(physical, &value.to_le_bytes()[..size])?;
+            cpu.write_memory(mapped, &value.to_le_bytes()[..size])?;
             monitors.written(Some((physical, size)))?;
         }
         set(arm::CORE[rd], u64::from(!success))?;

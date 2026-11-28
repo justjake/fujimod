@@ -12,6 +12,7 @@ const REGIONS: usize = 16;
 
 #[derive(Clone, Copy, Default)]
 pub struct Config {
+    pub core_index: usize,
     pub tcm: tcm::Options,
     pub high_vectors: bool,
     pub cp14_identity: u32,
@@ -19,6 +20,7 @@ pub struct Config {
 
 pub(super) struct Profile {
     pub mpu: RefCell<Mpu>,
+    private_memory_base: u64,
     pub clock: Cell<Option<Clock>>,
     pmu: Cell<pmu::Counter>,
     tcm: [tcm::Bank; 2],
@@ -42,8 +44,13 @@ struct SavedBank {
 
 impl Profile {
     pub fn new(config: Config) -> Result<Self, String> {
+        let private_memory_base = (config.core_index as u64)
+            .checked_mul(0x0100_0000)
+            .and_then(|offset| offset.checked_add(0x1_0000_0000))
+            .ok_or("Cortex-R TCM identity exhausted")?;
         Ok(Self {
             mpu: Default::default(),
+            private_memory_base,
             clock: Cell::new(None),
             pmu: Cell::new(pmu::Counter::default()),
             tcm: tcm::banks(config.tcm)?,
@@ -53,7 +60,7 @@ impl Profile {
 
     pub fn tcm_region(&self, address: u64, bytes: usize) -> Option<(Mapping, usize)> {
         let end = address.checked_add(bytes as u64)?;
-        self.tcm.iter().find_map(|bank| {
+        self.tcm.iter().enumerate().find_map(|(index, bank)| {
             let (base, size) = bank.extent()?;
             (base <= address && end <= base + size as u64).then(|| {
                 (
@@ -61,6 +68,7 @@ impl Profile {
                         bytes: size,
                         permissions: 7,
                         ptr: NonNull::new(bank.memory.as_ptr()).unwrap(),
+                        physical_base: self.private_memory_base + index as u64 * 0x0080_0000,
                     },
                     (address - base) as usize,
                 )
@@ -359,6 +367,7 @@ impl Core {
                     })?;
                     if bank.register.replace(value) != value {
                         self.shared.mapping_changed();
+                        self.shared.clear_reservation()?;
                     }
                 }
                 Ok(bank.register.get())
@@ -573,5 +582,56 @@ mod tests {
         .unwrap();
         assert_eq!(cpu.instruction_progress(), Some(4));
         assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 2) }, 4);
+    }
+
+    #[test]
+    fn an_rprofile_store_through_another_alias_breaks_the_reservation() {
+        use fujimod_emulator_cpu::{exclusive, memory::Backing};
+        let monitors = exclusive::Shared::default();
+        let backing = Backing::aligned_zeros(4096, 4096).unwrap();
+        let cores = [
+            Core::new(Model::CortexR5F).unwrap(),
+            Core::new(Model::CortexR5F).unwrap(),
+        ];
+        for (index, cpu) in cores.iter().enumerate() {
+            cpu.set_armv7a_owner_exclusives(true).unwrap();
+            let owner = monitors.lock().unwrap().register(4).unwrap();
+            cpu.set_armv7a_exclusive_context(monitors.clone(), owner);
+            cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+            let alias = 0x2000 + 4096 * index as u64;
+            unsafe {
+                cpu.map_physical(
+                    alias,
+                    0x4000,
+                    4096,
+                    7,
+                    NonNull::new(backing.as_ptr()).unwrap(),
+                )
+                .unwrap();
+            }
+            cpu.write_register(arm::CORE[2], &(alias as u32).to_le_bytes())
+                .unwrap();
+        }
+        let source =
+            |core: usize, pc, word: u32| cores[core].write_memory(pc, &word.to_le_bytes()).unwrap();
+        source(0, 0x1000, 0xe192_0f9f); // ldrex r0, [r2]
+        source(0, 0x1004, 0xe182_4f90); // strex r4, r0, [r2]
+        source(1, 0x1000, 0xe582_0000); // str r0, [r2], same value
+        let run = |cpu: &Core, begin| {
+            cpu.set_loop_window(true).unwrap();
+            cpu.run(Run {
+                begin,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(1),
+            })
+            .unwrap();
+        };
+        run(&cores[0], 0x1000);
+        assert!(monitors.lock().unwrap().active());
+        run(&cores[1], 0x1000);
+        assert!(!monitors.lock().unwrap().active());
+        run(&cores[0], 0x1004);
+        assert_eq!(unsafe { ffi::dynarmic_get_reg(cores[0].inst, 4) }, 1);
     }
 }
