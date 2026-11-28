@@ -2271,7 +2271,20 @@ impl Board {
         // Anything may have happened since the last run.
         blocks.poll = None;
         blocks.poll_enabled = wanted && self.poll_loops.get();
-        Ok((wanted, blocks.inline.begin(&*self.cpus[core], inline)))
+        let slice = blocks.inline.begin(&*self.cpus[core], inline);
+        // The bitmap outlives each arming, so seed it with every page the code
+        // shadow has proven once here, at the slice boundary. Scanning the
+        // whole page set on every admitted block costs more than the callbacks
+        // it saves; per-block arming then only has to add its own page. A page
+        // that changed behind the engine is dropped from the shadow's proven
+        // set, and the next seed omits it.
+        if let Some(shadow) = s.code_shadow[core].as_mut() {
+            let proven = shadow.proven_pages(&*self.cpus[core]);
+            if let Some(blocks) = s.blocks[core].as_mut() {
+                blocks.inline.seed_pages(&proven);
+            }
+        }
+        Ok((wanted, slice))
     }
     /// Discard a processor's translations when its instruction observer
     /// asked for it. Returns whether the stopped slice must resume.
@@ -4488,31 +4501,16 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
         // replayed device read is not idempotent (`io_readx` serviced it
         // already). The classifier refuses those encodings; this keeps the
         // guarantee if one is reached through a different path.
-        // Every page the shadow has proven is a page the translated guard may
-        // enter without a host callback: the block there was scanned from the
-        // same copied bytes, and a page that changed behind the engine is not
-        // proven. Taking the set once here keeps the per-block cost at one
-        // page compare rather than one host callback per page transition.
-        let proven = if inline {
-            let page = pc & !0x3ff;
-            let mut pages = s.code_shadow[core]
-                .as_mut()
-                .map(|shadow| shadow.proven_pages(cpu))
-                .unwrap_or_default();
-            pages.retain(|&address| address != page);
-            pages
-        } else {
-            Vec::new()
-        };
         let blocks = s.blocks[core].as_mut().unwrap();
         blocks.room -= entries - 1;
         blocks.pending = Some((pc, bytes, entries, pc + last));
         if inline {
-            // The grant stays inside this block's own window: a wider one lets
-            // the guest enter instructions past an unserviced device deadline,
-            // which the timeline refuses. What the grant buys is that every
-            // proven page may pass the guard, not that the slice grows.
-            blocks.inline.arm_pages(pc, window_room - entries, &proven);
+            // The slice already seeded every proven page, so arming adds only
+            // this block's own page and sets the grant. The grant stays inside
+            // this block's window: a wider one lets the guest enter
+            // instructions past an unserviced device deadline, which the
+            // timeline refuses.
+            blocks.inline.arm(pc, window_room - entries);
         }
         Ok::<(), String>(())
     })();
