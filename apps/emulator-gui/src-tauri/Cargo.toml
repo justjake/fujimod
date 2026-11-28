@@ -35,8 +35,9 @@ tauri = { version = "2.12.7", features = [] }
 tauri-plugin-dialog = "2"
 
 [features]
-default = ["custom-protocol"]
+default = ["custom-protocol", "dynarmic"]
 custom-protocol = ["tauri/custom-protocol"]
+dynarmic = ["fujimod-emulator-boot/dynarmic"]
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.5"

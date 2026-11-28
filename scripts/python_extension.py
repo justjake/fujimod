@@ -47,7 +47,7 @@ def build(*, dynarmic: bool) -> Path:
             "bindings/python/module/Cargo.toml",
             "--lib",
             "--message-format=json-render-diagnostics",
-            *(["--features", "dynarmic"] if dynarmic else []),
+            *([] if dynarmic else ["--no-default-features", "--features", "emulator"]),
         ],
         cwd=ROOT,
         check=True,
@@ -68,8 +68,8 @@ def build(*, dynarmic: bool) -> Path:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build and install the native Python extension.")
-    parser.add_argument("--dynarmic", action="store_true", help="include the Dynarmic CPU backend")
-    library = build(dynarmic=parser.parse_args().dynarmic)
+    parser.add_argument("--no-dynarmic", action="store_true", help="build with Unicorn only")
+    library = build(dynarmic=not parser.parse_args().no_dynarmic)
     candidate = PACKAGE / f"._native.new-{os.getpid()}.abi3.so"
     try:
         shutil.copyfile(library, candidate)

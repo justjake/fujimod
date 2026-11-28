@@ -200,6 +200,7 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
     if let Some(engine) = request.engine {
         resolved.override_engine(engine)?;
     }
+    fujimod_emulator_boot::application::prefer_dynarmic(&mut resolved)?;
     if !matches!(
         resolved.configuration.start,
         RunStart::Loader | RunStart::Rom
