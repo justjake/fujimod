@@ -3,7 +3,7 @@
 //! phase routes. The input pixel clock and phase law are explicit functional
 //! assumptions, not measured silicon timing. No guest software is inspected.
 use fujimod_emulator_devices::{Cx, Device, graphics::scanout::Frame};
-use fujimod_framebuffer::raster::PixelOrder;
+use fujimod_framebuffer::raster::{self, PixelOrder, Snapshot};
 use fujimod_framebuffer_xp4::{Picture, Video};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -24,6 +24,9 @@ pub struct Lcdc {
     picture: Option<Picture>,
     video: Option<Video>,
     state: State,
+    /// The rows behind `state.last_image`, as captured at its scanout. Host
+    /// memory only: equal rows compose to the same image, so it is reused.
+    input: Option<(u32, u32, Vec<Snapshot>)>,
 }
 impl Lcdc {
     pub fn new(
@@ -54,6 +57,7 @@ impl Lcdc {
                 sequence: 0,
                 last_image: None,
             },
+            input: None,
         })
     }
     fn r(&self, offset: usize) -> u32 {
@@ -121,11 +125,32 @@ impl Lcdc {
         } else {
             "abgr8888-straight"
         };
-        let rgba = output.render(|a, n| cx.ram_bytes(a, n))?;
-        if self.state.last_image.as_ref() != Some(&(width, height, rgba.clone())) {
-            self.state.sequence += 1;
-            self.state.last_image = Some((width, height, rgba.clone()));
-        }
+        let captured = planes
+            .iter()
+            .map(|plane| raster::capture(|a, n| cx.ram_bytes(a, n), *plane, width, height))
+            .collect::<Result<Vec<_>, _>>()?;
+        let unchanged = self
+            .input
+            .as_ref()
+            .is_some_and(|(w, h, rows)| (*w, *h) == (width, height) && *rows == captured);
+        let rgba = match &self.state.last_image {
+            Some((_, _, image)) if unchanged => image.clone(),
+            _ => {
+                let mut rgba = fujimod_framebuffer::canvas(width, height)?;
+                for rows in &captured {
+                    raster::composite_snapshot(rows, width, height, &mut rgba)?;
+                }
+                let last = self.state.last_image.as_ref();
+                if last.map(|(w, h, image)| (*w, *h, image.as_slice()))
+                    != Some((width, height, rgba.as_slice()))
+                {
+                    self.state.sequence += 1;
+                    self.state.last_image = Some((width, height, rgba.clone()));
+                }
+                self.input = Some((width, height, captured));
+                rgba
+            }
+        };
         cx.scanout(Frame {
             output: self.output(),
             sequence: self.state.sequence,
@@ -351,6 +376,7 @@ impl Device for Lcdc {
         let state = SavedLcdc::decode(self, data)?;
         self.validate_state(&state)?;
         self.state = state;
+        self.input = None;
         Ok(())
     }
     fn save(&self) -> Value {
@@ -360,6 +386,7 @@ impl Device for Lcdc {
         let s: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
         self.validate_state(&s)?;
         self.state = s;
+        self.input = None;
         Ok(())
     }
 }
@@ -542,6 +569,23 @@ mod tests {
         assert_eq!(h.images[3].sequence, 2);
         write(&mut restored, &mut h, 0, 4, 0);
         assert_eq!(h.outputs.last().unwrap()["active"], false);
+    }
+    #[test]
+    fn unchanged_rows_reuse_the_image_and_changed_rows_compose_again() {
+        let (mut d, mut h) = picture();
+        for at in [80, 160] {
+            h.now = at;
+            d.advance(&mut Cx::new(&mut h, 0, 0, 0));
+        }
+        assert_eq!(h.images[1], h.images[0]);
+        h.ram[16] = 44;
+        h.now = 240;
+        d.advance(&mut Cx::new(&mut h, 0, 0, 0));
+        assert_eq!(h.images[2].sequence, 2);
+        assert_ne!(h.images[2].rgba, h.images[0].rgba);
+        h.now = 320;
+        d.advance(&mut Cx::new(&mut h, 0, 0, 0));
+        assert_eq!(h.images[3], h.images[2]);
     }
     #[test]
     fn unknown_layers_and_picture_modes_refuse() {
