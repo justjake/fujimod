@@ -4,9 +4,14 @@
   "id": "xpp",
   "cpu_model": "Cortex-A7",
   "runtime_abi": "armv7a-unicorn-v1",
+  "instructions_per_tick": {
+    "numerator": 4,
+    "denominator": 1
+  },
   "mmu": "Unicorn ARMv7-A CPU page-table walker; guest CP15 and page tables",
   "limits": [
     "Two cores are a declared discovery input from a public dual Cortex-A7 listing; the count is not measured.",
+    "Each core runs 4 instructions per 48 MHz device tick, from X-T20 camera timing: the marker log read over the live service on 2026-10-22 times step 0x02010100 at 0.182 ms and step 0x02040100 at 0.128 ms, in which the strict REC run executes 36082 and 24216 instructions, about 198 and 189 million instructions per second. Steps that wait on hardware give lower rates (about 140 million per second).",
     "Storage covers the flash aperture, PL330 memory-to-memory programs and the method-4 decompressor. The DMP renderer and display output 1 registers are declared; output 1 scans out its OSD layers over its packed 4:2:2 video layer.",
     "No boot ROM, reset-release controller or external peripheral replies are assumed."
   ]

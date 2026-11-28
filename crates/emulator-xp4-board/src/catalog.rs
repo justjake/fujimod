@@ -66,7 +66,18 @@ pub struct Catalog {
 }
 impl Catalog {
     pub fn new(resolved: &ResolvedConfiguration) -> Result<Self, String> {
-        let soc = serde_json::to_value(&resolved.reference.soc).map_err(|e| e.to_string())?;
+        let mut soc = serde_json::to_value(&resolved.reference.soc).map_err(|e| e.to_string())?;
+        // The instruction rate is an emulation choice of the processor, kept beside
+        // its hardware record; the body's execution clock overrides it.
+        if let (Some(soc), Some(rate)) = (
+            soc.as_object_mut(),
+            resolved.processor_emulation()?.instructions_per_tick,
+        ) {
+            soc.insert(
+                "instructions_per_tick".into(),
+                serde_json::to_value(rate).map_err(|e| e.to_string())?,
+            );
+        }
         let profile = resolved
             .configuration
             .preset
@@ -312,7 +323,12 @@ impl Catalog {
                 declared["numerator"].clone(),
                 declared["denominator"].clone(),
             ],
-            _ => vec![json!(1), json!(1)],
+            _ => {
+                return Err(
+                    "neither the processor emulation nor the body declares an instruction rate"
+                        .into(),
+                );
+            }
         };
         let (n, d) = (
             rate.first().and_then(Value::as_u64),
@@ -989,6 +1005,22 @@ mod tests {
             })
             .collect();
         assert!(failures.is_empty(), "{failures:#?}");
+    }
+
+    #[test]
+    fn xp4_bodies_run_at_the_processor_rate_unless_they_declare_their_own() {
+        for (id, resolved) in xp4_configurations() {
+            let catalog = Catalog::new(&resolved).unwrap();
+            let expected = match &catalog.board["execution_clock"]["instructions_per_tick"] {
+                Value::Array(rate) => json!(rate),
+                _ => json!([6, 1]),
+            };
+            assert_eq!(
+                catalog.body_fields().unwrap()["instructions_per_tick"],
+                expected,
+                "{id}"
+            );
+        }
     }
 
     #[test]

@@ -6,10 +6,12 @@
   "runtime_abi": "armv7a-unicorn-v1",
   "engines": ["rust-unicorn-armv7a"],
   "instructions_per_tick": {
-    "numerator": 1,
+    "numerator": 6,
     "denominator": 1
   },
   "pmu_cycles_per_tick": 24,
   "mmu": "Unicorn ARMv7-A CPU page-table walker; guest CP15 and page tables",
-  "limits": []
+  "limits": [
+    "Each core runs 6 instructions per 54 MHz device tick, estimated, not measured: a Cortex-A7 at roughly 1.2 GHz gives about 22 per tick at one instruction per cycle, and 6 is a quarter of that. At 24 the X-T3 5.11 boot reads the pointer at 0x18181ec before another core sets it (at 0x33bd548) and halts in the exception reporter; at 6 it reaches the first-start language menu."
+  ]
 }

@@ -154,8 +154,13 @@ impl StagedClock {
             Ok(self.counter.counter(tick)? as u16)
         } else if register == c.read_high {
             Ok((self.counter.counter(tick)? >> 16) as u16)
+        } else if register == c.stage_low {
+            // A staging word reads back its last write, zero before any.
+            Ok(self.staged as u16)
+        } else if register == c.stage_high {
+            Ok((self.staged >> 16) as u16)
         } else {
-            Err("Staged RTC staging-register readback is not modeled".into())
+            Err(format!("Staged RTC register{register} is not modeled"))
         }
     }
     pub fn write(&mut self, register: u8, value: u16, tick: u64) -> Result<(), String> {
@@ -277,6 +282,20 @@ mod tests {
         assert_eq!(clock.read(100, 59).unwrap(), 0x203);
         assert_eq!(clock.read(100, 62).unwrap(), 3);
         assert_eq!(clock.counter.counter(67).unwrap(), 0);
+    }
+    #[test]
+    fn staging_words_read_back_their_last_write() {
+        let mut clock = StagedClock::new(config()).unwrap();
+        assert_eq!(
+            (clock.read(103, 0).unwrap(), clock.read(104, 0).unwrap()),
+            (0, 0)
+        );
+        clock.write(103, 0x5678, 1).unwrap();
+        clock.write(104, 0x1234, 2).unwrap();
+        assert_eq!(
+            (clock.read(103, 3).unwrap(), clock.read(104, 3).unwrap()),
+            (0x5678, 0x1234)
+        );
     }
     #[test]
     fn staged_checkpoint_preserves_partial_load_and_timebase() {

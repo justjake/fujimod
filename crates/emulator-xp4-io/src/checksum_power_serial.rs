@@ -185,13 +185,20 @@ impl Input for ChecksumPowerSerial {
                     let value = u16::from_be_bytes([s.frame[1], s.frame[2]]);
                     if let Some(rtc) = s.rtc.as_mut().filter(|r| r.config.owns(register)) {
                         if register == rtc.config.control && value == rtc.retained_control_value() {
-                            if s.retained_registers.is_empty()
-                                || s.retained_written != s.retained_registers
+                            // Words without a declared reset value need one
+                            // write since reset; X-S10 3.11 commits again
+                            // without rewriting them.
+                            let unset = s
+                                .retained_registers
+                                .iter()
+                                .filter(|r| !s.inputs.contains_key(r))
+                                .collect::<Vec<_>>();
+                            if unset.is_empty()
+                                || unset.iter().any(|r| !s.retained_written.contains(r))
                             {
-                                return Err("Retained control commit requires fresh writes to every declared word".into());
+                                return Err("Retained control commit requires a write to every declared word".into());
                             }
                             rtc.commit_retained(value, tick)?;
-                            s.retained_written.clear();
                         } else {
                             rtc.write(register, value, tick)?;
                         }
@@ -506,6 +513,75 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn a_retained_commit_needs_each_unset_word_written_once_since_reset() {
+        fn write(
+            peer: &mut ChecksumPowerSerial,
+            register: u8,
+            value: u16,
+            tick: u64,
+        ) -> Result<(), String> {
+            let [high, low] = value.to_be_bytes();
+            let header = 0x80 | register;
+            let bytes = [
+                header,
+                high,
+                low,
+                !(header.wrapping_add(high).wrapping_add(low)),
+            ];
+            for byte in bytes {
+                peer.exchange(8, u16::from(byte), tick)?;
+            }
+            Ok(())
+        }
+        let rtc = StagedConfig {
+            control: 100,
+            read_low: 101,
+            read_high: 102,
+            stage_low: 103,
+            stage_high: 104,
+            commit_value: 0x202,
+            valid_mask: 2,
+            retained_valid_mask: 1,
+            strobe: crate::rtc::StrobeWindow {
+                mask: 0x200,
+                set_through_ticks: 2,
+                clear_from_ticks: 5,
+            },
+            initial_control: 0,
+            initial_seconds: 0,
+            ticks_per_second: 10,
+        };
+        let pins = Pins::new([0; 16]);
+        let mut gpio = Gpio::new(BASE, pins.clone()).unwrap();
+        let mut peer = ChecksumPowerSerial::new(
+            pins,
+            12,
+            5,
+            true,
+            false,
+            [(14, 0x11)].into(),
+            vec![],
+            Some(rtc),
+            vec![14, 65],
+        )
+        .unwrap();
+        select(&mut gpio, true);
+        write(&mut peer, 103, 0x5678, 0).unwrap();
+        write(&mut peer, 104, 0x1234, 0).unwrap();
+        write(&mut peer, 100, 0x202, 0).unwrap();
+        assert!(
+            write(&mut peer, 100, 3, 10)
+                .unwrap_err()
+                .contains("every declared word")
+        );
+        select(&mut gpio, false);
+        select(&mut gpio, true);
+        write(&mut peer, 65, 8, 10).unwrap();
+        write(&mut peer, 100, 3, 10).unwrap();
+        write(&mut peer, 100, 3, 20).unwrap();
     }
 
     #[test]
