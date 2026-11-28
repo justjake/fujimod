@@ -1,0 +1,86 @@
+diff --git a/src/dynarmic/backend/arm64/a32_address_space.cpp b/src/dynarmic/backend/arm64/a32_address_space.cpp
+--- a/src/dynarmic/backend/arm64/a32_address_space.cpp
++++ b/src/dynarmic/backend/arm64/a32_address_space.cpp
+@@ -4,6 +4,8 @@
+  */
+ 
+ #include <array>
++
++#include <oaknut/feature_detection/feature_detection.hpp>
+ 
+ #include "dynarmic/backend/arm64/a32_address_space.h"
+ 
+@@ -384,6 +386,7 @@
+         code.l(already_set);
+     };
+ 
++    static const bool has_lse = oaknut::detect_features().has(oaknut::CpuFeature::LSE);
+     oaknut::Label return_from_run_code, l_return_to_dispatcher;
+ 
+     prelude_info.run_code = code.xptr<PreludeInfo::RunCodeFuncType>();
+@@ -449,13 +452,20 @@
+ 
+         enter_guest_fpcr();
+ 
+-        oaknut::Label step_hr_loop;
+-        code.l(step_hr_loop);
+-        code.LDAXR(Wscratch0, Xhalt);
+-        code.CBNZ(Wscratch0, return_from_run_code);
+-        code.ORR(Wscratch0, Wscratch0, static_cast<u32>(HaltReason::Step));
+-        code.STLXR(Wscratch1, Wscratch0, Xhalt);
+-        code.CBNZ(Wscratch1, step_hr_loop);
++        if (has_lse) {
++            code.MOV(Wscratch0, WZR);
++            code.MOV(Wscratch1, static_cast<u32>(HaltReason::Step));
++            code.CASAL(Wscratch0, Wscratch1, Xhalt);
++            code.CBNZ(Wscratch0, return_from_run_code);
++        } else {
++            oaknut::Label step_hr_loop;
++            code.l(step_hr_loop);
++            code.LDAXR(Wscratch0, Xhalt);
++            code.CBNZ(Wscratch0, return_from_run_code);
++            code.ORR(Wscratch0, Wscratch0, static_cast<u32>(HaltReason::Step));
++            code.STLXR(Wscratch1, Wscratch0, Xhalt);
++            code.CBNZ(Wscratch1, step_hr_loop);
++        }
+ 
+         code.BR(X19);
+     }
+@@ -524,11 +534,15 @@
+         code.MSR(oaknut::SystemReg::FPCR, Xscratch0);
+         code.l(host_fpcr_restored);
+ 
+-        oaknut::Label exit_hr_loop;
+-        code.l(exit_hr_loop);
+-        code.LDAXR(W0, Xhalt);
+-        code.STLXR(Wscratch0, WZR, Xhalt);
+-        code.CBNZ(Wscratch0, exit_hr_loop);
++        if (has_lse) {
++            code.SWPAL(WZR, W0, Xhalt);
++        } else {
++            oaknut::Label exit_hr_loop;
++            code.l(exit_hr_loop);
++            code.LDAXR(W0, Xhalt);
++            code.STLXR(Wscratch0, WZR, Xhalt);
++            code.CBNZ(Wscratch0, exit_hr_loop);
++        }
+ 
+         ABI_PopRegisters(code, ABI_CALLEE_SAVE | (1 << 30), sizeof(StackLayout));
+         code.RET();
+diff --git a/src/dynarmic/backend/arm64/a32_interface.cpp b/src/dynarmic/backend/arm64/a32_interface.cpp
+--- a/src/dynarmic/backend/arm64/a32_interface.cpp
++++ b/src/dynarmic/backend/arm64/a32_interface.cpp
+@@ -82,8 +82,11 @@
+     }
+ 
+     void ClearHalt(HaltReason hr) {
+-        Atomic::And(&halt_reason, ~static_cast<u32>(hr));
+-        Atomic::Barrier();
++        const auto mask = static_cast<u32>(hr);
++        if ((Atomic::Load(&halt_reason) & mask) != 0) {
++            Atomic::And(&halt_reason, ~mask);
++            Atomic::Barrier();
++        }
+     }
+ 
+     std::array<std::uint32_t, 16>& Regs() {

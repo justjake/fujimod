@@ -26,7 +26,8 @@ set(DYNARMIC_PATCHES
     "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-guarded-word-page.patch"
     "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-translation-overhead.patch"
     "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-regalloc-locks.patch"
-    "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-fpcr-switch.patch")
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-fpcr-switch.patch"
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-halt-atomics.patch")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${DYNARMIC_PATCHES})
 file(REMOVE_RECURSE "${DYNARMIC_SOURCE}")
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/vendor/dynarmic/"
