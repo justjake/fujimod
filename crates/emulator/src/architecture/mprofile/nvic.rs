@@ -18,6 +18,9 @@ pub struct Nvic {
 }
 
 impl Nvic {
+    pub const CLASS: fujimod_emulator_devices::bus::DeviceClass =
+        fujimod_emulator_devices::bus::DeviceClass::CoreLocal;
+
     pub fn new(clock_hz: u64) -> Self {
         Self {
             enabled: vec![0; 8],

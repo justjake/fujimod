@@ -25,6 +25,7 @@ pub mod coherence;
 mod coherent_cpu;
 #[cfg(test)]
 mod coherent_cpu_tests;
+mod exclusive_hook;
 mod translation_attributes;
 #[cfg(test)]
 mod translation_attributes_tests;
@@ -90,6 +91,8 @@ struct Execution {
     // ARMv7-A owner options (see `Cpu::set_armv7a_owner_exclusives` and the
     // following setters).
     exclusive_exits: Cell<bool>,
+    a64_monitor: Cell<Option<exclusive::Owner>>,
+    watch_a64_exclusives: Cell<bool>,
     owner_mpidr: Cell<bool>,
     board_mpidr: Cell<bool>,
     owner_interrupts: Cell<bool>,
@@ -213,6 +216,8 @@ impl Core {
             coherent: Cell::new(false),
             stores: RefCell::new(vec![]),
             exclusive_exits: Cell::new(false),
+            a64_monitor: Cell::new(None),
+            watch_a64_exclusives: Cell::new(false),
             owner_mpidr: Cell::new(false),
             board_mpidr: Cell::new(false),
             owner_interrupts: Cell::new(false),
@@ -385,6 +390,13 @@ impl Core {
 impl Drop for Execution {
     fn drop(&mut self) {
         self.memory.forget(self.id.get());
+        if let Some(owner) = self.a64_monitor.get() {
+            self.memory
+                .monitors
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .unregister(owner);
+        }
     }
 }
 impl Execution {

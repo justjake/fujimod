@@ -1,6 +1,6 @@
 //! VM-wide stage-2 mappings. All CPUs must be stopped during map/host writes.
 use super::ffi;
-use fujimod_emulator_cpu::exclusive::{Monitors, Owner, Saved, Shared};
+use fujimod_emulator_cpu::exclusive::{Owner, Saved, Shared};
 use fujimod_emulator_cpu::{Identity, MemoryRegion};
 use std::collections::BTreeMap;
 use std::ffi::c_void;
@@ -43,7 +43,7 @@ pub struct Machine {
     pub(super) monitors: Shared,
 }
 impl Machine {
-    pub fn create() -> Result<Arc<Self>, String> {
+    pub fn create(monitors: Shared) -> Result<Arc<Self>, String> {
         let mut live = LIVE.lock().map_err(|_| "HVF VM ownership lock poisoned")?;
         if live.strong_count() != 0 {
             return Err(
@@ -56,7 +56,7 @@ impl Machine {
         let vm = Arc::new(Self {
             maps: Mutex::new(BTreeMap::new()),
             devices: Mutex::new(BTreeMap::new()),
-            monitors: Arc::new(Mutex::new(Monitors::default())),
+            monitors,
         });
         *live = Arc::downgrade(&vm);
         Ok(vm)

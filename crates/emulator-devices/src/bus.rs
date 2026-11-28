@@ -332,9 +332,25 @@ pub struct ReadValidity {
     pub countdown_expiry: Option<u64>,
 }
 
+/// Ownership of a device's state during a parallel execution window.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DeviceClass {
+    /// The executing core owns the device instance or bank.
+    CoreLocal,
+    /// Published reads can be evaluated at the accessing core's guest tick.
+    /// Writes and reads outside the published view still use device service.
+    TimeFunction,
+    /// Accesses require serialized device service.
+    #[default]
+    Shared,
+}
+
 /// A register-level device behind one or more address windows.
 pub trait Device: Send + std::any::Any {
     fn name(&self) -> &'static str;
+    fn class(&self) -> DeviceClass {
+        DeviceClass::Shared
+    }
     /// Host publication stamp, advanced only when `save()` would change.
     /// Devices without a stamp retain the serialized publication comparison.
     fn publication_generation(&self) -> Option<u64> {

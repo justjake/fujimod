@@ -293,6 +293,9 @@ struct TimerSnapshot {
     group: u32,
 }
 impl Device for Timer {
+    fn class(&self) -> fujimod_emulator_devices::bus::DeviceClass {
+        fujimod_emulator_devices::bus::DeviceClass::TimeFunction
+    }
     fn name(&self) -> &'static str {
         if self.extended {
             "soc-extended-timers"

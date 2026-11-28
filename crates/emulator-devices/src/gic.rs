@@ -33,6 +33,13 @@ impl ProcessorSecurity {
 
 /// An Arm GIC: distributor, redistributors and CPU interfaces.
 pub trait InterruptController: Send {
+    fn distributor_class(&self) -> crate::bus::DeviceClass {
+        crate::bus::DeviceClass::Shared
+    }
+    /// The CPU interface is banked by core.
+    fn cpu_interface_class(&self) -> crate::bus::DeviceClass {
+        crate::bus::DeviceClass::CoreLocal
+    }
     /// The (IRQ, FIQ) outputs to one core. Inspection never acknowledges.
     fn pins(&self, core: usize) -> Result<(bool, bool), String>;
     /// Whether an SGI is latched for `core`, regardless of enable or priority (a wake

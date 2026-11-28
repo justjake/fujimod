@@ -33,8 +33,13 @@ pub struct Vm {
 }
 impl Vm {
     pub fn new() -> Result<Self, String> {
+        Self::with_exclusive_domain(Default::default())
+    }
+    pub fn with_exclusive_domain(
+        domain: fujimod_emulator_cpu::exclusive::Shared,
+    ) -> Result<Self, String> {
         Ok(Self {
-            machine: Machine::create()?,
+            machine: Machine::create(domain)?,
             _owner: PhantomData,
         })
     }

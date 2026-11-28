@@ -9,7 +9,11 @@ mod loops;
 mod mprofile;
 mod status;
 
-use fujimod_emulator_cpu::{code::CodeTracker, memory::Backing, *};
+use fujimod_emulator_cpu::{
+    code::{CodeTracker, Invalidations},
+    memory::Backing,
+    *,
+};
 use std::any::Any;
 use std::cell::{Cell, RefCell, UnsafeCell};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -241,7 +245,7 @@ struct CoreShared {
     inlined_exclusives: Cell<u64>,
     mappings: RefCell<BTreeMap<u64, Mapping>>,
     code_tracker: CodeTracker,
-    seen_revision: Cell<u64>,
+    invalidations: RefCell<Invalidations>,
     seen_watch_revision: Cell<u64>,
     memory_flushes: Cell<u64>,
     selective_pages: Cell<u64>,
@@ -457,8 +461,10 @@ impl CoreShared {
         let Some(revision) = self.code_tracker.watch_bytes(pointer, &bytes) else {
             return;
         };
+        if self.seen_watch_revision.get().wrapping_add(1) == revision {
+            self.seen_watch_revision.set(revision);
+        }
         let page = pointer.addr() & !4095;
-        self.seen_watch_revision.set(revision);
         for slot in self.touched_pages.borrow().iter().copied() {
             if self.inline_page(slot << 12).addr() & !4095 == page {
                 self.clear_inline_page(slot);
@@ -482,7 +488,6 @@ impl CoreShared {
     }
 
     fn flush_changed_code(&self, read_context: bool) {
-        let revision = self.code_tracker.revision();
         let mut recycle_contexts = false;
         if read_context {
             let mut control = ffi::DynarmicMemoryControl::default();
@@ -532,40 +537,37 @@ impl CoreShared {
                 }
             }
         }
-        let previous = self.seen_revision.replace(revision);
-        if previous != revision {
+        let mut words = BTreeSet::new();
+        let mut pages = BTreeSet::new();
+        let invalidated = {
+            let mut compiled = self.compiled_words.borrow_mut();
+            let mut descriptors = self.compiled_descriptors.borrow_mut();
+            self.invalidations.borrow_mut().drain(|word| {
+                if let Some(targets) = compiled.remove(&word) {
+                    words.extend(targets);
+                }
+                if let Some(targets) = descriptors.remove(&word) {
+                    pages.extend(targets);
+                }
+            })
+        };
+        if invalidated.is_some() {
             self.memory_flushes.set(self.memory_flushes.get() + 1);
             self.clear_inline_pages();
-            if !recycle_contexts {
-                let mut words = BTreeSet::new();
-                let mut pages = BTreeSet::new();
-                let mut compiled = self.compiled_words.borrow_mut();
-                let mut descriptors = self.compiled_descriptors.borrow_mut();
-                let complete = self.code_tracker.changed_since(previous, |word| {
-                    if let Some(targets) = compiled.remove(&word) {
-                        words.extend(targets);
-                    }
-                    if let Some(targets) = descriptors.remove(&word) {
-                        pages.extend(targets);
-                    }
-                });
-                if complete {
-                    self.selective_pages
-                        .set(self.selective_pages.get() + pages.len() as u64);
-                    for word in words {
-                        if !pages.contains(&(word & !4095)) {
-                            unsafe { ffi::dynarmic_invalidate_cache(self.inst.get(), word, 4) };
-                        }
-                    }
-                    for page in pages {
-                        unsafe { ffi::dynarmic_invalidate_cache(self.inst.get(), page, 4096) };
-                    }
-                    return;
+        }
+        if recycle_contexts || invalidated == Some(false) {
+            self.mapping_changed();
+        } else if invalidated == Some(true) {
+            self.selective_pages
+                .set(self.selective_pages.get() + pages.len() as u64);
+            for word in words {
+                if !pages.contains(&(word & !4095)) {
+                    unsafe { ffi::dynarmic_invalidate_cache(self.inst.get(), word, 4) };
                 }
             }
-        }
-        if previous != revision || recycle_contexts {
-            self.mapping_changed();
+            for page in pages {
+                unsafe { ffi::dynarmic_invalidate_cache(self.inst.get(), page, 4096) };
+            }
         }
     }
 
@@ -1352,8 +1354,8 @@ impl Core {
             #[cfg(test)]
             inlined_exclusives: Cell::new(0),
             mappings: RefCell::new(BTreeMap::new()),
+            invalidations: RefCell::new(code_tracker.subscribe()),
             code_tracker,
-            seen_revision: Cell::new(0),
             seen_watch_revision: Cell::new(0),
             memory_flushes: Cell::new(0),
             selective_pages: Cell::new(0),

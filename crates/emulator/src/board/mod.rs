@@ -2123,11 +2123,11 @@ impl Board {
                 || s.mprofile.iter().any(Option::is_some);
             (concurrent_windows && concurrent_monitor)
                 || s.memory.watching_writes()
-                || (self.cpus[core].exclusive_domain().is_none()
+                || (!self.cpus[core].reports_exclusive_writes()
                     && s.exclusive
                         .lock()
                         .map_err(|_| "exclusive monitors poisoned")?
-                        .active())
+                        .observes_writes())
         };
         match (wanted, installed) {
             (true, None) => {
@@ -4724,7 +4724,7 @@ fn notify_memory(
     address: u64,
     size: usize,
 ) -> Result<(), String> {
-    if size == 0 || cpus[writer].exclusive_domain().is_some() {
+    if size == 0 || cpus[writer].reports_exclusive_writes() {
         return Ok(());
     }
     let physical = if let Some(p) = &profiles[writer] {

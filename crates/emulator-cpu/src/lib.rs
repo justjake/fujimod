@@ -828,6 +828,11 @@ pub trait Cpu {
     fn exclusive_domain(&self) -> Option<exclusive::Shared> {
         None
     }
+    /// Whether every relevant write reaches the exclusive domain without a
+    /// board store observer.
+    fn reports_exclusive_writes(&self) -> bool {
+        self.exclusive_domain().is_some()
+    }
     fn model(&self) -> Model;
     fn features(&self) -> Features;
     fn set_guest_clock(&self, _clock: Clock) -> Result<(), String> {

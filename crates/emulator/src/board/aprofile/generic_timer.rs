@@ -56,6 +56,9 @@ pub struct Timer {
     control: u8,
 }
 impl Timer {
+    pub const CLASS: fujimod_emulator_devices::bus::DeviceClass =
+        fujimod_emulator_devices::bus::DeviceClass::CoreLocal;
+
     fn condition(&self, count: u64) -> bool {
         (count.wrapping_sub(self.compare) as i64) >= 0
     }

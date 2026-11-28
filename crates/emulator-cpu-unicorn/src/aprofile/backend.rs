@@ -11,6 +11,7 @@ struct Saved {
     raw: Box<dyn Snapshot>,
     irq: bool,
     fiq: bool,
+    reservation: Option<exclusive::Saved>,
 }
 impl Snapshot for Saved {
     fn owner(&self) -> Identity {
@@ -20,7 +21,12 @@ impl Snapshot for Saved {
         self
     }
     fn export(&self) -> Result<Vec<u8>, String> {
-        crate::durable::encode(&(self.raw.export()?, self.irq, self.fiq))
+        let raw = self.raw.export()?;
+        if let Some(reservation) = self.reservation {
+            crate::durable::encode(&(raw, self.irq, self.fiq, reservation.to_bytes().to_vec()))
+        } else {
+            crate::durable::encode(&(raw, self.irq, self.fiq))
+        }
     }
 }
 impl Cpu for Core {
@@ -48,6 +54,17 @@ impl Cpu for Core {
             store_pc_control: true,
             ..Features::default()
         }
+    }
+    fn exclusive_domain(&self) -> Option<exclusive::Shared> {
+        self.execution
+            .a64_monitor
+            .get()
+            .map(|_| self.execution.memory.monitors.clone())
+    }
+    fn reports_exclusive_writes(&self) -> bool {
+        // The engine watches reservation pages installed by AArch64 loads.
+        // A companion can also reserve RAM without installing these watches.
+        false
     }
     fn set_execution_policy(&self, policy: ExecutionPolicy) -> Result<(), String> {
         let e = &self.execution;
@@ -317,6 +334,9 @@ impl Cpu for Core {
         let _reservation =
             e.memory
                 .reserve_run(e.id.get(), e.policy.get(), e.pause_requested.is_some())?;
+        if e.a64_monitor.get().is_some() && e.pause_requested.is_some() {
+            e.memory.apply_watches()?;
+        }
         if e.memory.flush_pending() {
             e.memory.flush()?;
         }
@@ -456,11 +476,21 @@ impl Cpu for Core {
         Ok(self.execution.memory.backings(self.execution.id.get()))
     }
     fn import_snapshot(&self, bytes: &[u8]) -> Result<Box<dyn Snapshot>, String> {
-        let (raw, irq, fiq): (Vec<u8>, bool, bool) = crate::durable::decode(bytes)?;
+        let (raw, irq, fiq, reservation) =
+            match crate::durable::decode::<(Vec<u8>, bool, bool, Vec<u8>)>(bytes) {
+                Ok((raw, irq, fiq, saved)) => {
+                    (raw, irq, fiq, Some(exclusive::Saved::from_bytes(&saved)?))
+                }
+                Err(_) => {
+                    let (raw, irq, fiq) = crate::durable::decode(bytes)?;
+                    (raw, irq, fiq, None)
+                }
+            };
         Ok(Box::new(Saved {
             raw: self.execution.cpu.import_snapshot(&raw)?,
             irq,
             fiq,
+            reservation,
         }))
     }
     fn snapshot(&self, previous: Option<&dyn Snapshot>) -> Result<Box<dyn Snapshot>, String> {
@@ -471,10 +501,22 @@ impl Cpu for Core {
         let previous = previous
             .and_then(|s| s.as_any().downcast_ref::<Saved>())
             .map(|s| &*s.raw);
+        let reservation = e
+            .a64_monitor
+            .get()
+            .map(|owner| {
+                e.memory
+                    .monitors
+                    .lock()
+                    .map(|monitor| monitor.save(owner))
+                    .map_err(|_| "exclusive monitors poisoned")
+            })
+            .transpose()?;
         Ok(Box::new(Saved {
             raw: e.cpu.snapshot(previous)?,
             irq: e.irq.get(),
             fiq: e.fiq.get(),
+            reservation,
         }))
     }
     fn restore(&self, snapshot: &dyn Snapshot) -> Result<(), String> {
@@ -484,6 +526,18 @@ impl Cpu for Core {
             .downcast_ref::<Saved>()
             .ok_or("snapshot is not A-profile")?;
         e.cpu.restore(&*s.raw)?;
+        if let Some(owner) = e.a64_monitor.get() {
+            let mut monitors = e
+                .memory
+                .monitors
+                .lock()
+                .map_err(|_| "exclusive monitors poisoned")?;
+            if let Some(saved) = s.reservation {
+                monitors.restore(owner, saved);
+            } else {
+                monitors.clear(owner);
+            }
+        }
         e.irq.set(s.irq);
         e.fiq.set(s.fiq);
         e.count.set(0);

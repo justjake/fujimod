@@ -1,6 +1,6 @@
 //! Durable reservations use processor construction order rather than allocated
 //! owner IDs. The caller must first match the complete processor/device graph.
-use super::{Monitors, Reservation, Slot};
+use super::{Monitors, Reservation};
 
 const MAGIC: &[u8; 8] = b"FJMONI01";
 const HEADER: usize = 32;
@@ -52,16 +52,32 @@ impl Monitors {
         if bytes.get(..8) != Some(MAGIC) {
             return Err("unknown exclusive snapshot format".into());
         }
-        if bytes.len() != HEADER + self.cores.len() * SLOT
-            || u64::from_le_bytes(bytes[24..32].try_into().unwrap()) != self.cores.len() as u64
+        let body = bytes
+            .get(HEADER..)
+            .ok_or("truncated exclusive snapshot header")?;
+        let (entries, remainder) = body.as_chunks::<SLOT>();
+        let count = entries.len();
+        let legacy = count != self.cores.len();
+        if !remainder.is_empty()
+            || u64::from_le_bytes(bytes[24..32].try_into().unwrap()) != count as u64
+            || (legacy
+                && count
+                    != self
+                        .cores
+                        .values()
+                        .filter(|slot| !slot.legacy_optional)
+                        .count())
         {
             return Err("exclusive snapshot processor count differs".into());
         }
         let mut cores = self.cores.clone();
-        for (slot, words) in cores
-            .values_mut()
-            .zip(bytes[HEADER..].as_chunks::<SLOT>().0)
-        {
+        let mut entries = entries.iter();
+        for slot in cores.values_mut() {
+            if legacy && slot.legacy_optional {
+                slot.reservation = None;
+                continue;
+            }
+            let words = entries.next().unwrap();
             let word = |at| u64::from_le_bytes(words[at..at + 8].try_into().unwrap());
             let granule = word(0);
             let address = word(8);
@@ -73,10 +89,7 @@ impl Monitors {
             if (size == 0 && address != 0) || address.checked_add(size as u64).is_none() {
                 return Err("invalid exclusive snapshot reservation".into());
             }
-            *slot = Slot {
-                granule,
-                reservation: (size != 0).then_some(Reservation { address, size }),
-            };
+            slot.reservation = (size != 0).then_some(Reservation { address, size });
         }
         Ok(Self {
             epoch: u128::from_le_bytes(bytes[8..24].try_into().unwrap()),
@@ -144,6 +157,21 @@ mod tests {
         target.restore(fresh_a, cpu_saved);
         assert!(!target.store(fresh_a, 0x1000, 4));
         assert!(target.store(fresh_b, 0x2000, 8));
+    }
+
+    #[test]
+    fn previous_board_archives_restore_owners_that_already_used_the_domain() {
+        let mut old = Monitors::default();
+        let companion = old.register(16).unwrap();
+        old.load(companion, 0x2000, 4);
+        let mut current = Monitors::default();
+        let aarch64 = current.register_native(64, false).unwrap();
+        let companion = current.register(16).unwrap();
+        current.load(aarch64, 0x1000, 8);
+        let saved = current.import_checkpoint(&old.export_checkpoint()).unwrap();
+        current.restore_checkpoint(&saved).unwrap();
+        assert_eq!(current.reservation(aarch64), None);
+        assert!(current.store(companion, 0x2000, 4));
     }
 
     #[test]

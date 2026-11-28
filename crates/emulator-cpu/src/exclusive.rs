@@ -39,6 +39,9 @@ pub struct Monitors {
 struct Slot {
     granule: u64,
     reservation: Option<Reservation>,
+    // Older board checkpoints stored these processors' exclusives in the CPU.
+    legacy_optional: bool,
+    invalidates_on_write: bool,
 }
 impl Monitors {
     pub fn validate_checkpoint(&self, saved: &Self) -> Result<(), String> {
@@ -69,6 +72,24 @@ impl Monitors {
     /// Register once at processor construction, so guest reservations never
     /// insert or remove map entries on the execution path.
     pub fn register(&mut self, granule: u64) -> Result<Owner, String> {
+        self.register_slot(granule, false, true)
+    }
+    /// Register a CPU that previously kept its monitor entirely in the engine.
+    /// Serialized engines can retain their native value comparison while the
+    /// domain checks the physical reservation and its width.
+    pub fn register_native(
+        &mut self,
+        granule: u64,
+        invalidates_on_write: bool,
+    ) -> Result<Owner, String> {
+        self.register_slot(granule, true, invalidates_on_write)
+    }
+    fn register_slot(
+        &mut self,
+        granule: u64,
+        legacy_optional: bool,
+        invalidates_on_write: bool,
+    ) -> Result<Owner, String> {
         if !(4..=2048).contains(&granule) || !granule.is_power_of_two() {
             return Err("invalid exclusive reservation granule".into());
         }
@@ -78,18 +99,32 @@ impl Monitors {
             Slot {
                 granule,
                 reservation: None,
+                legacy_optional,
+                invalidates_on_write,
             },
         );
         Ok(owner)
     }
     pub fn unregister(&mut self, core: Owner) {
-        self.cores.remove(&core);
+        if self
+            .cores
+            .remove(&core)
+            .is_some_and(|slot| slot.reservation.is_some())
+        {
+            self.bump_reservations();
+        }
     }
     pub fn reservation(&self, core: Owner) -> Option<Reservation> {
         self.cores.get(&core).and_then(|slot| slot.reservation)
     }
     pub fn active(&self) -> bool {
         self.cores.values().any(|slot| slot.reservation.is_some())
+    }
+    /// Whether a write observer is needed to invalidate a reservation.
+    pub fn observes_writes(&self) -> bool {
+        self.cores
+            .values()
+            .any(|slot| slot.invalidates_on_write && slot.reservation.is_some())
     }
     /// Whether an owner other than `core` holds a reservation.
     pub fn active_except(&self, core: Owner) -> bool {
@@ -101,7 +136,7 @@ impl Monitors {
     /// overlaps any `[begin, end)` physical span.
     pub fn active_except_overlapping(&self, core: Owner, spans: &[(u64, u64)]) -> bool {
         self.cores.iter().any(|(owner, slot)| {
-            if *owner == core {
+            if *owner == core || !slot.invalidates_on_write {
                 return false;
             }
             let Some(r) = slot.reservation else {
@@ -130,15 +165,14 @@ impl Monitors {
         self.reservations
     }
     pub fn store(&mut self, core: Owner, address: u64, size: usize) -> bool {
-        let cleared = self
+        let previous = self
             .cores
             .get_mut(&core)
-            .and_then(|slot| slot.reservation.take())
-            == Some(Reservation { address, size });
-        if cleared {
+            .and_then(|slot| slot.reservation.take());
+        if previous.is_some() {
             self.bump_reservations();
         }
-        cleared
+        previous == Some(Reservation { address, size })
     }
     pub fn clear(&mut self, core: Owner) {
         if let Some(slot) = self.cores.get_mut(&core)
@@ -168,7 +202,9 @@ impl Monitors {
         if let Some((address, end)) = range {
             let mut cleared = false;
             for slot in self.cores.values_mut() {
-                if let Some(r) = slot.reservation {
+                if slot.invalidates_on_write
+                    && let Some(r) = slot.reservation
+                {
                     let mask = slot.granule - 1;
                     let first = r.address & !mask;
                     let last = (r.address + r.size as u64 - 1) | mask;
@@ -183,7 +219,9 @@ impl Monitors {
             }
         } else {
             for slot in self.cores.values_mut() {
-                slot.reservation = None;
+                if slot.invalidates_on_write {
+                    slot.reservation = None;
+                }
             }
             self.bump_reservations();
         }

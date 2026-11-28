@@ -229,7 +229,12 @@ fn unicorn_workers(graph: &Graph, options: &Options) -> bool {
     }
 }
 impl Engines {
-    fn new(graph: &Graph, options: &Options) -> Result<Self, String> {
+    fn new(
+        graph: &Graph,
+        options: &Options,
+        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+        domain: fujimod_emulator_cpu::exclusive::Shared,
+    ) -> Result<Self, String> {
         validate_engine(
             options.engine,
             graph.processors.iter().map(|processor| processor.model),
@@ -249,7 +254,7 @@ impl Engines {
         };
         #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
         let hypervisor = if need_hvf {
-            Some(fujimod_emulator_cpu_hvf::Vm::new()?)
+            Some(fujimod_emulator_cpu_hvf::Vm::with_exclusive_domain(domain)?)
         } else {
             None
         };
@@ -319,7 +324,7 @@ impl Engines {
                     )?));
                 }
                 Model::ArmV8A => {
-                    return Ok(Box::new(worker::spawn_aprofile(
+                    return Ok(Box::new(worker::spawn_board_aprofile(
                         translation_cache_size_bytes,
                         memory.shared(),
                     )?));
@@ -339,10 +344,13 @@ impl Engines {
         if model == Model::ArmV8A
             || model == Model::CortexA7 && std::env::var_os("FUJIMOD_A7_PER_INSTRUCTION").is_none()
         {
-            return Ok(Box::new(fujimod_emulator_cpu_unicorn::aprofile::Core::new(
-                raw,
-                memory.clone(),
-            )?));
+            let cpu = fujimod_emulator_cpu_unicorn::aprofile::Core::new(raw, memory.clone())?;
+            return Ok(Box::new(if model == Model::ArmV8A {
+                // Serialized slices retain Unicorn's native value check.
+                cpu.with_board_exclusives(false)?
+            } else {
+                cpu
+            }));
         }
         if let Some(config) = processor.rprofile.clone() {
             Ok(Box::new(
@@ -590,15 +598,21 @@ impl Graph {
             Some(bytes) => bytes,
             None => translation_cache_size_bytes(unicorn_processors)?,
         };
-        let engines = Engines::new(&self, &options)?;
+        let shared_memory = fujimod_emulator_cpu_unicorn::memory::SharedMemory::default();
+        let engines = Engines::new(
+            &self,
+            &options,
+            #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+            shared_memory.exclusive_domain(),
+        )?;
         ram.all_code_writers_report = options.engine == RunEngine::Unicorn;
         #[cfg(not(target_os = "emscripten"))]
         {
-            // Worker cohorts retain their existing code coherence. They
-            // cannot share a thread-affine tracker with the M4.
+            // Legacy worker cohorts retain their existing code coherence.
+            // They do not report writes to the board tracker.
             ram.all_code_writers_report &= !engines.unicorn_workers;
         }
-        let memory = fujimod_emulator_cpu_unicorn::memory::Memory::default();
+        let memory = shared_memory.processor();
         let cpus = self
             .processors
             .iter()

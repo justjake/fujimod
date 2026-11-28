@@ -1,21 +1,20 @@
 use super::{Core, ffi};
-use fujimod_emulator_cpu::code::CodeTracker;
-use std::cell::Cell;
+use fujimod_emulator_cpu::code::{CodeTracker, Invalidations};
+use std::cell::{Cell, RefCell};
 use std::ffi::c_void;
 
 pub(super) struct CodeTracking {
     tracker: CodeTracker,
     seen_watches: Cell<u64>,
-    seen_writes: Cell<u64>,
+    invalidations: RefCell<Invalidations>,
 }
 
 impl Core {
-    /// Add this engine to the board's code tracker. All engines sharing this
-    /// tracker must run on its owner thread.
+    /// Add this engine to the board's code tracker.
     pub fn with_code_tracker(mut self, tracker: CodeTracker) -> Result<Self, String> {
         let mut tracking = Box::new(CodeTracking {
             seen_watches: Cell::new(tracker.watch_revision()),
-            seen_writes: Cell::new(tracker.revision()),
+            invalidations: RefCell::new(tracker.subscribe()),
             tracker,
         });
         self.check(unsafe {
@@ -39,24 +38,24 @@ impl CodeTracking {
             cpu.check(unsafe { ffi::uc_embedder_sync_code_tracking(cpu.raw) })?;
             self.seen_watches.set(watches);
         }
-        let writes = self.tracker.revision();
-        if self.seen_writes.get() != writes {
-            let mut words = Vec::new();
-            if self
-                .tracker
-                .changed_since(self.seen_writes.get(), |word| words.push(word))
-            {
+        let mut words = Vec::new();
+        match self
+            .invalidations
+            .borrow_mut()
+            .drain(|word| words.push(word))
+        {
+            Some(true) => {
                 words.sort_unstable();
                 words.dedup();
                 for word in words {
                     cpu.invalidate_backing(word, 4)?;
                 }
-            } else {
-                // The bounded journal no longer covers this engine.
+            }
+            Some(false) => {
                 use fujimod_emulator_cpu::Cpu;
                 cpu.invalidate_code(None)?;
             }
-            self.seen_writes.set(writes);
+            None => {}
         }
         Ok(())
     }
@@ -71,12 +70,15 @@ unsafe extern "C" fn translated(data: *mut c_void, backing: *const u8, size: usi
     let tracking = unsafe { &*data.cast::<CodeTracking>() };
     // The native engine provides the backing span used by the translation.
     let bytes = unsafe { std::slice::from_raw_parts(backing, size) };
-    if let Some(revision) = tracking.tracker.watch_bytes(backing, bytes) {
-        // Unicorn rearms its own TLB when this callback adds a watch.
+    let Some(revision) = tracking.tracker.watch_bytes(backing, bytes) else {
+        return false;
+    };
+    // Unicorn rearms the current translation's watches. Leave an unseen peer
+    // registration pending for the next entry even if ours followed it.
+    if tracking.seen_watches.get().wrapping_add(1) == revision {
         tracking.seen_watches.set(revision);
-        return true;
     }
-    false
+    true
 }
 
 unsafe extern "C" fn store(data: *mut c_void, backing: *const u8, size: usize, completed: bool) {
@@ -154,14 +156,14 @@ mod tests {
         assert_eq!(execute(), 1);
         assert!(tracker.watched(shared.as_ptr()));
 
-        let original_revision = tracker.revision();
+        let mut invalidations = tracker.subscribe();
         write(0x4008, 0x1234);
         write(0x4000, original);
-        assert_eq!(tracker.revision(), original_revision);
+        assert_eq!(invalidations.drain(|_| panic!("unchanged code")), None);
 
         write(0x4000, 0xe3a0_0009); // mov r0, #9
         let mut changed = Vec::new();
-        assert!(tracker.changed_since(original_revision, |word| changed.push(word)));
+        assert_eq!(invalidations.drain(|word| changed.push(word)), Some(true));
         assert_eq!(changed, [shared.as_ptr().addr()]);
         assert_eq!(execute(), 9);
     }

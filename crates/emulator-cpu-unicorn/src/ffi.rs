@@ -357,6 +357,11 @@ mod linked {
             begin: u64,
             end: u64,
         ) -> Error;
+        pub(crate) fn uc_embedder_set_a64_exclusive(
+            engine: Engine,
+            callback: Option<unsafe extern "C" fn(*mut c_void, u64, usize, u32) -> bool>,
+            data: *mut c_void,
+        ) -> Error;
         pub(crate) fn uc_embedder_set_code_tracking(
             engine: Engine,
             watched: Option<CodeSpan>,
@@ -416,5 +421,6 @@ mod linked {
 }
 
 pub(super) use linked::{
-    uc_embedder_invalidate_backing, uc_embedder_set_code_tracking, uc_embedder_sync_code_tracking,
+    uc_embedder_invalidate_backing, uc_embedder_set_a64_exclusive, uc_embedder_set_code_tracking,
+    uc_embedder_sync_code_tracking,
 };

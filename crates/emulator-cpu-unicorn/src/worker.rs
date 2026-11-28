@@ -46,6 +46,7 @@ pub struct CpuWorker {
     identity: Identity,
     model: Model,
     owner_accounting: bool,
+    board_exclusives: bool,
     execution_policy: Cell<ExecutionPolicy>,
     features: Features,
     thumb_accounting: Option<NonNull<ThumbBlockAccounting>>,
@@ -150,7 +151,22 @@ pub fn spawn_aprofile(
     translation_cache_size_bytes: u32,
     memory: SharedMemory,
 ) -> Result<CpuWorker, String> {
-    spawn_engine(EngineConfig::Aprofile, translation_cache_size_bytes, memory)
+    spawn_engine(
+        EngineConfig::Aprofile { board_exclusives: false },
+        translation_cache_size_bytes,
+        memory,
+    )
+}
+
+pub fn spawn_board_aprofile(
+    translation_cache_size_bytes: u32,
+    memory: SharedMemory,
+) -> Result<CpuWorker, String> {
+    spawn_engine(
+        EngineConfig::Aprofile { board_exclusives: true },
+        translation_cache_size_bytes,
+        memory,
+    )
 }
 
 /// A board that provides its own mixed-width instruction accounting can
@@ -172,8 +188,12 @@ enum EngineConfig {
     /// worker with only the code-store observer installed.
     #[cfg(test)]
     Armv7a,
-    Aprofile,
-    Mprofile { owner_accounting: bool },
+    Aprofile {
+        board_exclusives: bool,
+    },
+    Mprofile {
+        owner_accounting: bool,
+    },
 }
 
 enum Engine {
@@ -248,13 +268,19 @@ fn spawn_engine(
         EngineConfig::Rprofile(_) => Model::CortexR5F,
         #[cfg(test)]
         EngineConfig::Armv7a => Model::CortexA7,
-        EngineConfig::Aprofile => Model::ArmV8A,
+        EngineConfig::Aprofile { .. } => Model::ArmV8A,
         EngineConfig::Mprofile { .. } => Model::CortexM4,
     };
     let owner_accounting = matches!(
         config,
         EngineConfig::Mprofile {
             owner_accounting: true
+        }
+    );
+    let board_exclusives = matches!(
+        config,
+        EngineConfig::Aprofile {
+            board_exclusives: true
         }
     );
     let worker_memory = memory.clone();
@@ -301,6 +327,7 @@ fn spawn_engine(
                 identity: ready.identity,
                 model,
                 owner_accounting,
+                board_exclusives,
                 execution_policy: Cell::new(ExecutionPolicy::Exact),
                 features,
                 memory,
@@ -1081,11 +1108,19 @@ fn serve(
                     memory: memory.processor(),
                 },
             )?),
-            EngineConfig::Aprofile => Engine::Aprofile(aprofile::Core::new_parallel_worker(
-                raw,
-                memory.processor(),
-                context.pause_requested.clone(),
-            )?),
+            EngineConfig::Aprofile { board_exclusives } => {
+                let cpu = aprofile::Core::new_parallel_worker(
+                    raw,
+                    memory.processor(),
+                    context.pause_requested.clone(),
+                )?;
+                Engine::Aprofile(if board_exclusives {
+                    // Keep the current worker scheduler's native CAS behavior.
+                    cpu.with_board_exclusives(false)?
+                } else {
+                    cpu
+                })
+            }
             EngineConfig::Mprofile { owner_accounting } => {
                 let mut record = raw
                     .accounting()
@@ -1842,7 +1877,11 @@ impl Cpu for CpuWorker {
         }
     }
     fn exclusive_domain(&self) -> Option<exclusive::Shared> {
-        (self.model == Model::CortexR5F).then(|| self.memory.exclusive_domain())
+        (self.model == Model::CortexR5F || self.board_exclusives)
+            .then(|| self.memory.exclusive_domain())
+    }
+    fn reports_exclusive_writes(&self) -> bool {
+        self.model == Model::CortexR5F
     }
     fn model(&self) -> Model {
         self.model
