@@ -44,7 +44,7 @@ diff --git a/src/dynarmic/backend/arm64/a32_address_space.cpp b/src/dynarmic/bac
 +#include <algorithm>
  #include <array>
  
- #include <oaknut/feature_detection/feature_detection.hpp>
+ #include "dynarmic/backend/arm64/a32_address_space.h"
 @@ -612,7 +613,12 @@
  void A32AddressSpace::RegisterNewBasicBlock(const IR::Block& block, const EmittedBlockInfo&) {
      const A32::LocationDescriptor descriptor{block.Location()};
