@@ -69,16 +69,14 @@ impl Epoch {
     pub(super) fn room(&self, core: usize) -> u64 {
         self.limit.saturating_sub(self.progress[core])
     }
-    /// Whether the cohort runs another segment. It ends when its first core
-    /// reaches the limit: a peer that executed less does not run on alone,
-    /// because shared memory shows it every store the exhausted cores made
-    /// while those cores cannot answer. A core that leaves a flag rendezvous
-    /// and clears the flags for its next round would then strand a peer that
-    /// set its flag but had not yet read the others, as firmware cross-core
-    /// cache maintenance does. The shortfall is forfeited, as by a slower
-    /// core; the next epoch starts every core together at the frontier.
+    /// Whether the cohort runs another segment: until every core reaches the
+    /// limit. A core that reached it parks while the others catch up, so a
+    /// processor whose host thread was descheduled still gets its share of
+    /// the epoch instead of forfeiting it. A peer left spinning on a flag
+    /// rendezvous that an exhausted core already cleared spins only to its
+    /// own limit; the next epoch starts every core together at the frontier.
     pub(super) fn open(&self, cores: &[usize]) -> bool {
-        cores.iter().all(|&core| self.room(core) > 0)
+        cores.iter().any(|&core| self.room(core) > 0)
     }
     fn clock(&self, core: usize) -> Result<Clock, String> {
         self.clock.after(self.progress[core])
@@ -203,6 +201,13 @@ impl Board {
                     return Ok(());
                 }
             }
+            // Cores that reached the epoch limit park until the others do.
+            let runnable: Vec<usize> = {
+                let state = self.state.borrow();
+                let epoch = state.parallel.as_ref().unwrap();
+                cores.iter().copied().filter(|&core| epoch.room(core) > 0).collect()
+            };
+            let mprofile = mprofile.filter(|core| runnable.contains(core));
             let (blocks, _thumb_slice) = if let Some(core) = mprofile {
                 let room = self.state.borrow().parallel.as_ref().unwrap().room(core);
                 self.prepare_mprofile_segment(core, room)?
@@ -211,7 +216,7 @@ impl Board {
             };
             {
                 let mut state = self.state.borrow_mut();
-                for &core in cores {
+                for &core in &runnable {
                     let epoch = state.parallel.as_ref().unwrap();
                     // A peer must not spend the whole epoch while another is
                     // parked in a host callback. Bound each segment to one
