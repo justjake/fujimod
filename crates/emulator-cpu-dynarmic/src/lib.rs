@@ -2836,6 +2836,53 @@ mod tests {
     }
 
     #[test]
+    fn batched_word_transfers_use_the_current_checked_page() {
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
+        let code: [u32; 4] = [
+            0xe898_00e0, // ldmia r8, {r5, r6, r7}
+            0xe8a8_001c, // stmia r8!, {r2, r3, r4}
+            0xe938_00e0, // ldmdb r8!, {r5, r6, r7}
+            0xe289_9001, // add r9, r9, #1
+        ];
+        cpu.write_memory(0x1000, &code.map(u32::to_le_bytes).concat())
+            .unwrap();
+        for (round, base) in [0x2100u32, 0x2100, 0x2ff8, 0x4100, 0x4100, 0x1100, 0x1100]
+            .into_iter()
+            .enumerate()
+        {
+            let values = [0x11u32, 0x22, 0x33].map(|v| v + round as u32);
+            for (register, value) in (2..5).zip(values) {
+                cpu.write_register(arm::CORE[register], &value.to_le_bytes())
+                    .unwrap();
+            }
+            cpu.write_register(arm::CORE[8], &base.to_le_bytes())
+                .unwrap();
+            cpu.set_loop_window(true).unwrap();
+            cpu.run(Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(code.len()),
+            })
+            .unwrap();
+
+            let register = |index| {
+                let mut value = [0; 4];
+                cpu.read_register(arm::CORE[index], &mut value).unwrap();
+                u32::from_le_bytes(value)
+            };
+            assert_eq!([register(5), register(6), register(7)], values);
+            assert_eq!(register(8), base);
+            assert_eq!(register(9), round as u32 + 1);
+            assert_eq!(cpu.instruction_progress(), Some(code.len() as u64));
+            let mut stored = [0; 12];
+            cpu.read_memory(u64::from(base), &mut stored).unwrap();
+            assert_eq!(stored.as_slice(), values.map(u32::to_le_bytes).concat());
+        }
+    }
+
+    #[test]
     fn test_dynarmic_execution() {
         let core = Core::new(Model::CortexA7).expect("create dynarmic core");
         let mut ram = vec![0u8; 0x10000];

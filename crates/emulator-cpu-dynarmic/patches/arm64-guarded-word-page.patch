@@ -1,0 +1,129 @@
+diff --git a/src/dynarmic/backend/arm64/emit_arm64.cpp b/src/dynarmic/backend/arm64/emit_arm64.cpp
+--- a/src/dynarmic/backend/arm64/emit_arm64.cpp
++++ b/src/dynarmic/backend/arm64/emit_arm64.cpp
+@@ -95,11 +95,22 @@
+     } else {
+         code.SUB(Wscratch1, Wbase, static_cast<u32>(-offset));
+     }
++    // The guard is emitted only for the first A32 instruction in the block.
++    // Its unordered LDM/STM accesses can share the verified page base in X25.
++    const auto word = args[2].GetImmediateU64();
++    ctx.guarded_words = ((word >> 25) & 7) == 4 && inline_guard->length > 4
++        && ctx.conf.timed_a32_memory && !ctx.conf.fastmem_pointer
++        && !ctx.conf.absolute_offset_page_table && ctx.conf.page_table_pointer_mask_bits == 1;
++    const auto Xpage = ctx.guarded_words ? Xfastmem : Xscratch0;
++    if (ctx.guarded_words) {
++        code.TST(Wscratch1, 3);
++        code.B(NE, *slow);
++    }
+     code.UBFX(Xscratch0, Xscratch1, 12, 20);
+-    code.LDR(Xscratch0, Xpagetable, Xscratch0, LSL, 3);
+-    code.CBZ(Xscratch0, *slow);
++    code.LDR(Xpage, Xpagetable, Xscratch0, LSL, 3);
++    code.CBZ(Xpage, *slow);
+     if (inline_guard->write) {
+-        code.TBNZ(Xscratch0, 0, *slow);
++        code.TBNZ(Xpage, 0, *slow);
+         if (ctx.conf.state_observe_stores_offset != 0) {
+             code.LDRB(Wscratch0, Xstate, ctx.conf.state_observe_stores_offset);
+             code.CBNZ(Wscratch0, *slow);
+@@ -108,12 +119,15 @@
+     code.AND(Wscratch1, Wscratch1, 4095);
+     code.CMP(Wscratch1, 4096 - inline_guard->length);
+     code.B(HI, *slow);
++    if (ctx.guarded_words && !inline_guard->write) {
++        code.AND(Xfastmem, Xfastmem, ~u64{1});
++    }
+     code.l(*done);
+
+     // A mapped span only needs the guest base. Marshal arguments and preserve
+     // the caller's registers when a span actually requires the host callback.
+-    ctx.deferred_emits.emplace_back([&code, slow, done, function, base = *Wbase,
+-                                    context = args[1].GetImmediateU64(), word = args[2].GetImmediateU64()] {
++    ctx.deferred_emits.emplace_back([&code, slow, done, function, base = *Wbase, word,
++                                    guarded_words = ctx.guarded_words, context = args[1].GetImmediateU64()] {
+         code.l(*slow);
+         ABI_PushRegisters(code, ABI_CALLER_SAVE, 0);
+         code.MOV(W2, base);
+@@ -122,6 +136,9 @@
+         code.MOV(Xscratch0, function);
+         code.BLR(Xscratch0);
+         ABI_PopRegisters(code, ABI_CALLER_SAVE, 0);
++        if (guarded_words) {
++            code.MOV(Xfastmem, XZR);
++        }
+         code.B(*done);
+     });
+ }
+diff --git a/src/dynarmic/backend/arm64/emit_arm64_memory.cpp b/src/dynarmic/backend/arm64/emit_arm64_memory.cpp
+--- a/src/dynarmic/backend/arm64/emit_arm64_memory.cpp
++++ b/src/dynarmic/backend/arm64/emit_arm64_memory.cpp
+@@ -407,6 +407,15 @@
+     return fastmem_location;
+ }
+
++static bool HasGuardedWordPage(const EmitContext& ctx, const IR::Inst* inst) {
++    if (!ctx.guarded_words) {
++        return false;
++    }
++    const A32::LocationDescriptor start{ctx.block.Location()};
++    const A32::LocationDescriptor here{IR::LocationDescriptor{inst->GetArg(0).GetU64()}};
++    return here.PC() == start.PC();
++}
++
+ template<size_t bitsize>
+ void InlinePageTableEmitReadMemory(oaknut::CodeGenerator& code, EmitContext& ctx, IR::Inst* inst) {
+     auto args = ctx.reg_alloc.GetArgumentInfo(inst);
+@@ -425,8 +434,14 @@
+
+     SharedLabel fallback = GenSharedLabel(), end = GenSharedLabel();
+
+-    const auto [Xbase, Xoffset] = InlinePageTableEmitVAddrLookup<bitsize>(code, ctx, Xaddr, fallback);
+-    EmitMemoryLdr<bitsize>(code, Rvalue->index(), Xbase, Xoffset, ordered);
++    if (bitsize == 32 && !ordered && HasGuardedWordPage(ctx, inst)) {
++        code.CBZ(Xfastmem, *fallback);
++        code.AND(Xscratch1, Xaddr, page_mask);
++        EmitMemoryLdr<bitsize>(code, Rvalue->index(), Xfastmem, Xscratch1, false);
++    } else {
++        const auto [Xbase, Xoffset] = InlinePageTableEmitVAddrLookup<bitsize>(code, ctx, Xaddr, fallback);
++        EmitMemoryLdr<bitsize>(code, Rvalue->index(), Xbase, Xoffset, ordered);
++    }
+
+     ctx.deferred_emits.emplace_back([&code, &ctx, inst, Xaddr = *Xaddr, Rvalue = *Rvalue, ordered, fallback, end] {
+         code.l(*fallback);
+@@ -473,12 +488,18 @@
+
+     SharedLabel fallback = GenSharedLabel(), end = GenSharedLabel();
+
+-    if (ctx.conf.state_observe_stores_offset != 0) {
+-        code.LDRB(Wscratch0, Xstate, ctx.conf.state_observe_stores_offset);
+-        code.CBNZ(Wscratch0, *fallback);
+-    }
+-    const auto [Xbase, Xoffset] = InlinePageTableEmitVAddrLookup<bitsize>(code, ctx, Xaddr, fallback, true);
+-    EmitMemoryStr<bitsize>(code, Rvalue->index(), Xbase, Xoffset, ordered);
++    if (bitsize == 32 && !ordered && HasGuardedWordPage(ctx, inst)) {
++        code.CBZ(Xfastmem, *fallback);
++        code.AND(Xscratch1, Xaddr, page_mask);
++        EmitMemoryStr<bitsize>(code, Rvalue->index(), Xfastmem, Xscratch1, false);
++    } else {
++        if (ctx.conf.state_observe_stores_offset != 0) {
++            code.LDRB(Wscratch0, Xstate, ctx.conf.state_observe_stores_offset);
++            code.CBNZ(Wscratch0, *fallback);
++        }
++        const auto [Xbase, Xoffset] = InlinePageTableEmitVAddrLookup<bitsize>(code, ctx, Xaddr, fallback, true);
++        EmitMemoryStr<bitsize>(code, Rvalue->index(), Xbase, Xoffset, ordered);
++    }
+
+     ctx.deferred_emits.emplace_back([&code, &ctx, inst, Xaddr = *Xaddr, Rvalue = *Rvalue, ordered, fallback, end] {
+         code.l(*fallback);
+diff --git a/src/dynarmic/backend/arm64/emit_context.h b/src/dynarmic/backend/arm64/emit_context.h
+--- a/src/dynarmic/backend/arm64/emit_context.h
++++ b/src/dynarmic/backend/arm64/emit_context.h
+@@ -41,6 +41,7 @@
+     FastmemManager& fastmem;
+
+     std::vector<std::function<void()>> deferred_emits;
++    bool guarded_words = false;
+
+     FP::FPCR FPCR(bool fpcr_controlled = true) const {
+         const FP::FPCR fpcr = conf.descriptor_to_fpcr(block.Location());
