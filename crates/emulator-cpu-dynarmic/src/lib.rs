@@ -329,6 +329,9 @@ struct NativeReadWindow {
 }
 
 struct CoreShared {
+    thumb_only: bool,
+    thumb_cpacr: Cell<u32>,
+    thumb_stepping: Cell<bool>,
     exclusive: RefCell<Option<BoardExclusive>>,
     observe_exclusive_stores: Cell<bool>,
     #[cfg(test)]
@@ -858,7 +861,8 @@ impl CoreShared {
         if permissions & 1 == 0 || unsafe { ptr.as_ptr().add(offset + within) } != pointer {
             return;
         }
-        let write_allowed = !self.code_visibility.watched(pointer)
+        let write_allowed = !self.thumb_only
+            && !self.code_visibility.watched(pointer)
             && permissions & 2 != 0
             && (access == Access::Write
                 || self.walk(address, Access::Write).ok().and_then(Result::ok) == Some(physical));
@@ -1182,6 +1186,24 @@ impl CoreShared {
         output: Option<u64>,
         elapsed: Option<u64>,
     ) -> u64 {
+        if self.thumb_only && self.batching.get() {
+            if output.is_none()
+                && let Some(NativeAccess::Ram(pointer, _)) =
+                    self.native_access(address, size, Access::Read)
+            {
+                if cfg!(target_arch = "aarch64") {
+                    self.install_inline_page(address, pointer, Access::Read);
+                }
+                let mut value = [0; 8];
+                unsafe { std::ptr::copy_nonoverlapping(pointer, value.as_mut_ptr(), size) };
+                return u64::from_le_bytes(value);
+            }
+            // Device accesses and observed stores run once in a single step,
+            // where board callbacks see the entry's exact count and PC.
+            self.replay_memory.set(Some(address));
+            unsafe { ffi::dynarmic_abort_access(self.inst.get()) };
+            return 0;
+        }
         if self.batching.get() {
             let access = if output.is_some() {
                 Access::Write
@@ -1392,6 +1414,9 @@ impl Core {
         }
         let thumb_only = model == Model::CortexM4;
         let shared = Box::new(CoreShared {
+            thumb_only,
+            thumb_cpacr: Cell::new(0),
+            thumb_stepping: Cell::new(false),
             exclusive: RefCell::new(None),
             observe_exclusive_stores: Cell::new(false),
             #[cfg(test)]
@@ -1444,6 +1469,7 @@ impl Core {
                 std::ptr::null_mut()
             },
             batch_instruction,
+            thumb_batch_instruction: Self::thumb_batch_instruction,
             guard_transfer: Self::guard_transfer,
             read_code: Self::read_code,
             read: Self::read,
@@ -1712,6 +1738,17 @@ impl Cpu for Core {
 
     fn model(&self) -> Model {
         self.model
+    }
+
+    fn set_execution_policy(
+        &self,
+        policy: fujimod_emulator_cpu::ExecutionPolicy,
+    ) -> Result<(), String> {
+        if self.model == Model::CortexM4 || policy == fujimod_emulator_cpu::ExecutionPolicy::Exact {
+            Ok(())
+        } else {
+            Err("Dynarmic Cortex-A7 requires exact execution policy".into())
+        }
     }
 
     fn set_armv7a_affinity(&self, mpidr: u32) -> Result<(), String> {
@@ -2117,6 +2154,9 @@ impl Cpu for Core {
     }
 
     fn run(&self, request: Run) -> Result<Exit, ExecutionError> {
+        if self.model == Model::CortexM4 {
+            return self.run_thumb(request, false);
+        }
         if self.run_limit.get().is_some() {
             return Err("nested Dynarmic execution is unsupported".into());
         }
@@ -2142,9 +2182,6 @@ impl Cpu for Core {
         };
         self.shared.device_accessed.set(false);
         self.shared.stopped.set(false);
-        if self.model == Model::CortexM4 {
-            return self.run_thumb(request.until, remaining);
-        }
         let allow_batch = stable
             && request.until.is_none()
             && self.shared.observers.borrow().is_empty()
@@ -2336,6 +2373,13 @@ impl Cpu for Core {
         Self::finish_run(status)
     }
 
+    fn run_mprofile_batch(&self, request: Run) -> Result<Exit, ExecutionError> {
+        if self.model != Model::CortexM4 {
+            return Err("M-profile batch requires a Cortex-M4".into());
+        }
+        self.run_thumb(request, true)
+    }
+
     fn set_loop_window(&self, stable: bool) -> Result<(), String> {
         self.loops.stable.set(stable);
         Ok(())
@@ -2358,7 +2402,7 @@ impl Cpu for Core {
     }
 
     fn instruction_progress(&self) -> Option<u64> {
-        Some(self.last_progress.get())
+        Some(self.last_progress.get() + u64::from(self.shared.thumb_stepping.get()))
     }
 
     fn stop(&self) -> Result<(), String> {

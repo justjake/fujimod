@@ -419,8 +419,9 @@ impl Graph {
                 .iter()
                 .filter(|processor| processor.cpu_backend == RunCpuBackend::Dynarmic)
         };
-        if dynarmic().any(|processor| processor.model != Model::CortexA7) {
-            return Err("cpu_backend=dynarmic requires a Cortex-A7 processor".into());
+        if dynarmic().any(|processor| !matches!(processor.model, Model::CortexA7 | Model::CortexM4))
+        {
+            return Err("cpu_backend=dynarmic requires a Cortex-A7 or Cortex-M4 processor".into());
         }
         #[cfg(not(all(
             feature = "dynarmic",

@@ -90,10 +90,12 @@ struct CoreInterruptMap {
 /// (`before`), instead of settling its entries in batches.
 fn observes_every_instruction(cpu: &dyn Cpu) -> bool {
     let features = cpu.features();
-    !(cpu.model() != fujimod_emulator_cpu::Model::CortexM4
-        && features.architectural_exits
+    !(features.architectural_exits
         && features.instruction_progress
         && features.tighten_instruction_limit)
+}
+fn mprofile_batches(cpu: &dyn Cpu) -> bool {
+    cpu.model() == Model::CortexM4 && !observes_every_instruction(cpu)
 }
 fn device_workers(policy: ExecutionPolicy, preference: usize) -> usize {
     match policy {
@@ -1365,7 +1367,9 @@ impl Board {
         self.map_mmio(core, 0xe0000000, 0x100000, 0xe0000000)?;
         let mut state = self.state.borrow_mut();
         state.mprofile[core] = Some(profile);
-        state.code_shadow[core] = Some(Default::default());
+        if !mprofile_batches(&*self.cpus[core]) {
+            state.code_shadow[core] = Some(Default::default());
+        }
         state.blocks[core] = Some(Default::default());
         Ok(())
     }
@@ -1902,7 +1906,7 @@ impl Board {
             // Block execution has no engine counter: the board debits entries.
             let mut limit = budget;
             self.state.borrow_mut().run_entries[core] = 0;
-            let mut result = cpu.run(Run {
+            let request = Run {
                 begin: if cpu.model() == fujimod_emulator_cpu::Model::CortexM4
                     || matches!(
                         cpu.model(),
@@ -1917,7 +1921,13 @@ impl Board {
                 until: None,
                 watchdog_us: 0,
                 instructions: (!blocks).then_some(limit),
-            });
+            };
+            let native_mprofile = mprofile_batches(&**cpu);
+            let mut result = if native_mprofile {
+                self.run_mprofile_batches(core, budget as u64)
+            } else {
+                cpu.run(request)
+            };
             // An observer stopped the run for host bookkeeping: it found code
             // changed behind the engine, or (block execution) it changed the
             // PC. Resume the same slice at once: the stop is not a scheduling
@@ -1975,7 +1985,11 @@ impl Board {
                     s.accounted[core] = 0;
                     s.run_entries[core] = 0;
                     if !blocks {
-                        limit = limit.saturating_sub(consumed as usize);
+                        limit = if native_mprofile {
+                            budget.saturating_sub((s.instructions[core] - entered) as usize)
+                        } else {
+                            limit.saturating_sub(consumed as usize)
+                        };
                         if limit == 0 {
                             result = Ok(fujimod_emulator_cpu::Exit::Stopped);
                             break;
@@ -1983,18 +1997,22 @@ impl Board {
                     }
                 }
                 let resume = scalar(&**cpu, Register::Pc)?;
-                result = cpu.run(Run {
-                    begin: if cpu.model() == fujimod_emulator_cpu::Model::CortexM4
-                        || scalar(&**cpu, Register::Pstate)? & 0x20 != 0
-                    {
-                        resume | 1
-                    } else {
-                        resume
-                    },
-                    until: None,
-                    watchdog_us: 0,
-                    instructions: (!blocks).then_some(limit),
-                });
+                result = if native_mprofile {
+                    self.run_mprofile_batches(core, limit as u64)
+                } else {
+                    cpu.run(Run {
+                        begin: if cpu.model() == fujimod_emulator_cpu::Model::CortexM4
+                            || scalar(&**cpu, Register::Pstate)? & 0x20 != 0
+                        {
+                            resume | 1
+                        } else {
+                            resume
+                        },
+                        until: None,
+                        watchdog_us: 0,
+                        instructions: (!blocks).then_some(limit),
+                    })
+                };
             }
             engine_guard.stop();
             engine_guard.set_instructions(cpu.instruction_progress().unwrap_or(0));
@@ -3103,7 +3121,7 @@ impl State {
     ) -> Result<(u64, Option<u64>), String> {
         if !settled {
             // The next instruction needs another pin push and deadline refresh.
-            return Ok((remaining.min(1), None));
+            return Ok((1, None));
         }
         let scheduler_room = self.scheduler_room(core);
         // Cap at the run window and next generic-timer output change.

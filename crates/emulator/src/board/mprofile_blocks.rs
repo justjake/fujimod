@@ -251,21 +251,8 @@ pub(super) fn poll_period(code: &[u8]) -> Option<u64> {
 /// Whether the controller's observer may emulate, enter or refuse an
 /// instruction with this first halfword (`Profile::before`). Such an
 /// instruction starts its own block.
-pub(super) fn observed(word: u16) -> bool {
-    matches!(word, 0xbf30 | 0xbf20 | 0xf3ef | 0xf3bf)
-        || word & 0xff00 == 0xdf00
-        || word & 0xff87 == 0x4700
-        || matches!(word & 0xfff0, 0xe850 | 0xe840 | 0xe8d0 | 0xe8c0)
-}
-
-
-/// Whether an instruction with this first halfword can change which
-/// exceptions are masked: CPS and MSR (PRIMASK, FAULTMASK, BASEPRI,
-/// CONTROL). A pending exception may become ready after it, so it ends its
-/// block.
-fn unmasks(word: u16) -> bool {
-    word & 0xffe8 == 0xb660 || word & 0xfff0 == 0xf380
-}
+pub(super) use fujimod_emulator_cpu::arm::thumb::mprofile_observed as observed;
+use fujimod_emulator_cpu::arm::thumb::mprofile_unmasks as unmasks;
 
 /// Whether the controller's observer may do more than let this instruction
 /// execute (`Profile::before`): emulate it, enter or return from an

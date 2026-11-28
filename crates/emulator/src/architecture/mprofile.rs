@@ -87,6 +87,9 @@ pub fn enter(cpu: &dyn Cpu, nvic: &mut Nvic, exception: u16, pc: u32) -> Result<
         },
     )?;
     set(cpu, Register::Pc, vector)?;
+    if cpu.features().architectural_exits {
+        set(cpu, special(arm::Register::Ipsr), u32::from(exception))?;
+    }
     nvic.enter(exception);
     Ok(())
 }
@@ -140,6 +143,12 @@ pub fn exception_return(cpu: &dyn Cpu, nvic: &mut Nvic, ret: u32) -> Result<(), 
         (control & !2) | if ret & 4 != 0 { 2 } else { 0 },
     )?;
     set(cpu, Register::Pc, frame[6] | 1)?;
+    if cpu.features().architectural_exits {
+        if nvic.active.last() != Some(&2) {
+            set(cpu, special(arm::Register::Faultmask), 0)?;
+        }
+        set(cpu, special(arm::Register::Ipsr), previous)?;
+    }
     nvic.active.pop();
     Ok(())
 }
@@ -149,12 +158,32 @@ mod tests {
     use super::*;
     use fujimod_emulator_cpu::{Model, Run};
     use fujimod_emulator_cpu_unicorn::Library;
-    fn library() -> Library {
-        Library::linked().unwrap()
+    fn test_cores() -> Vec<Box<dyn Cpu>> {
+        vec![
+            Box::new(
+                Library::linked()
+                    .unwrap()
+                    .open(Model::CortexM4, 1024 * 1024)
+                    .unwrap(),
+            ),
+            #[cfg(all(
+                feature = "dynarmic",
+                any(target_arch = "aarch64", target_arch = "x86_64"),
+                any(target_os = "linux", target_os = "macos")
+            ))]
+            Box::new(fujimod_emulator_cpu_dynarmic::Core::new(Model::CortexM4).unwrap()),
+        ]
     }
     #[test]
     fn real_m4_executes_handler_and_restores_aligned_psp_and_nested_msp_frames() {
-        let cpu = library().open(Model::CortexM4, 1024 * 1024).unwrap();
+        for cpu in test_cores() {
+            check_real_m4_executes_handler_and_restores_aligned_psp_and_nested_msp_frames(&*cpu);
+        }
+    }
+
+    fn check_real_m4_executes_handler_and_restores_aligned_psp_and_nested_msp_frames(
+        cpu: &dyn Cpu,
+    ) {
         cpu.map_zeroed(0, 0x4000, 7).unwrap();
         cpu.write_memory(71 * 4, &0x301u32.to_le_bytes()).unwrap();
         cpu.write_memory(74 * 4, &0x401u32.to_le_bytes()).unwrap();
@@ -173,12 +202,12 @@ mod tests {
             (special(arm::Register::Control), 2),
             (special(arm::Register::Cpsr), 0xa8000020),
         ] {
-            set(&cpu, reg, value).unwrap();
+            set(cpu, reg, value).unwrap();
         }
-        enter(&cpu, &mut nvic, 71, 0x1234).unwrap();
-        assert_eq!(get(&cpu, r(14)).unwrap(), 0xfffffffd);
-        assert_eq!(get(&cpu, special(arm::Register::Psp)).unwrap(), 0x1fe0);
-        assert_eq!(get(&cpu, Register::Sp).unwrap(), 0x3000);
+        enter(cpu, &mut nvic, 71, 0x1234).unwrap();
+        assert_eq!(get(cpu, r(14)).unwrap(), 0xfffffffd);
+        assert_eq!(get(cpu, special(arm::Register::Psp)).unwrap(), 0x1fe0);
+        assert_eq!(get(cpu, Register::Sp).unwrap(), 0x3000);
         let mut frame = [0; 32];
         cpu.read_memory(0x1fe0, &mut frame).unwrap();
         assert_eq!(
@@ -196,45 +225,50 @@ mod tests {
             instructions: Some(1),
         })
         .unwrap();
-        assert_eq!(get(&cpu, r(0)).unwrap(), 12);
-        enter(&cpu, &mut nvic, 74, 0x302).unwrap();
-        assert_eq!(get(&cpu, r(14)).unwrap(), 0xfffffff1);
+        assert_eq!(get(cpu, r(0)).unwrap(), 12);
+        enter(cpu, &mut nvic, 74, 0x302).unwrap();
+        assert_eq!(get(cpu, r(14)).unwrap(), 0xfffffff1);
         assert_eq!(nvic.active, vec![71, 74]);
-        assert_eq!(exception_status(&cpu, &nvic).unwrap() & 511, 74);
-        exception_return(&cpu, &mut nvic, 0xfffffff1).unwrap();
+        assert_eq!(exception_status(cpu, &nvic).unwrap() & 511, 74);
+        exception_return(cpu, &mut nvic, 0xfffffff1).unwrap();
         assert_eq!(nvic.active, vec![71]);
-        assert_eq!(get(&cpu, Register::Pc).unwrap(), 0x302);
-        assert_eq!(get(&cpu, special(arm::Register::Msp)).unwrap(), 0x3000);
-        assert_eq!(get(&cpu, r(14)).unwrap(), 0xfffffffd);
-        exception_return(&cpu, &mut nvic, 0xfffffffd).unwrap();
+        assert_eq!(get(cpu, Register::Pc).unwrap(), 0x302);
+        assert_eq!(get(cpu, special(arm::Register::Msp)).unwrap(), 0x3000);
+        assert_eq!(get(cpu, r(14)).unwrap(), 0xfffffffd);
+        exception_return(cpu, &mut nvic, 0xfffffffd).unwrap();
         assert!(nvic.active.is_empty());
-        assert_eq!(get(&cpu, Register::Pc).unwrap(), 0x1234);
-        assert_eq!(get(&cpu, r(0)).unwrap(), 11);
-        assert_eq!(get(&cpu, special(arm::Register::Psp)).unwrap(), 0x2004);
-        assert_eq!(get(&cpu, Register::Sp).unwrap(), 0x2004);
+        assert_eq!(get(cpu, Register::Pc).unwrap(), 0x1234);
+        assert_eq!(get(cpu, r(0)).unwrap(), 11);
+        assert_eq!(get(cpu, special(arm::Register::Psp)).unwrap(), 0x2004);
+        assert_eq!(get(cpu, Register::Sp).unwrap(), 0x2004);
         assert_eq!(
-            exception_status(&cpu, &nvic).unwrap() & 0xf8000000,
+            exception_status(cpu, &nvic).unwrap() & 0xf8000000,
             0xa8000000
         );
     }
     #[test]
     fn invalid_vector_and_frame_refuse_before_changing_cpu_or_stack() {
-        let cpu = library().open(Model::CortexM4, 1024 * 1024).unwrap();
+        for cpu in test_cores() {
+            check_invalid_vector_and_frame_refuse_before_changing_cpu_or_stack(&*cpu);
+        }
+    }
+
+    fn check_invalid_vector_and_frame_refuse_before_changing_cpu_or_stack(cpu: &dyn Cpu) {
         cpu.map_zeroed(0, 0x4000, 7).unwrap();
-        set(&cpu, special(arm::Register::Msp), 0x3000).unwrap();
-        set(&cpu, Register::Pc, 0x1001).unwrap();
+        set(cpu, special(arm::Register::Msp), 0x3000).unwrap();
+        set(cpu, Register::Pc, 0x1001).unwrap();
         let mut nvic = Nvic::new(600_000_000);
         assert!(
-            enter(&cpu, &mut nvic, 71, 0x1000)
+            enter(cpu, &mut nvic, 71, 0x1000)
                 .unwrap_err()
                 .contains("non-Thumb")
         );
-        assert_eq!(get(&cpu, special(arm::Register::Msp)).unwrap(), 0x3000);
-        assert_eq!(get(&cpu, Register::Pc).unwrap(), 0x1000);
+        assert_eq!(get(cpu, special(arm::Register::Msp)).unwrap(), 0x3000);
+        assert_eq!(get(cpu, Register::Pc).unwrap(), 0x1000);
         assert!(nvic.active.is_empty());
-        assert!(exception_return(&cpu, &mut nvic, 0xffffffe9).is_err());
+        assert!(exception_return(cpu, &mut nvic, 0xffffffe9).is_err());
         assert!(
-            exception_return(&cpu, &mut nvic, 0xfffffff9)
+            exception_return(cpu, &mut nvic, 0xfffffff9)
                 .unwrap_err()
                 .contains("without an active")
         );

@@ -114,7 +114,9 @@ fn assert_unicorn_parity(
         put(cpu, Arm::Xpsr, 1 << 24);
         setup(cpu);
     }
-    put(&unicorn, Arm::Cpacr, 0x00f0_0000);
+    for cpu in [&unicorn as &dyn Cpu, &dynarmic] {
+        put(cpu, Arm::Cpacr, 0x00f0_0000);
+    }
     let hook = unsafe {
         unicorn.install_hook(Hook::Instruction {
             callback: count_instruction,
@@ -203,6 +205,50 @@ fn thumb_vfp_matches_unicorn() {
             assert_eq!(memory(cpu, DATA + 16, 4), 3.5_f32.to_le_bytes());
         },
     );
+}
+
+#[test]
+fn cpacr_changes_invalidate_warm_thumb_translations() {
+    let cpu = Core::new(Model::CortexM4).unwrap();
+    install_program(&cpu, &[0xbf00, 0xee70, 0xfa20, 0xe7fe]); // nop; vadd; b .
+    let run = request(CODE, 2);
+    put(&cpu, Arm::S(0), 1.5_f32.to_bits());
+    put(&cpu, Arm::S(1), 2.0_f32.to_bits());
+    for (cpacr, progress) in [(0, 1), (0x00f0_0000, 2), (0, 1)] {
+        put(&cpu, Arm::Cpacr, cpacr);
+        let exit = cpu.run(run).unwrap();
+        if cpacr == 0 {
+            let Exit::Trap(trap) = exit else {
+                panic!("expected NOCP, got {exit:?}");
+            };
+            assert_eq!(trap.syndrome, arm::thumb::NOCP);
+            assert_eq!(trap.virtual_address, u64::from(CODE + 2));
+        } else {
+            assert!(matches!(exit, Exit::Stopped));
+            assert_eq!(get(&cpu, Register::Arm32(Arm::S(31))), 3.5_f32.to_bits());
+        }
+        assert_eq!(cpu.instruction_progress(), Some(progress));
+    }
+}
+
+#[test]
+fn native_batches_stop_before_observations_and_reobserve_after_cps() {
+    let cpu = Core::new(Model::CortexM4).unwrap();
+    install_program(&cpu, &[0x3001, 0x3001, 0x3001, 0xb672, 0x3001, 0xbf30]);
+    for (begin, end, progress, primask, r0) in [
+        (CODE, CODE + 6, 3, 0, 3),
+        (CODE + 6, CODE + 8, 1, 1, 3),
+        (CODE + 8, CODE + 10, 1, 1, 4),
+    ] {
+        assert!(matches!(
+            cpu.run_mprofile_batch(request(begin, 20)).unwrap(),
+            Exit::Stopped
+        ));
+        assert_eq!(cpu.instruction_progress(), Some(progress));
+        assert_eq!(get(&cpu, Register::Pc), end);
+        assert_eq!(get(&cpu, Register::Arm32(Arm::Primask)), primask);
+        assert_eq!(get(&cpu, Register::Arm32(Arm::R(0))), r0);
+    }
 }
 
 #[test]

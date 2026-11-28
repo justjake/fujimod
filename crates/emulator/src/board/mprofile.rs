@@ -1,4 +1,5 @@
 //! M-profile architectural state on the board timeline. No firmware policy.
+mod batches;
 #[cfg(test)]
 mod cache_tests;
 #[cfg(test)]
@@ -323,6 +324,40 @@ impl Profile {
             .map_err(|_| "exclusive monitors poisoned")?
             .written(Some((address, 32)))
     }
+    pub(super) fn exception_return(&mut self, cpu: &dyn Cpu, target: u32) -> Result<(), String> {
+        mprofile::exception_return(cpu, &mut self.nvic, target)?;
+        self.clear_exclusive()
+    }
+    pub(super) fn usage_fault(
+        &mut self,
+        cpu: &dyn Cpu,
+        status: u32,
+        pc: u32,
+    ) -> Result<(), String> {
+        *self.nvic.regs.entry(0xd28).or_default() |= status;
+        let shcsr = self.nvic.regs.get(&0xd24).copied().unwrap_or(0);
+        let priority = self.nvic.priority[6];
+        let active = self.nvic.active.last().copied();
+        let masked = get(cpu, special(arm::Register::Primask))? != 0;
+        let basepri = get(cpu, special(arm::Register::Basepri))?;
+        let faultmask = get(cpu, special(arm::Register::Faultmask))? != 0;
+        if shcsr & (1 << 18) != 0
+            && !masked
+            && !faultmask
+            && (basepri == 0 || u32::from(priority) < basepri)
+            && active.is_none_or(|e| e > 3 && priority < self.nvic.priority[usize::from(e)])
+        {
+            self.enter(cpu, 6, pc)
+        } else {
+            *self.nvic.regs.entry(0xd2c).or_default() |= 1 << 30;
+            if faultmask || matches!(active, Some(2 | 3)) {
+                return Err(format!(
+                    "M-profile fault lockup at {pc:#010x} (CFSR {status:#010x})"
+                ));
+            }
+            self.enter(cpu, 3, pc)
+        }
+    }
     fn exclusive(
         &mut self,
         cpu: &dyn Cpu,
@@ -477,20 +512,7 @@ impl Profile {
         fetched: Option<u16>,
         idle: bool,
     ) -> Result<Entry, String> {
-        self.ready = !idle && self.pending();
-        // Without a ready exception the mask registers cannot select one.
-        if self.ready
-            && let Some(exception) = self.nvic.next(
-                get(cpu, special(arm::Register::Primask))?,
-                get(cpu, special(arm::Register::Basepri))?,
-                get(cpu, special(arm::Register::Faultmask))?,
-            )
-        {
-            self.enter(
-                cpu,
-                exception,
-                u32::try_from(pc).map_err(|_| "M-profile PC width")?,
-            )?;
+        if self.take_pending(cpu, pc, idle)? {
             return Ok(Entry::Redirect);
         }
         let mut bytes = [0; 2];
@@ -509,6 +531,30 @@ impl Profile {
                 u16::from_le_bytes(bytes)
             }
         };
+        self.before_instruction(cpu, pc, word)
+    }
+
+    fn take_pending(&mut self, cpu: &dyn Cpu, pc: u64, idle: bool) -> Result<bool, String> {
+        self.ready = !idle && self.pending();
+        // Without a ready exception the mask registers cannot select one.
+        if self.ready
+            && let Some(exception) = self.nvic.next(
+                get(cpu, special(arm::Register::Primask))?,
+                get(cpu, special(arm::Register::Basepri))?,
+                get(cpu, special(arm::Register::Faultmask))?,
+            )
+        {
+            self.enter(
+                cpu,
+                exception,
+                u32::try_from(pc).map_err(|_| "M-profile PC width")?,
+            )?;
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
+    fn before_instruction(&mut self, cpu: &dyn Cpu, pc: u64, word: u16) -> Result<Entry, String> {
         // Only the encodings handled below need the condition state; every
         // other instruction executes natively whether or not it passes.
         if !super::mprofile_blocks::observed(word) {
@@ -537,7 +583,8 @@ impl Profile {
                 arm::thumb::advance_it(cpsr),
             )?;
             self.enter(cpu, 11, (pc as u32).wrapping_add(2))?;
-        } else if word == 0xf3ef {
+        } else if word == 0xf3ef && !cpu.features().architectural_exits {
+            let mut bytes = [0; 2];
             cpu.read_memory(pc + 2, &mut bytes)?;
             let suffix = u16::from_le_bytes(bytes);
             if matches!(suffix & 255, 1 | 3 | 5 | 7) {
@@ -560,16 +607,16 @@ impl Profile {
             } else {
                 handled = false;
             }
-        } else if word & 0xff87 == 0x4700 {
+        } else if word & 0xff87 == 0x4700 && !cpu.features().architectural_exits {
             let target = get(cpu, reg(((word >> 3) & 15) as u8))?;
             if target >= 0xffffffe0 {
-                mprofile::exception_return(cpu, &mut self.nvic, target)?;
-                self.clear_exclusive()?;
+                self.exception_return(cpu, target)?;
             } else {
                 handled = false;
             }
         } else if matches!(word & 0xfff0, 0xe850 | 0xe840 | 0xe8d0 | 0xe8c0) || word == 0xf3bf {
-            cpu.read_memory(pc + 2, &mut bytes)?;
+            let mut bytes = [0; 2];
+            cpu.read_virtual(pc + 2, Access::Fetch, &mut bytes)?;
             let suffix = u16::from_le_bytes(bytes);
             if let Some(instruction) = arm::thumb::exclusive::decode(word, suffix)? {
                 self.exclusive(cpu, pc, instruction)?;
@@ -649,14 +696,33 @@ impl Profile {
 }
 
 #[cfg(test)]
+pub(super) fn test_backends() -> impl Iterator<Item = fujimod_catalog_configuration::RunCpuBackend>
+{
+    use fujimod_catalog_configuration::RunCpuBackend::*;
+    [
+        Unicorn,
+        #[cfg(all(
+            feature = "dynarmic",
+            any(target_arch = "aarch64", target_arch = "x86_64"),
+            any(target_os = "linux", target_os = "macos")
+        ))]
+        Dynarmic,
+    ]
+    .into_iter()
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     #[test]
     fn dwt_cycle_counter_is_guest_clocked_gated_and_observational() {
-        let lib = fujimod_emulator_cpu_unicorn::Library::linked().unwrap();
-        let cpu = lib
-            .open(fujimod_emulator_cpu::Model::CortexM4, 1024 * 1024)
-            .unwrap();
+        for backend in test_backends() {
+            let board = exclusive_tests::board(backend, &[0xbf30], &[0xbf30]);
+            check_dwt_cycle_counter(board.cpu(0).unwrap());
+        }
+    }
+
+    fn check_dwt_cycle_counter(cpu: &dyn Cpu) {
         let mut p = Profile::new(
             Config {
                 clock_hz: 100_000_000,
@@ -671,20 +737,20 @@ mod tests {
             }],
         )
         .unwrap();
-        p.access(&cpu, 0xe0001000, 4, Some(1), 0).unwrap();
-        assert_eq!(p.access(&cpu, 0xe0001004, 4, None, 100).unwrap(), 0);
-        p.access(&cpu, 0xe000edfc, 4, Some(1 << 24), 100).unwrap();
+        p.access(cpu, 0xe0001000, 4, Some(1), 0).unwrap();
+        assert_eq!(p.access(cpu, 0xe0001004, 4, None, 100).unwrap(), 0);
+        p.access(cpu, 0xe000edfc, 4, Some(1 << 24), 100).unwrap();
         let saved = p.state(150);
         assert_eq!(saved["dwt_counter"], 5);
         assert_eq!(saved, p.state(150));
-        p.access(&cpu, 0xe0001004, 4, Some(100), 150).unwrap();
-        assert_eq!(p.access(&cpu, 0xe0001004, 4, None, 200).unwrap(), 105);
-        p.access(&cpu, 0xe000edfc, 4, Some(0), 200).unwrap();
-        assert_eq!(p.access(&cpu, 0xe0001004, 4, None, 1000).unwrap(), 105);
-        p.access(&cpu, 0xe000edfc, 4, Some(1 << 24), 1000).unwrap();
-        assert_eq!(p.access(&cpu, 0xe0001004, 4, None, 1050).unwrap(), 110);
-        p.access(&cpu, 0xe0001000, 4, Some(0), 1050).unwrap();
-        assert_eq!(p.access(&cpu, 0xe0001004, 4, None, 10000).unwrap(), 110);
+        p.access(cpu, 0xe0001004, 4, Some(100), 150).unwrap();
+        assert_eq!(p.access(cpu, 0xe0001004, 4, None, 200).unwrap(), 105);
+        p.access(cpu, 0xe000edfc, 4, Some(0), 200).unwrap();
+        assert_eq!(p.access(cpu, 0xe0001004, 4, None, 1000).unwrap(), 105);
+        p.access(cpu, 0xe000edfc, 4, Some(1 << 24), 1000).unwrap();
+        assert_eq!(p.access(cpu, 0xe0001004, 4, None, 1050).unwrap(), 110);
+        p.access(cpu, 0xe0001000, 4, Some(0), 1050).unwrap();
+        assert_eq!(p.access(cpu, 0xe0001004, 4, None, 10000).unwrap(), 110);
     }
 
     #[test]

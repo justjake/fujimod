@@ -465,11 +465,11 @@ fn pausing_inside_a_quantum_preserves_multicore_interleaving() {
 #[test]
 fn mprofile_systick_wakes_wfi_and_executes_a_real_exception_handler() {
     use factory::*;
-    let run = |quantum| {
+    let run = |backend, quantum| {
         let graph = Graph {
             decoders: vec![],
             processors: vec![Processor {
-                cpu_backend: Default::default(),
+                cpu_backend: backend,
                 model: Model::CortexM4,
                 registers: vec![],
                 released: true,
@@ -540,11 +540,23 @@ fn mprofile_systick_wakes_wfi_and_executes_a_real_exception_handler() {
         assert_eq!(saved, board.state());
         (saved["instructions"].clone(), saved["mprofile"].clone())
     };
-    assert_eq!(run(8), run(64));
+    let reference = run(fujimod_catalog_configuration::RunCpuBackend::Unicorn, 8);
+    for backend in mprofile::test_backends() {
+        assert_eq!(run(backend, 8), reference, "{backend:?}");
+        assert_eq!(run(backend, 64), reference, "{backend:?}");
+    }
 }
 
 #[test]
 fn device_reset_cancels_a_released_mprofile_timer_deadline() {
+    for backend in mprofile::test_backends() {
+        check_device_reset_cancels_a_released_mprofile_timer_deadline(backend);
+    }
+}
+
+fn check_device_reset_cancels_a_released_mprofile_timer_deadline(
+    backend: fujimod_catalog_configuration::RunCpuBackend,
+) {
     use factory::*;
     struct ResetAtDeadline(bool);
     impl Device for ResetAtDeadline {
@@ -566,7 +578,7 @@ fn device_reset_cancels_a_released_mprofile_timer_deadline() {
     let graph = Graph {
         decoders: vec![],
         processors: vec![Processor {
-            cpu_backend: Default::default(),
+            cpu_backend: backend,
             model: Model::CortexM4,
             registers: vec![],
             released: true,

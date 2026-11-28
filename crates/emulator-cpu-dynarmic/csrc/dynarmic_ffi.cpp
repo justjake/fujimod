@@ -189,6 +189,7 @@ private:
     std::optional<std::uint32_t> ReadCheckedCode(VAddr address);
     std::optional<PrefetchedCode> prefetched_code;
     bool compiled_multiple_transfer = false;
+    bool compiled_thumb_access = false;
     DynarmicCallbacks callbacks;
     DynarmicInstance* instance;
     std::uint64_t remaining_ticks = 0;
@@ -197,6 +198,7 @@ private:
 
 struct DynarmicInstance {
     DynarmicCallbacks callbacks;
+    bool thumb_only;
     std::unique_ptr<UserCallbacksImpl> callbacks_impl;
     std::shared_ptr<CP15Impl> cp15_impl;
     ExclusiveMonitor monitor{1};
@@ -218,6 +220,40 @@ bool UserCallbacksImpl::PreCodeReadHook(bool thumb, VAddr pc, IREmitter& ir) {
     if (start.SingleStepping()) return true;
     const bool entry = start.PC() == pc;
     prefetched_code.reset();
+    if (instance->thumb_only) {
+        const auto end_block = [&] {
+            if (entry) {
+                if (thumb) ir.BranchWritePC(ir.Imm32(pc));
+                else ir.BXWritePC(ir.Imm32(pc));
+                ir.CallSupervisor(ir.Imm32(exit_before_instruction));
+                ir.SetTerm(Dynarmic::IR::Term::CheckHalt{Dynarmic::IR::Term::ReturnToDispatch{}});
+            } else {
+                ir.SetTerm(Dynarmic::IR::Term::LinkBlock{ir.current_location});
+            }
+            return false;
+        };
+        // EXC_RETURN targets and failed Thumb exchanges never fetch code.
+        if (!thumb || pc >= 0xffffffe0) return end_block();
+        if (entry) compiled_thumb_access = false;
+        if (compiled_thumb_access || pc - start.PC() >= max_block_instructions * 2)
+            return end_block();
+        const VAddr aligned = pc & ~3u;
+        if (const auto word = ReadCheckedCode(aligned)) {
+            const auto first = static_cast<uint16_t>(*word >> ((pc & 2) * 8));
+            const auto kind = callbacks.thumb_batch_instruction(callbacks.user_data, first);
+            if (kind == THUMB_BATCH_OBSERVE || (kind == THUMB_BATCH_SINGLE_ACCESS && !entry))
+                return end_block();
+            if (first >= 0xe800 && (pc & 2) && !ReadCheckedCode(aligned + 4))
+                return end_block();
+            // A single memory access can replay through the board on a page
+            // miss. Give it its own block so the abort has no retired prefix.
+            compiled_thumb_access = kind == THUMB_BATCH_SINGLE_ACCESS;
+            prefetched_code = PrefetchedCode{aligned, *word};
+        } else {
+            return end_block();
+        }
+        return true;
+    }
     if (entry) compiled_multiple_transfer = false;
     const auto word = thumb ? std::nullopt : ReadCheckedCode(pc);
     const auto consume_word = [&] {
@@ -346,6 +382,7 @@ extern "C" {
 DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks, bool thumb_only) {
     auto inst = std::make_unique<DynarmicInstance>();
     inst->callbacks = *callbacks;
+    inst->thumb_only = thumb_only;
 
     inst->callbacks_impl = std::make_unique<UserCallbacksImpl>(inst->callbacks, inst.get());
     inst->cp15_impl = std::make_shared<CP15Impl>(inst.get());

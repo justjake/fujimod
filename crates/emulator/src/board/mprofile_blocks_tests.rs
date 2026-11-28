@@ -42,13 +42,23 @@ struct Outcome {
 
 /// The program and its storing peer on a fresh board.
 fn board(blocks: bool) -> Board {
+    board_with_backend(
+        blocks,
+        fujimod_catalog_configuration::RunCpuBackend::Unicorn,
+    )
+}
+
+fn board_with_backend(
+    blocks: bool,
+    backend: fujimod_catalog_configuration::RunCpuBackend,
+) -> Board {
     use factory::*;
     let arm32 = |r| Register::Arm32(fujimod_emulator_cpu::arm::Register::R(r));
     let graph = Graph {
         decoders: vec![],
         processors: vec![
             Processor {
-                cpu_backend: Default::default(),
+                cpu_backend: backend,
                 model: Model::CortexM4,
                 registers: vec![],
                 released: true, parked_until_sgi: false,
@@ -145,6 +155,51 @@ fn outcome(board: &Board) -> Outcome {
         observed,
         watching,
         fast_stores,
+    }
+}
+
+#[test]
+fn admission_room_allows_one_entry_when_unsettled_even_with_zero_remaining() {
+    let board = board(false);
+    let state = board.state.borrow();
+    assert_eq!(state.admission_room(0, 0, false).unwrap(), (1, None));
+    assert_eq!(state.admission_room(0, 0, true).unwrap().0, 0);
+}
+
+#[cfg(all(
+    feature = "dynarmic",
+    any(target_arch = "aarch64", target_arch = "x86_64"),
+    any(target_os = "linux", target_os = "macos")
+))]
+#[test]
+fn dynarmic_mprofile_batches_match_unicorn_at_scheduling_boundaries() {
+    use fujimod_catalog_configuration::RunCpuBackend::Dynarmic;
+    for policy in [ExecutionPolicy::Exact, ExecutionPolicy::Interactive] {
+        for quantum in [1, 7, 16, 64] {
+            let mut unicorn = board(false);
+            let mut dynarmic = board_with_backend(true, Dynarmic);
+            unicorn.set_execution_policy(policy).unwrap();
+            dynarmic.set_execution_policy(policy).unwrap();
+            for until in [211, 212, 900, 2333, 4000] {
+                unicorn.run_until(until, quantum).unwrap();
+                dynarmic.run_until(until, quantum).unwrap();
+                let reference = outcome(&unicorn);
+                let candidate = outcome(&dynarmic);
+                assert_eq!(candidate.state, reference.state, "{policy:?}, {quantum}, {until}");
+                assert_eq!(
+                    candidate.registers, reference.registers,
+                    "{policy:?}, {quantum}, {until}"
+                );
+                assert_eq!(
+                    candidate.memory, reference.memory,
+                    "{policy:?}, {quantum}, {until}"
+                );
+                assert_eq!(
+                    candidate.state, reference.state,
+                    "{policy:?}, {quantum}, {until}"
+                );
+            }
+        }
     }
 }
 

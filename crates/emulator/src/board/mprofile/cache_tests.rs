@@ -3,21 +3,31 @@ use super::*;
 use crate::board::bus::{Bus, Mode};
 use crate::board::factory::{Graph, MemoryMap, Options, Peripheral, Processor, Ram};
 use crate::board::memory::BusMapping;
-use fujimod_catalog_configuration::RunEngine;
+use fujimod_catalog_configuration::{RunCpuBackend, RunEngine};
 use fujimod_emulator_cpu::{ExecutionPolicy, Model, timeline::Ratio};
 use fujimod_emulator_devices::{Cx, Device};
 
 #[test]
 fn peer_and_host_code_writes_survive_partial_quanta() {
+    for backend in test_backends() {
+        check_peer_and_host_code_writes_survive_partial_quanta(backend);
+    }
+}
+
+fn check_peer_and_host_code_writes_survive_partial_quanta(backend: RunCpuBackend) {
     for quantum in [1, 64] {
-        let mut b = board(&[0xbf00, 0x2601, 0xbf30], &[0xbf30]);
+        let mut b = board(backend, &[0xbf00, 0x2601, 0xbf30], &[0xbf30]);
         b.run_for_instructions(1, quantum).unwrap();
         b.write_memory(1, 0x4102, &0x2609u16.to_le_bytes()).unwrap();
         b.run_until(20, quantum).unwrap();
         assert_eq!(get(b.cpu(0).unwrap(), reg(6)).unwrap(), 9);
     }
     // Populate core0's translation before a real STRH through core1's alias.
-    let mut b = board(&[0xbf00, 0xbf00, 0x2601, 0xbf30], &[0xbf00, 0x802c, 0xbf30]);
+    let mut b = board(
+        backend,
+        &[0xbf00, 0xbf00, 0x2601, 0xbf30],
+        &[0xbf00, 0x802c, 0xbf30],
+    );
     b.run_for_instructions(2, 1).unwrap();
     set(b.cpu(1).unwrap(), reg(4), 0x2609).unwrap();
     set(b.cpu(1).unwrap(), reg(5), 0x4104).unwrap();
@@ -27,7 +37,13 @@ fn peer_and_host_code_writes_survive_partial_quanta() {
 
 #[test]
 fn native_store_through_another_local_alias_replaces_cached_code() {
-    let mut b = board(&[0xbf00, 0x802c, 0x2601, 0xbf30], &[0xbf30]);
+    for backend in test_backends() {
+        check_native_store_through_another_local_alias_replaces_cached_code(backend);
+    }
+}
+
+fn check_native_store_through_another_local_alias_replaces_cached_code(backend: RunCpuBackend) {
+    let mut b = board(backend, &[0xbf00, 0x802c, 0x2601, 0xbf30], &[0xbf30]);
     b.run_for_instructions(1, 64).unwrap();
     set(b.cpu(0).unwrap(), reg(4), 0x2609).unwrap();
     set(b.cpu(0).unwrap(), reg(5), 0x20104).unwrap();
@@ -38,7 +54,16 @@ fn native_store_through_another_local_alias_replaces_cached_code() {
 
 #[test]
 fn emulated_exclusive_store_through_another_alias_replaces_cached_code() {
+    for backend in test_backends() {
+        check_emulated_exclusive_store_through_another_alias_replaces_cached_code(backend);
+    }
+}
+
+fn check_emulated_exclusive_store_through_another_alias_replaces_cached_code(
+    backend: RunCpuBackend,
+) {
     let mut b = board(
+        backend,
         &[0xbf00, 0xe8d0, 0x1f5f, 0xe8c0, 0x3f52, 0x2601, 0xbf30],
         &[0xbf30],
     );
@@ -77,10 +102,23 @@ impl Device for DmaCodeWrite {
 }
 #[test]
 fn due_dma_code_write_restarts_the_current_peer_without_counting_stale_code() {
+    for backend in test_backends() {
+        check_due_dma_code_write_restarts_the_current_peer_without_counting_stale_code(backend);
+    }
+}
+
+fn check_due_dma_code_write_restarts_the_current_peer_without_counting_stale_code(
+    backend: RunCpuBackend,
+) {
     for quantum in [1, 64] {
         let mut bus = Bus::new(Mode::Strict);
         bus.attach(Box::new(DmaCodeWrite(false)));
-        let mut b = board_with_bus(&[0xbf30], &[0xbf00, 0xbf00, 0xbf00, 0x2601, 0xbf30], bus);
+        let mut b = board_with_bus(
+            backend,
+            &[0xbf30],
+            &[0xbf00, 0xbf00, 0xbf00, 0x2601, 0xbf30],
+            bus,
+        );
         b.run_until(20, quantum).unwrap();
         assert_eq!(get(b.cpu(1).unwrap(), reg(6)).unwrap(), 9);
         assert_eq!(b.state()["instructions"], json!([1, 5]));
