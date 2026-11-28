@@ -97,7 +97,7 @@ pub(super) struct Statistics {
     by_core: Vec<[Totals; 3]>,
     /// Per-core, per-phase cumulative block-callback time and call counts.
     /// The call table stays `None` unless `FUJIMOD_BLOCK_PHASES` asks for the
-    /// split, so an ordinary run pays one environment probe per callback.
+    /// split; the environment is read once per process.
     block_phases: Vec<[u64; BlockPhase::COUNT]>,
     block_phase_calls: Option<Vec<[u64; BlockPhase::COUNT]>>,
     #[cfg(test)]
@@ -138,11 +138,15 @@ pub(super) struct PhaseCapture {
 }
 
 impl PhaseCapture {
-    /// Probe the environment once per callback. With the diagnostic off the
-    /// capture is inert and every `span` runs its closure untouched.
+    /// With the diagnostic off the capture is inert and every `span` runs its
+    /// closure untouched. The environment is read once per process: a lookup
+    /// per callback cost about a tenth of the M4's host time.
     pub(super) fn new(statistics: Option<&SharedStatistics>, core: usize) -> Self {
+        static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
         let enabled = statistics.is_some()
-            && std::env::var_os("FUJIMOD_BLOCK_PHASES").is_some_and(|v| v != "0");
+            && *ENABLED.get_or_init(|| {
+                std::env::var_os("FUJIMOD_BLOCK_PHASES").is_some_and(|v| v != "0")
+            });
         Self {
             statistics: enabled.then(|| statistics.cloned()).flatten(),
             core,
