@@ -2,7 +2,7 @@ diff --git a/src/dynarmic/frontend/A32/translate/impl/a32_branch.cpp b/src/dynar
 --- a/src/dynarmic/frontend/A32/translate/impl/a32_branch.cpp
 +++ b/src/dynarmic/frontend/A32/translate/impl/a32_branch.cpp
 @@ -11,12 +11,23 @@
- 
+
  // B <label>
  bool TranslatorVisitor::arm_B(Cond cond, Imm<24> imm24) {
 +    const u32 imm32 = mcl::bit::sign_extend<26, u32>(imm24.ZeroExtend() << 2) + 8;

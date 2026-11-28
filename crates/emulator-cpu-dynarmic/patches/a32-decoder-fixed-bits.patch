@@ -4,7 +4,7 @@ diff --git a/src/dynarmic/frontend/decoder/decoder_detail.h b/src/dynarmic/front
 @@ -67,6 +67,21 @@
          return std::make_tuple(mask, expect);
      }
- 
+
 +    struct FixedBits {
 +        opcode_type required = ~opcode_type{0};
 +        opcode_type forbidden = ~opcode_type{0};
@@ -27,7 +27,7 @@ diff --git a/src/dynarmic/frontend/A32/decoder/vfp.h b/src/dynarmic/frontend/A32
 --- a/src/dynarmic/frontend/A32/decoder/vfp.h
 +++ b/src/dynarmic/frontend/A32/decoder/vfp.h
 @@ -22,6 +22,19 @@
- 
+
  template<typename V>
  std::optional<std::reference_wrapper<const VFPMatcher<V>>> DecodeVFP(u32 instruction) {
 +    // Skip the matcher scan when the opcode violates a fixed bit shared by
@@ -44,13 +44,13 @@ diff --git a/src/dynarmic/frontend/A32/decoder/vfp.h b/src/dynarmic/frontend/A32
 +    }
 +
      using Table = std::vector<VFPMatcher<V>>;
- 
+
      static const struct Tables {
 diff --git a/src/dynarmic/frontend/A32/decoder/asimd.h b/src/dynarmic/frontend/A32/decoder/asimd.h
 --- a/src/dynarmic/frontend/A32/decoder/asimd.h
 +++ b/src/dynarmic/frontend/A32/decoder/asimd.h
 @@ -67,6 +67,19 @@
- 
+
  template<typename V>
  std::optional<std::reference_wrapper<const ASIMDMatcher<V>>> DecodeASIMD(u32 instruction) {
 +    // Skip the matcher scan when the opcode violates a fixed bit shared by
@@ -67,5 +67,5 @@ diff --git a/src/dynarmic/frontend/A32/decoder/asimd.h b/src/dynarmic/frontend/A
 +    }
 +
      static const auto table = GetASIMDDecodeTable<V>();
- 
+
      const auto matches_instruction = [instruction](const auto& matcher) { return matcher.Matches(instruction); };

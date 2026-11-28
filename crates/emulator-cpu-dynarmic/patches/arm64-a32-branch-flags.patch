@@ -2,16 +2,16 @@ diff --git a/src/dynarmic/backend/arm64/emit_arm64_a32.cpp b/src/dynarmic/backen
 --- a/src/dynarmic/backend/arm64/emit_arm64_a32.cpp
 +++ b/src/dynarmic/backend/arm64/emit_arm64_a32.cpp
 @@ -5,6 +5,8 @@
- 
+
  #include <mcl/bit/bit_field.hpp>
  #include <oaknut/oaknut.hpp>
 +
 +#include <array>
- 
+
  #include "dynarmic/backend/arm64/a32_jitstate.h"
  #include "dynarmic/backend/arm64/abi.h"
 @@ -24,9 +26,23 @@
- 
+
  oaknut::Label EmitA32Cond(oaknut::CodeGenerator& code, EmitContext&, IR::Cond cond) {
      oaknut::Label pass;
 -    // TODO: Flags in host flags
