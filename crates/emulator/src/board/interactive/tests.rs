@@ -600,7 +600,7 @@ fn flag_rendezvous_continues_with_short_turns_and_livelocks_when_one_core_runs_a
 }
 
 #[test]
-fn cohort_ends_when_its_first_core_reaches_the_limit() {
+fn cohort_runs_until_every_core_reaches_the_limit() {
     let clock = fujimod_emulator_cpu::Clock {
         now: 1000,
         phase: 0,
@@ -610,20 +610,20 @@ fn cohort_ends_when_its_first_core_reaches_the_limit() {
     let cohort = [0, 1, 2];
     assert!(epoch.open(&cohort));
     // Owner callbacks split the epoch into segments; each core keeps its
-    // remaining share while every core has some left.
+    // remaining share.
     assert_eq!(epoch.advance(1, 30).unwrap(), 30);
     assert_eq!(epoch.advance(2, 60).unwrap(), 30);
-    assert!(epoch.open(&cohort));
     assert_eq!((epoch.room(0), epoch.room(1), epoch.room(2)), (100, 70, 40));
-    // Core 2 reaches the limit. Cores 0 and 1 still have room, but they
-    // would run alone against core 2's stores, so the cohort ends and time
-    // advances to the furthest core only.
+    // Core 2 reaches the limit and parks; a core that lagged, as one whose
+    // host thread was descheduled does, still runs its share. Time advances
+    // to the furthest core only.
     assert_eq!(epoch.advance(2, 40).unwrap(), 40);
     assert_eq!(epoch.advance(0, 10).unwrap(), 0);
-    assert!(!epoch.open(&cohort));
+    assert!(epoch.open(&cohort));
     assert_eq!(epoch.clock(2).unwrap().now, 1100);
-    // A core outside the cohort (waiting or not released) does not end it.
-    assert!(epoch.open(&[0, 1]));
+    assert_eq!(epoch.advance(0, 90).unwrap(), 0);
+    assert_eq!(epoch.advance(1, 70).unwrap(), 0);
+    assert!(!epoch.open(&cohort));
 }
 
 const M4: usize = 4;
