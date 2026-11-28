@@ -130,10 +130,8 @@ fn build_processor(
         .rprofile
         .as_ref()
         .map(|state| {
-            use fujimod_emulator_cpu_unicorn::rprofile::{
-                core::Options,
-                tcm::{BankOptions, Options as TcmOptions},
-            };
+            use fujimod_emulator_cpu::armv7r::tcm::{BankOptions, Options as TcmOptions};
+            use fujimod_emulator_cpu_unicorn::rprofile::core::Options;
             let bank = |state: fujimod_catalog::reference::TcmState| {
                 Ok::<_, String>(BankOptions {
                     bytes: usize::try_from(state.bytes)
