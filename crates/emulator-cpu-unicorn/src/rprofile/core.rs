@@ -1248,7 +1248,7 @@ impl Execution {
         opc2: u32,
         value: Option<u32>,
     ) -> Result<u32, String> {
-        Counter::check(crm, opc2)?;
+        pmu::Counter::check(crm, opc2)?;
         let clock = self
             .clock
             .get()
