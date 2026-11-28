@@ -225,9 +225,12 @@ impl Machine {
 
     pub(super) fn is_code_write(&self, trap: Trap) -> bool {
         let esr = trap.syndrome;
+        // Hypervisor can report a write blocked by hv_vm_protect as a
+        // stage-2 translation fault (DFSC 0x07). The IPA must be one of
+        // the writable RAM pages we explicitly protected.
         matches!(esr >> 26, 0x24 | 0x25)
             && esr & 0x40 != 0
-            && matches!(esr & 0x3f, 0x0c..=0x0f)
+            && matches!(esr & 0x3f, 0x04..=0x07 | 0x0c..=0x0f)
             && self.is_code_page(trap.physical_address)
     }
 
@@ -266,8 +269,16 @@ impl Machine {
         })();
         let mut restored = Ok(());
         for (ipa, permissions) in opened {
-            let result = Self::protect(ipa, PAGE, permissions & !2)
-                .and(self.note_code_write(tracker, ipa, PAGE));
+            let protection = Self::protect(ipa, PAGE, permissions & !2);
+            if protection.is_err() {
+                let mut watches = self
+                    .code_watches
+                    .lock()
+                    .unwrap_or_else(|error| error.into_inner());
+                watches.protected.remove(&ipa);
+                watches.revision = None;
+            }
+            let result = protection.and(self.note_code_write(tracker, ipa, PAGE));
             if restored.is_ok() {
                 restored = result;
             }
