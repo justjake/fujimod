@@ -344,6 +344,7 @@ struct CoreShared {
     selective_pages: Cell<u64>,
     compiled_words: RefCell<HashMap<usize, BTreeSet<u32>>>,
     compiled_descriptors: RefCell<HashMap<usize, BTreeSet<u32>>>,
+    thumb_code: RefCell<HashMap<u32, mprofile::CodePage>>,
     control_flushes: Cell<u64>,
     mmu_context: Cell<Option<ffi::DynarmicMemoryControl>>,
     contexts: RefCell<Vec<ffi::DynarmicMemoryControl>>,
@@ -588,6 +589,7 @@ impl CoreShared {
         self.clear_inline_pages();
         self.compiled_words.borrow_mut().clear();
         self.compiled_descriptors.borrow_mut().clear();
+        self.thumb_code.borrow_mut().clear();
         unsafe { ffi::dynarmic_clear_cache(self.inst.get()) };
     }
 
@@ -689,6 +691,9 @@ impl CoreShared {
     }
 
     fn watch_compiled_word(&self, pointer: *const u8, address: u32) {
+        if self.thumb_only {
+            self.watch_thumb_code(address, pointer);
+        }
         self.watch_code_backing(pointer);
         self.compiled_words
             .borrow_mut()
@@ -1429,6 +1434,7 @@ impl Core {
             selective_pages: Cell::new(0),
             compiled_words: RefCell::new(HashMap::new()),
             compiled_descriptors: RefCell::new(HashMap::new()),
+            thumb_code: RefCell::new(HashMap::new()),
             control_flushes: Cell::new(0),
             mmu_context: Default::default(),
             contexts: Default::default(),
@@ -2148,9 +2154,19 @@ impl Cpu for Core {
                 );
             }
         } else {
+            self.shared.thumb_code.borrow_mut().clear();
             unsafe { ffi::dynarmic_clear_cache(self.inst) };
         }
         Ok(())
+    }
+
+    fn revalidate_code(&self) -> Result<(), String> {
+        if self.model == Model::CortexM4 {
+            self.shared.revalidate_thumb_code();
+            Ok(())
+        } else {
+            self.invalidate_code(None)
+        }
     }
 
     fn run(&self, request: Run) -> Result<Exit, ExecutionError> {
@@ -2542,6 +2558,38 @@ impl Cpu for Core {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn thumb_revalidation_covers_both_pages_of_an_instruction_and_their_aliases() {
+        let ram = Backing::aligned_zeros(0x2000, 0x1000).unwrap();
+        let cpu = Core::new(Model::CortexM4).unwrap();
+        for base in [0x1000, 0x4000] {
+            unsafe { cpu.map_backing(base, 0x2000, 7, NonNull::new(ram.as_ptr()).unwrap()) }
+                .unwrap();
+        }
+        // movw r0, #1 across a page boundary, then a branch to itself.
+        cpu.write_memory(0x1ffe, &[0x40, 0xf2, 1, 0, 0xfe, 0xe7])
+            .unwrap();
+        let run = |begin, expected| {
+            cpu.run_mprofile_batch(Run {
+                begin,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(2),
+            })
+            .unwrap();
+            assert_eq!(cpu.instruction_progress(), Some(2));
+            assert_eq!(cpu.reg(0), expected);
+        };
+        run(0x1fff, 1);
+        run(0x4fff, 1);
+
+        // A peer backend writes backing directly, without calling note_write.
+        unsafe { ram.as_ptr().add(0x1000).write(9) };
+        cpu.revalidate_code().unwrap();
+        run(0x1fff, 9);
+        run(0x4fff, 9);
+    }
 
     #[test]
     fn test_dynarmic_execution() {

@@ -952,6 +952,11 @@ pub trait Cpu {
     fn unmap(&self, address: u64, bytes: usize) -> Result<(), String>;
     fn protect(&self, address: u64, bytes: usize, permissions: u32) -> Result<(), String>;
     fn invalidate_code(&self, range: Option<(u64, u64)>) -> Result<(), String>;
+    /// Recheck translated code after backing could have changed without a
+    /// write notification. The owner must quiesce all backing writers first.
+    fn revalidate_code(&self) -> Result<(), String> {
+        self.invalidate_code(None)
+    }
     fn run(&self, request: Run) -> Result<Exit, ExecutionError>;
     /// Run an M-profile batch after the controller has observed its first
     /// entry. Return at the next architectural observation or budget boundary.

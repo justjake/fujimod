@@ -1826,32 +1826,23 @@ impl Board {
                     .reset(&*self.cpus[core])?;
             }
             if s.mprofile[core].is_some() {
-                // A peer's guest stores are invisible to this engine, as are
-                // host and DMA writes between its slices. After any of them,
-                // keep the translations only while the shadow can prove
-                // their bytes. DMA invalidates the affected native blocks directly.
-                // An untracked alias store, decoder change or reset discards them.
-                // This holds under either execution policy: a slice on this
-                // path runs alone (a concurrent window never holds a
-                // processor whose slices come here, and it changes the code
-                // run reason when it ends), and the instruction observer runs before
-                // every instruction of this engine whatever the policy.
+                // Peer slices and untracked writes can change translated bytes.
+                // This path runs alone under either policy. Engines with a
+                // board shadow check code at their instruction/block observer.
+                // The batch engine checks its translations before entry.
+                let cpu = &*self.cpus[core];
                 let peer_ran = !s.code_run.is_running(core);
                 let shadow = s.code_shadow[core].as_mut();
-                let discard = match &shadow {
-                    Some(shadow) => shadow.changed() || peer_ran && shadow.unproven(),
-                    None => peer_ran,
-                };
-                if discard {
-                    self.cpus[core].invalidate_code(None)?;
-                }
                 if let Some(shadow) = shadow {
-                    if discard {
+                    if shadow.changed() || peer_ran && shadow.unproven() {
+                        cpu.invalidate_code(None)?;
                         shadow.discarded();
                     } else if peer_ran {
                         shadow.peer_ran();
                     }
                     shadow.begin_slice();
+                } else if peer_ran {
+                    cpu.revalidate_code()?;
                 }
             }
             s.code_run = RunCode::Running(core);

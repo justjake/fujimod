@@ -35,7 +35,7 @@ impl Board {
                     break;
                 }
                 if !s.code_run.is_running(core) {
-                    cpu.invalidate_code(None)?;
+                    cpu.revalidate_code()?;
                     s.code_run = RunCode::Running(core);
                 }
                 let settled = s.settled();

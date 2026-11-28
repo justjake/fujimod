@@ -10,6 +10,66 @@ const SPSEL: u32 = 1 << 1;
 const FPSCR_MASK: u32 = 0xf7c0_009f;
 const CP10_CP11: u32 = 0x00f0_0000;
 
+const CODE_PAGE_BYTES: usize = 4096;
+const CODE_WORD_BYTES: usize = 4;
+
+pub(super) struct CodePage {
+    backing: *const [u8; CODE_PAGE_BYTES],
+    bytes: Box<[u8; CODE_PAGE_BYTES]>,
+    fetched: [u64; CODE_PAGE_BYTES / CODE_WORD_BYTES / 64],
+}
+
+impl CoreShared {
+    pub(super) fn watch_thumb_code(&self, address: u32, pointer: *const u8) {
+        let offset = address as usize % CODE_PAGE_BYTES;
+        let base = address - offset as u32;
+        let mut pages = self.thumb_code.borrow_mut();
+        let page = pages.entry(base).or_insert_with(|| {
+            // M4 fetches are untranslated, and each backing mapping starts
+            // and ends on a guest page boundary. Remapping drops these pointers.
+            let backing = unsafe { pointer.sub(offset) }.cast::<[u8; CODE_PAGE_BYTES]>();
+            CodePage {
+                backing,
+                bytes: Box::new(unsafe { backing.read() }),
+                fetched: [0; CODE_PAGE_BYTES / CODE_WORD_BYTES / 64],
+            }
+        });
+        let word = offset / CODE_WORD_BYTES;
+        page.fetched[word / 64] |= 1 << (word % 64);
+        page.bytes[offset..offset + CODE_WORD_BYTES]
+            .copy_from_slice(&unsafe { pointer.cast::<[u8; CODE_WORD_BYTES]>().read() });
+    }
+
+    pub(super) fn revalidate_thumb_code(&self) {
+        for (&address, page) in self.thumb_code.borrow_mut().iter_mut() {
+            // The board has stopped all writers, including hardware peers
+            // that cannot report stores through the native code watcher.
+            let current = unsafe { &*page.backing };
+            if current == page.bytes.as_ref() {
+                continue;
+            }
+            let changed = page.fetched.iter().enumerate().any(|(group, &bits)| {
+                let mut words = bits;
+                while words != 0 {
+                    let offset = (group * 64 + words.trailing_zeros() as usize) * CODE_WORD_BYTES;
+                    let range = offset..offset + CODE_WORD_BYTES;
+                    if current[range.clone()] != page.bytes[range] {
+                        return true;
+                    }
+                    words &= words - 1;
+                }
+                false
+            });
+            page.bytes.copy_from_slice(current);
+            if changed {
+                unsafe {
+                    ffi::dynarmic_invalidate_cache(self.inst.get(), address, CODE_PAGE_BYTES)
+                };
+            }
+        }
+    }
+}
+
 #[derive(Clone, Copy, Default)]
 pub(super) struct Registers {
     // Dynarmic's R13 holds the active stack. Exchange it with this value
