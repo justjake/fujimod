@@ -202,7 +202,7 @@ impl Core {
             );
         }
         self.shared.stop.store(false, Ordering::Release);
-        let _watchdog = Watchdog::new(self.native_cpu, watchdog_us, self.shared.clone());
+        let _watchdog = Watchdog::arm(self.native_cpu, watchdog_us, &self.shared);
         match self.rpc(Op::RunToNativeExit)? {
             Value::NativeExit(exit) => Ok(exit),
             _ => unreachable!(),
@@ -805,7 +805,7 @@ impl Cpu for Core {
         // run. An asynchronous tightening may arrive before native entry.
         let limit = request.instructions.map_or(u64::MAX, |n| n as u64);
         self.shared.limit.store(limit, Ordering::Release);
-        let _watchdog = Watchdog::new(self.native_cpu, request.watchdog_us, self.shared.clone());
+        let _watchdog = Watchdog::arm(self.native_cpu, request.watchdog_us, &self.shared);
         let observe = self.has_instruction_hooks();
         self.parked.set(false);
         self.commands
@@ -877,7 +877,7 @@ impl Cpu for Core {
         self.shared.progress.store(0, Ordering::Relaxed);
         self.shared.measured.store(false, Ordering::Relaxed);
         self.shared.exhausted_grant.store(false, Ordering::Relaxed);
-        let watchdog = Watchdog::new(self.native_cpu, request.watchdog_us, self.shared.clone());
+        let watchdog = Watchdog::arm(self.native_cpu, request.watchdog_us, &self.shared);
         self.parked.set(false);
         if self
             .commands
@@ -894,7 +894,7 @@ impl Cpu for Core {
             callback_error: None,
             result: None,
             exhausted_grant: false,
-            watchdog: Some(watchdog),
+            watchdog,
         });
         Ok(token)
     }
@@ -1180,30 +1180,33 @@ struct Watchdog {
     thread: Option<JoinHandle<()>>,
 }
 impl Watchdog {
-    fn new(cpu: u64, micros: u64, shared: Arc<worker::Shared>) -> Self {
+    fn arm(cpu: u64, micros: u64, shared: &Arc<worker::Shared>) -> Option<Self> {
+        if micros == 0 {
+            return None;
+        }
         let done = Arc::new((std::sync::Mutex::new(false), std::sync::Condvar::new()));
-        let thread = if micros == 0 {
-            None
-        } else {
-            let wait = done.clone();
-            Some(std::thread::spawn(move || {
-                let (lock, cv) = &*wait;
-                let (finished, _) = cv
-                    .wait_timeout_while(
-                        lock.lock().unwrap(),
-                        std::time::Duration::from_micros(micros),
-                        |done| !*done,
-                    )
-                    .unwrap();
-                if !*finished {
-                    shared.stop.store(true, Ordering::Release);
-                    unsafe {
-                        let _ = ffi::hv_vcpus_exit(&cpu, 1);
-                    }
+        let wait = done.clone();
+        let shared = shared.clone();
+        let thread = std::thread::spawn(move || {
+            let (lock, cv) = &*wait;
+            let (finished, _) = cv
+                .wait_timeout_while(
+                    lock.lock().unwrap(),
+                    std::time::Duration::from_micros(micros),
+                    |done| !*done,
+                )
+                .unwrap();
+            if !*finished {
+                shared.stop.store(true, Ordering::Release);
+                unsafe {
+                    let _ = ffi::hv_vcpus_exit(&cpu, 1);
                 }
-            }))
-        };
-        Self { done, thread }
+            }
+        });
+        Some(Self {
+            done,
+            thread: Some(thread),
+        })
     }
 }
 impl Drop for Watchdog {
