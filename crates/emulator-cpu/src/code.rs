@@ -23,24 +23,36 @@ struct WatchedPages {
 pub struct CodeTracker(Rc<WatchedPages>);
 
 impl CodeTracker {
-    /// Record four fetched bytes within one backing page. Return the new
-    /// watch revision if this is the first registration on that page.
-    pub fn watch_word(&self, pointer: *const u8, bytes: [u8; 4]) -> Option<u64> {
-        let page = pointer.addr() & !4095;
-        let mut pages = self.0.pages.borrow_mut();
-        let new = !pages.contains_key(&page);
-        let watched = pages.entry(page).or_insert_with(|| {
-            Box::new(WatchedPage {
-                seen: [0; 64],
-                contents: [0; 4096],
-            })
-        });
-        let byte = pointer.addr() - page;
-        for (index, value) in (byte..byte + 4).zip(bytes) {
-            watched.seen[index / 64] |= 1 << (index % 64);
-            watched.contents[index] = value;
+    /// Record the bytes used by a translation. Return the new watch revision
+    /// if this is the first registration on any backing page in the span.
+    pub fn watch_bytes(&self, pointer: *const u8, bytes: &[u8]) -> Option<u64> {
+        if bytes.is_empty() {
+            return None;
         }
-        drop(pages);
+        let start = pointer.addr();
+        let end = start + bytes.len();
+        let mut new = false;
+        let mut pages = self.0.pages.borrow_mut();
+        for page in ((start & !4095)..end).step_by(4096) {
+            let watched = pages.entry(page).or_insert_with(|| {
+                new = true;
+                Box::new(WatchedPage {
+                    seen: [0; 64],
+                    contents: [0; 4096],
+                })
+            });
+            let first = start.saturating_sub(page);
+            let last = (end - page).min(4096);
+            let offset = page + first - start;
+            watched.contents[first..last].copy_from_slice(&bytes[offset..offset + last - first]);
+            let mut index = first;
+            while index < last {
+                let bit = index % 64;
+                let width = (last - index).min(64 - bit);
+                watched.seen[index / 64] |= (u64::MAX >> (64 - width)) << bit;
+                index += width;
+            }
+        }
         new.then(|| {
             let revision = self.watch_revision().wrapping_add(1);
             self.0.watch_revision.set(revision);
@@ -66,6 +78,16 @@ impl CodeTracker {
             .contains_key(&(pointer.addr() & !4095))
     }
 
+    /// Whether any backing page in the span contains watched bytes.
+    pub fn watches_pages(&self, pointer: *const u8, count: usize) -> bool {
+        let start = pointer.addr();
+        let pages = self.0.pages.borrow();
+        count != 0
+            && ((start & !4095)..start + count)
+                .step_by(4096)
+                .any(|page| pages.contains_key(&page))
+    }
+
     /// Whether the given backing span contains any watched bytes.
     pub fn overlaps(&self, pointer: *const u8, count: usize) -> bool {
         if count == 0 {
@@ -88,6 +110,24 @@ impl CodeTracker {
     /// The span must be valid for reading `count` initialized bytes without
     /// concurrent writes for the duration of this call.
     pub unsafe fn note_write(&self, pointer: *const u8, count: usize) {
+        self.record_write(pointer, count, |watched, index, offset| {
+            let byte = unsafe { pointer.add(offset).read() };
+            std::mem::replace(&mut watched.contents[index], byte) != byte
+        });
+    }
+
+    /// Invalidate watched bytes in the footprint of a direct access which
+    /// can write, such as a conditional atomic read-modify-write.
+    pub fn note_possible_write(&self, pointer: *const u8, count: usize) {
+        self.record_write(pointer, count, |_, _, _| true);
+    }
+
+    fn record_write(
+        &self,
+        pointer: *const u8,
+        count: usize,
+        mut changed_byte: impl FnMut(&mut WatchedPage, usize, usize) -> bool,
+    ) {
         if count == 0 {
             return;
         }
@@ -103,8 +143,7 @@ impl CodeTracker {
                 if watched.seen[index / 64] & (1 << (index % 64)) == 0 {
                     continue;
                 }
-                let byte = unsafe { pointer.add(page + index - start).read() };
-                if std::mem::replace(&mut watched.contents[index], byte) == byte {
+                if !changed_byte(watched, index, page + index - start) {
                     continue;
                 }
                 let word = (page + index) & !3;

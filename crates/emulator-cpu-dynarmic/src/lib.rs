@@ -230,6 +230,9 @@ struct NativeReadWindow {
 
 struct CoreShared {
     thumb_only: bool,
+    thumb_observe_stores: Cell<bool>,
+    thumb_stack_rejected: Cell<bool>,
+    thumb_fast_reads: RefCell<HashMap<u64, Vec<FastMmioRead>>>,
     thumb_cpacr: Cell<u32>,
     thumb_stepping: Cell<bool>,
     exclusive: RefCell<Option<BoardExclusive>>,
@@ -244,6 +247,7 @@ struct CoreShared {
     selective_pages: Cell<u64>,
     compiled_words: RefCell<HashMap<usize, BTreeSet<u32>>>,
     compiled_descriptors: RefCell<HashMap<usize, BTreeSet<u32>>>,
+    unreported_writes: Cell<bool>,
     thumb_code: RefCell<HashMap<u32, mprofile::CodePage>>,
     control_flushes: Cell<u64>,
     mmu_context: Cell<Option<ffi::DynarmicMemoryControl>>,
@@ -450,7 +454,7 @@ impl CoreShared {
 
     fn watch_code_backing(&self, pointer: *const u8) {
         let bytes = unsafe { pointer.cast::<[u8; 4]>().read() };
-        let Some(revision) = self.code_tracker.watch_word(pointer, bytes) else {
+        let Some(revision) = self.code_tracker.watch_bytes(pointer, &bytes) else {
             return;
         };
         let page = pointer.addr() & !4095;
@@ -575,7 +579,7 @@ impl CoreShared {
     }
 
     fn watch_compiled_word(&self, pointer: *const u8, address: u32) {
-        if self.thumb_only {
+        if self.unreported_writes.get() {
             self.watch_thumb_code(address, pointer);
         }
         self.watch_code_backing(pointer);
@@ -752,7 +756,7 @@ impl CoreShared {
         if permissions & 1 == 0 || unsafe { ptr.as_ptr().add(offset + within) } != pointer {
             return;
         }
-        let write_allowed = !self.thumb_only
+        let write_allowed = !self.thumb_observe_stores.get()
             && !self.code_tracker.watched(pointer)
             && permissions & 2 != 0
             && (access == Access::Write
@@ -1078,16 +1082,48 @@ impl CoreShared {
         elapsed: Option<u64>,
     ) -> u64 {
         if self.thumb_only && self.batching.get() {
-            if output.is_none()
-                && let Some(NativeAccess::Ram(pointer, _)) =
-                    self.native_access(address, size, Access::Read)
+            let access = if output.is_some() { Access::Write } else { Access::Read };
+            if !self.thumb_stack_rejected.replace(false)
+                && (output.is_none() || !self.thumb_observe_stores.get())
+                && let Some((page, mapping)) = self.native_page(address, size, access)
             {
-                if cfg!(target_arch = "aarch64") {
-                    self.install_inline_page(address, pointer, Access::Read);
+                match mapping {
+                    NativeAccess::Ram(pointer, _)
+                        if output.is_none() || !self.code_tracker.overlaps(pointer, size) =>
+                    {
+                        if cfg!(target_arch = "aarch64") {
+                            self.install_inline_page(address, pointer, access);
+                        }
+                        if let Some(value) = output {
+                            unsafe {
+                                std::ptr::copy_nonoverlapping(
+                                    value.to_le_bytes().as_ptr(),
+                                    pointer,
+                                    size,
+                                )
+                            };
+                            return 0;
+                        }
+                        let mut value = [0; 8];
+                        unsafe { std::ptr::copy_nonoverlapping(pointer, value.as_mut_ptr(), size) };
+                        return u64::from_le_bytes(value);
+                    }
+                    NativeAccess::Mmio(prepared) if output.is_none() => {
+                        let reads = self.thumb_fast_reads.borrow();
+                        if let Some(reads) = reads.get(&page.mapped_base) {
+                            let first =
+                                reads.partition_point(|read| read.register_offset < prepared.offset);
+                            if let Some(value) = reads[first..]
+                                .iter()
+                                .take_while(|read| read.register_offset == prepared.offset)
+                                .find_map(|read| read.read_at(prepared.offset, size as u32, None))
+                            {
+                                return value;
+                            }
+                        }
+                    }
+                    _ => {}
                 }
-                let mut value = [0; 8];
-                unsafe { std::ptr::copy_nonoverlapping(pointer, value.as_mut_ptr(), size) };
-                return u64::from_le_bytes(value);
             }
             // Device accesses and observed stores run once in a single step,
             // where board callbacks see the entry's exact count and PC.
@@ -1292,6 +1328,12 @@ impl Core {
         Self::new_with_code_tracker(model, CodeTracker::default())
     }
 
+    /// Keep Thumb backing snapshots when peers cannot report code writes.
+    /// Configure before running the core.
+    pub fn enable_unreported_writes(&self) {
+        self.shared.unreported_writes.set(self.model == Model::CortexM4);
+    }
+
     pub fn new_with_code_tracker(model: Model, code_tracker: CodeTracker) -> Result<Self, String> {
         if !matches!(model, Model::CortexA7 | Model::CortexM4) {
             return Err("Dynarmic requires a Cortex-A7 or Cortex-M4 processor".into());
@@ -1299,6 +1341,9 @@ impl Core {
         let thumb_only = model == Model::CortexM4;
         let shared = Box::new(CoreShared {
             thumb_only,
+            thumb_observe_stores: Cell::new(false),
+            thumb_stack_rejected: Cell::new(false),
+            thumb_fast_reads: RefCell::default(),
             thumb_cpacr: Cell::new(0),
             thumb_stepping: Cell::new(false),
             exclusive: RefCell::new(None),
@@ -1313,6 +1358,7 @@ impl Core {
             selective_pages: Cell::new(0),
             compiled_words: RefCell::new(HashMap::new()),
             compiled_descriptors: RefCell::new(HashMap::new()),
+            unreported_writes: Cell::new(false),
             thumb_code: RefCell::new(HashMap::new()),
             control_flushes: Cell::new(0),
             mmu_context: Default::default(),
@@ -1356,6 +1402,7 @@ impl Core {
             batch_instruction,
             thumb_batch_instruction: Self::thumb_batch_instruction,
             guard_transfer: Self::guard_transfer,
+            guard_thumb_stack: Self::guard_thumb_stack,
             read_code: Self::read_code,
             read: Self::read,
             timed_read32: Self::timed_read32,
@@ -1444,6 +1491,7 @@ impl Core {
         project: Option<DeviceReadProjection>,
     ) -> Result<(), String> {
         self.shared.mapping_changed();
+        self.shared.thumb_fast_reads.borrow_mut().remove(&address);
         self.shared.mappings.borrow_mut().insert(
             address,
             Mapping::Mmio {
@@ -1975,10 +2023,15 @@ impl Cpu for Core {
         address: u64,
         bytes: usize,
         callbacks: Mmio,
-        _fast_reads: Vec<FastMmioRead>,
+        mut fast_reads: Vec<FastMmioRead>,
         project: DeviceReadProjection,
     ) -> Result<(), String> {
-        self.install_mmio(address, bytes, callbacks, Some(project))
+        self.install_mmio(address, bytes, callbacks, Some(project))?;
+        if self.model == Model::CortexM4 && !fast_reads.is_empty() {
+            fast_reads.sort_by_key(|read| read.register_offset);
+            self.shared.thumb_fast_reads.borrow_mut().insert(address, fast_reads);
+        }
+        Ok(())
     }
 
     fn unmap(&self, address: u64, bytes: usize) -> Result<(), String> {
@@ -1993,6 +2046,7 @@ impl Cpu for Core {
         }
         self.shared.mapping_changed();
         self.shared.mappings.borrow_mut().remove(&address);
+        self.shared.thumb_fast_reads.borrow_mut().remove(&address);
         self.owned.borrow_mut().remove(&address);
         self.invalidate_code(Some((address, address + bytes as u64)))?;
         self.memory_regions
@@ -2441,6 +2495,7 @@ mod tests {
             unsafe { cpu.map_backing(base, 0x2000, 7, NonNull::new(ram.as_ptr()).unwrap()) }
                 .unwrap();
         }
+        cpu.enable_unreported_writes();
         // movw r0, #1 across a page boundary, then a branch to itself.
         cpu.write_memory(0x1ffe, &[0x40, 0xf2, 1, 0, 0xfe, 0xe7])
             .unwrap();

@@ -882,14 +882,14 @@ impl Board {
                         )
                 })
             {
-                // Without an M-profile controller (no alias stores to
-                // detect), the board store hook only shows the processor's
-                // stores to a live logical exclusive reservation and to a
-                // write watch. An all-store hook sends every store of the
-                // processor through the engine's slow path, so it is
-                // installed on demand (`sync_store_hook`).
+                // A tracked batch engine already reports writes through its
+                // backing, including aliases. The board observes its ordinary
+                // stores only for reservations and explicit write watches.
                 board.execution_hooks.push(core);
-                if board.cpus[core].model() != fujimod_emulator_cpu::Model::CortexM4 {
+                let cpu = &*board.cpus[core];
+                if cpu.model() != fujimod_emulator_cpu::Model::CortexM4
+                    || board.physical_memory.all_code_writers_report && mprofile_batches(cpu)
+                {
                     board.store_hooks_on_demand[core] = Some(None);
                 } else {
                     let hook = unsafe {
@@ -1445,6 +1445,7 @@ impl Board {
             }
             self.m4_engine_reads.extend(engine_reads.iter().cloned());
         }
+        published_reads.sort_by_key(|read| read.register_offset);
         let binding = Box::new(Binding {
             state: self.state.clone(),
             callback_service_time: self.state.borrow().callback_service_time.clone(),
@@ -1829,7 +1830,7 @@ impl Board {
                 // Peer slices and untracked writes can change translated bytes.
                 // This path runs alone under either policy. Engines with a
                 // board shadow check code at their instruction/block observer.
-                // The batch engine checks its translations before entry.
+                // The batch engine checks only when a writer cannot report.
                 let cpu = &*self.cpus[core];
                 let peer_ran = !s.code_run.is_running(core);
                 let shadow = s.code_shadow[core].as_mut();
@@ -1841,7 +1842,7 @@ impl Board {
                         shadow.peer_ran();
                     }
                     shadow.begin_slice();
-                } else if peer_ran {
+                } else if peer_ran && !s.memory.all_code_writers_report {
                     cpu.revalidate_code()?;
                 }
             }
@@ -3662,8 +3663,12 @@ impl State {
             if use_publication {
                 let tick = host.now();
                 let offset = address - binding.base;
-                if let Some(word) = binding.published_reads.iter().find_map(|read|
-                    read.published_at(offset, u32::from(size), Some(tick)))
+                let reads = &binding.published_reads;
+                let first = reads.partition_point(|read| read.register_offset < offset);
+                if let Some(word) = reads[first..]
+                    .iter()
+                    .take_while(|read| read.register_offset == offset)
+                    .find_map(|read| read.published_at(offset, u32::from(size), Some(tick)))
                 {
                     bus.finish_published_read(host, address, size)?;
                     binding.published_hits.set(binding.published_hits.get() + 1);

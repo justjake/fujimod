@@ -4,6 +4,7 @@
 #include "dynarmic/interface/A32/coprocessor.h"
 #include "dynarmic/interface/exclusive_monitor.h"
 #include "dynarmic/frontend/A32/a32_ir_emitter.h"
+#include "dynarmic/frontend/A32/a32_types.h"
 #include "dynarmic/ir/basic_block.h"
 #include "dynarmic/ir/cond.h"
 #include <memory>
@@ -109,6 +110,11 @@ public:
     static void GuardTransfer(std::uint64_t ctx, std::uint64_t word, std::uint64_t base) {
         const auto* self = reinterpret_cast<UserCallbacksImpl*>(ctx);
         self->callbacks.guard_transfer(self->callbacks.user_data, word, base);
+    }
+
+    static void GuardThumbStack(std::uint64_t ctx, std::uint64_t instruction, std::uint64_t sp) {
+        const auto* self = reinterpret_cast<UserCallbacksImpl*>(ctx);
+        self->callbacks.guard_thumb_stack(self->callbacks.user_data, instruction, sp);
     }
 
     bool PreCodeReadHook(bool thumb, VAddr pc, IREmitter& ir) override;
@@ -241,13 +247,21 @@ bool UserCallbacksImpl::PreCodeReadHook(bool thumb, VAddr pc, IREmitter& ir) {
         if (const auto word = ReadCheckedCode(aligned)) {
             const auto first = static_cast<uint16_t>(*word >> ((pc & 2) * 8));
             const auto kind = callbacks.thumb_batch_instruction(callbacks.user_data, first);
-            if (kind == THUMB_BATCH_OBSERVE || (kind == THUMB_BATCH_SINGLE_ACCESS && !entry))
+            const bool stack = kind == THUMB_BATCH_STACK_ACCESS;
+            const bool access = stack || kind == THUMB_BATCH_SINGLE_ACCESS;
+            if (kind == THUMB_BATCH_OBSERVE || (access && !entry)
+                || (stack && ir.current_location.IT().IsInITBlock()))
                 return end_block();
             if (first >= 0xe800 && (pc & 2) && !ReadCheckedCode(aligned + 4))
                 return end_block();
             // A single memory access can replay through the board on a page
             // miss. Give it its own block so the abort has no retired prefix.
-            compiled_thumb_access = kind == THUMB_BATCH_SINGLE_ACCESS;
+            compiled_thumb_access = access;
+            if (stack) {
+                ir.CallHostFunction(&UserCallbacksImpl::GuardThumbStack,
+                    ir.Imm64(reinterpret_cast<uintptr_t>(this)), ir.Imm64(first),
+                    ir.ZeroExtendWordToLong(ir.GetRegister(Reg::SP)));
+            }
             prefetched_code = PrefetchedCode{aligned, *word};
         } else {
             return end_block();

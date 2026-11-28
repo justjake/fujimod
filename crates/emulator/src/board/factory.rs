@@ -271,12 +271,7 @@ impl Engines {
         options: &Options,
         translation_cache_size_bytes: u32,
         memory: &fujimod_emulator_cpu_unicorn::memory::Memory,
-        #[cfg(all(
-            feature = "dynarmic",
-            any(target_arch = "aarch64", target_arch = "x86_64"),
-            any(target_os = "linux", target_os = "macos")
-        ))]
-        code_tracker: &fujimod_emulator_cpu::code::CodeTracker,
+        ram: &super::memory::Memory,
     ) -> Result<Box<dyn Cpu>, String> {
         let model = processor.model;
         if processor.cpu_backend == RunCpuBackend::Dynarmic {
@@ -285,12 +280,16 @@ impl Engines {
                 any(target_arch = "aarch64", target_arch = "x86_64"),
                 any(target_os = "linux", target_os = "macos")
             ))]
-            return Ok(Box::new(
-                fujimod_emulator_cpu_dynarmic::Core::new_with_code_tracker(
+            {
+                let cpu = fujimod_emulator_cpu_dynarmic::Core::new_with_code_tracker(
                     model,
-                    code_tracker.clone(),
-                )?,
-            ));
+                    ram.code_tracker.clone(),
+                )?;
+                if !ram.all_code_writers_report {
+                    cpu.enable_unreported_writes();
+                }
+                return Ok(Box::new(cpu));
+            }
             #[cfg(not(all(
                 feature = "dynarmic",
                 any(target_arch = "aarch64", target_arch = "x86_64"),
@@ -333,6 +332,7 @@ impl Engines {
             .as_ref()
             .ok_or("Unicorn engine was not constructed")?
             .open(model, translation_cache_size_bytes)?;
+        let raw = raw.with_code_tracker(ram.code_tracker.clone())?;
         // Cortex-A7 cores run on the counted A-profile backend in ARM state.
         // FUJIMOD_A7_PER_INSTRUCTION keeps the per-instruction ARMv7-A path,
         // for comparing the two.
@@ -567,7 +567,7 @@ impl Graph {
         self.validate()?;
         let peripheral_pages = self.peripheral_pages()?;
         // Validate maps before creating a process-wide native VM.
-        let ram = super::memory::Memory::new(
+        let mut ram = super::memory::Memory::new(
             self.ram
                 .iter()
                 .map(|r| {
@@ -591,6 +591,13 @@ impl Graph {
             None => translation_cache_size_bytes(unicorn_processors)?,
         };
         let engines = Engines::new(&self, &options)?;
+        ram.all_code_writers_report = options.engine == RunEngine::Unicorn;
+        #[cfg(not(target_os = "emscripten"))]
+        {
+            // Worker cohorts retain their existing code coherence. They
+            // cannot share a thread-affine tracker with the M4.
+            ram.all_code_writers_report &= !engines.unicorn_workers;
+        }
         let memory = fujimod_emulator_cpu_unicorn::memory::Memory::default();
         let cpus = self
             .processors
@@ -601,12 +608,7 @@ impl Graph {
                     &options,
                     translation_cache_size_bytes,
                     &memory,
-                    #[cfg(all(
-                        feature = "dynarmic",
-                        any(target_arch = "aarch64", target_arch = "x86_64"),
-                        any(target_os = "linux", target_os = "macos")
-                    ))]
-                    &ram.code_tracker,
+                    &ram,
                 )
             })
             .collect::<Result<Vec<_>, _>>()?;

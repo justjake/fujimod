@@ -22,6 +22,7 @@ pub enum ThumbBatchInstruction {
     Ordinary,
     Observe,
     SingleAccess,
+    StackAccess,
 }
 
 // Layout shared with Dynarmic's ARM64 TimedRead32Cache.
@@ -61,6 +62,7 @@ pub struct DynarmicCallbacks {
     pub batch_instruction: extern "C" fn(u32) -> u32,
     pub thumb_batch_instruction: unsafe extern "C" fn(*mut c_void, u16) -> ThumbBatchInstruction,
     pub guard_transfer: unsafe extern "C" fn(*mut c_void, u32, u32),
+    pub guard_thumb_stack: unsafe extern "C" fn(*mut c_void, u32, u32),
     pub read_code: unsafe extern "C" fn(*mut c_void, u32, *mut u32) -> bool,
     pub read: unsafe extern "C" fn(*mut c_void, u32, u32) -> u64,
     pub timed_read32: unsafe extern "C" fn(*mut c_void, u32, u64) -> u32,

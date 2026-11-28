@@ -332,3 +332,46 @@ fn exchange_to_even_address_stops_at_the_halfword_target() {
         assert_eq!(cpu.instruction_progress(), Some(1));
     }
 }
+
+#[test]
+fn an_a53_store_through_an_alias_invalidates_compiled_thumb_code() {
+    use fujimod_emulator_cpu::{code::CodeTracker, memory::Backing};
+    use std::ptr::NonNull;
+
+    let tracker = CodeTracker::default();
+    let ram = Backing::aligned_zeros(0x2000, 0x1000).unwrap();
+    let pointer = NonNull::new(ram.as_ptr()).unwrap();
+    let m4 = Core::new_with_code_tracker(Model::CortexM4, tracker.clone()).unwrap();
+    let a53 = Library::linked()
+        .unwrap()
+        .open(Model::ArmV8A, 1 << 20)
+        .unwrap()
+        .with_code_tracker(tracker)
+        .unwrap();
+    unsafe {
+        m4.map_backing(0x1000, 0x2000, 7, pointer).unwrap();
+        a53.map_backing(0x8000, 0x2000, 3, pointer).unwrap();
+    }
+
+    // MOVW r0, #1 crosses the backing page boundary. The A53 writes only
+    // the second halfword's low byte through a non-executable view.
+    m4.write_memory(0x1ffe, &[0x40, 0xf2, 1, 0, 0xfe, 0xe7])
+        .unwrap();
+    a53.map_zeroed(0x4000, 0x1000, 7).unwrap();
+    a53.write_memory(0x4000, &0x3900_0020u32.to_le_bytes()) // strb w0, [x1]
+        .unwrap();
+    a53.write_register(Register::X(0), &9u64.to_le_bytes())
+        .unwrap();
+    a53.write_register(Register::X(1), &0x9000u64.to_le_bytes())
+        .unwrap();
+
+    m4.run_mprofile_batch(request(0x1ffe, 2)).unwrap();
+    assert_eq!(get(&m4, arm::CORE[0]), 1);
+    a53.run(Run {
+        begin: 0x4000,
+        ..request(0x4000, 1)
+    })
+    .unwrap();
+    m4.run_mprofile_batch(request(0x1ffe, 2)).unwrap();
+    assert_eq!(get(&m4, arm::CORE[0]), 9);
+}

@@ -204,7 +204,12 @@ impl Core {
         first: u16,
     ) -> ffi::ThumbBatchInstruction {
         let shared = unsafe { &*user_data.cast::<CoreShared>() };
-        if thumb::mprofile_observed(first)
+        if matches!(first & 0xfe00, 0xb400 | 0xbc00) && first & 0x01ff != 0 {
+            return ffi::ThumbBatchInstruction::StackAccess;
+        }
+        // Native execution checks the Thumb state and EXC_RETURN after a
+        // branch. BX need not stop at the board before it runs.
+        if (thumb::mprofile_observed(first) && first & 0xff87 != 0x4700)
             || thumb::mprofile_unmasks(first)
             || matches!(first, 0xb400..=0xb5ff | 0xbc00..=0xbdff | 0xc000..=0xcfff
                 | 0xe800..=0xe9ff | 0xec00..=0xedff)
@@ -216,6 +221,41 @@ impl Core {
         } else {
             ffi::ThumbBatchInstruction::Ordinary
         }
+    }
+
+    /// Preflight an unconditional 16-bit PUSH or POP before its first
+    /// transfer. The slow path replays the whole instruction.
+    pub(super) unsafe extern "C" fn guard_thumb_stack(
+        user_data: *mut c_void,
+        instruction: u32,
+        sp: u32,
+    ) {
+        let shared = unsafe { &*user_data.cast::<CoreShared>() };
+        let write = instruction & 0x0800 == 0;
+        let len = 4 * (instruction & 0x01ff).count_ones();
+        let start = if write { sp.wrapping_sub(len) } else { sp };
+        let access = if write { Access::Write } else { Access::Read };
+        let room = 4096 - (start & 4095);
+        if len <= room && start.is_multiple_of(4) && (!write || !shared.thumb_observe_stores.get())
+        {
+            let inline = shared.inline_page(start).addr();
+            if inline != 0 && (!write || inline & 1 == 0) {
+                return;
+            }
+            if let Some(NativeAccess::Ram(pointer, _)) =
+                shared.native_access(start, len as usize, access)
+                && (!write || !shared.code_tracker.overlaps(pointer, len as usize))
+            {
+                if cfg!(target_arch = "aarch64") {
+                    shared.install_inline_page(start, pointer, access);
+                }
+                return;
+            }
+        }
+        // The first access must reach the callback before any load can change
+        // a register or any store can change memory.
+        shared.clear_inline_page(start >> 12);
+        shared.thumb_stack_rejected.set(true);
     }
 
     fn thumb_halfword(&self, pc: u32) -> Result<u16, ExecutionError> {
@@ -372,6 +412,17 @@ impl Core {
                     Hook::Instruction { .. } | Hook::Memory { read: true, .. }
                 )
             });
+        let observe_stores = self.shared.observers.borrow().iter().any(|(_, hook)| {
+            matches!(hook, Hook::Memory { write: true, .. })
+        });
+        if self.shared.thumb_observe_stores.replace(observe_stores) != observe_stores {
+            // Native store entries consult this guard even for pages already
+            // cached as writable before the owner installed its observer.
+            unsafe { ffi::dynarmic_observe_stores(self.inst, observe_stores) };
+            if !observe_stores {
+                self.shared.clear_inline_pages();
+            }
+        }
         self.shared.before_run(!single_entry);
         while remaining() != 0 {
             let pc = self.reg(15);
@@ -383,6 +434,7 @@ impl Core {
             }
             self.shared.flush_changed_code(false);
             if !single_entry {
+                self.shared.thumb_stack_rejected.set(false);
                 self.shared.batching.set(true);
                 let mut executed = 0;
                 let native_budget = remaining().min(i64::MAX as u64);

@@ -25,6 +25,7 @@ typedef enum ThumbBatchInstruction {
     THUMB_BATCH_ORDINARY,
     THUMB_BATCH_OBSERVE,
     THUMB_BATCH_SINGLE_ACCESS,
+    THUMB_BATCH_STACK_ACCESS,
 } ThumbBatchInstruction;
 
 typedef struct DynarmicCallbacks {
@@ -33,6 +34,7 @@ typedef struct DynarmicCallbacks {
     uint32_t (*batch_instruction)(uint32_t);
     ThumbBatchInstruction (*thumb_batch_instruction)(void*, uint16_t);
     void (*guard_transfer)(void*, uint32_t, uint32_t);
+    void (*guard_thumb_stack)(void*, uint32_t, uint32_t);
     bool (*read_code)(void*, uint32_t, uint32_t*);
     uint64_t (*read)(void*, uint32_t, uint32_t);
     uint32_t (*timed_read32)(void*, uint32_t, uint64_t);
