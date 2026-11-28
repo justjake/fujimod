@@ -37,4 +37,6 @@ jobs:
       contents: read
     uses: ./.github/workflows/ci.yml
     with:
-      ref: ${{ github.event.pull_request.head.sha }}
+      # The pull request merged into the current main, which GitHub keeps up to
+      # date, so a stale branch is tested as it would land.
+      ref: refs/pull/${{ github.event.pull_request.number }}/merge
