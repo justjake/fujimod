@@ -53,6 +53,8 @@ strict EXR II, XP4, and X-Processor Pro runs by default. Use `--cpu-backend unic
 select Unicorn, or `--execution-policy interactive` for Unicorn's interactive
 scheduler. The native JIT build needs the recursive Git submodules, CMake,
 Ninja, and Boost headers. `--no-default-features` builds the CLI with Unicorn.
+A named snapshot keeps its saved CPU backend when the launch leaves backend
+selection to the emulator.
 Every emulator change follows [program-independent emulation](crates/emulator/PROGRAM_INDEPENDENCE.md):
 devices, scheduling and the CPU backend never infer what the emulated program
 is doing from its code, addresses or state.

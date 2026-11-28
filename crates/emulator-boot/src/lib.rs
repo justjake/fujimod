@@ -1123,12 +1123,46 @@ impl TraceOutput {
 
 /// Restore a portable snapshot into a session built from the same inputs.
 pub fn load_snapshot(session: &mut Session, path: &Path) -> Result<(), String> {
-    let mut restore = || -> Result<(), String> {
-        let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
-        let point = session.import_snapshot(&bytes)?;
-        session.restore(&point)
-    };
-    restore().map_err(|error| format!("{}: {error}", path.display()))
+    SnapshotFile::read(path)?.restore(session)
+}
+
+/// A portable snapshot opened once so a caller can choose the CPU backend
+/// before constructing the session that will restore it.
+pub struct SnapshotFile {
+    path: PathBuf,
+    state: fujimod_emulator_devices::checkpoint::Checkpoint,
+}
+
+impl SnapshotFile {
+    pub fn read(path: &Path) -> Result<Self, String> {
+        let bytes = std::fs::read(path).map_err(|error| format!("{}: {error}", path.display()))?;
+        let state = fujimod_emulator_devices::checkpoint::Checkpoint::from_bytes(&bytes)
+            .map_err(|error| format!("{}: {error}", path.display()))?;
+        Ok(Self {
+            path: path.into(),
+            state,
+        })
+    }
+
+    pub fn uses_dynarmic(&self) -> Result<bool, String> {
+        let definition = fujimod_emulator_session::checkpoint::Snapshot::definition(&self.state)
+            .map_err(|error| format!("{}: {error}", self.path.display()))?;
+        Ok(definition
+            .pointer("/execution/processors")
+            .and_then(Value::as_array)
+            .is_some_and(|processors| {
+                processors
+                    .iter()
+                    .any(|processor| processor["cpu_backend"] == "dynarmic")
+            }))
+    }
+
+    pub fn restore(self, session: &mut Session) -> Result<(), String> {
+        session
+            .import_checkpoint(&self.state)
+            .and_then(|point| session.restore(&point))
+            .map_err(|error| format!("{}: {error}", self.path.display()))
+    }
 }
 
 /// Write a portable snapshot of the current session boundary.

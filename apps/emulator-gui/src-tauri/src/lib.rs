@@ -199,8 +199,6 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
     let mut resolved = ResolvedConfiguration::bundled(&request.configuration)?;
     if let Some(engine) = request.engine {
         resolved.override_engine(engine)?;
-    } else {
-        fujimod_emulator_boot::prefer_dynarmic(&mut resolved)?;
     }
     if !matches!(
         resolved.configuration.start,
@@ -226,6 +224,21 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
                     .map(|execution| execution.engine)
             ));
             if !matches!(resolved.configuration.inputs, Some(RunInputs::Xp5(_))) {
+                let snapshot = request
+                    .load_snapshot
+                    .as_deref()
+                    .map(fujimod_emulator_boot::SnapshotFile::read)
+                    .transpose()
+                    .inspect_err(|error| log_session(format!("session: {error}")))?;
+                if request.engine.is_none()
+                    && snapshot
+                        .as_ref()
+                        .map(fujimod_emulator_boot::SnapshotFile::uses_dynarmic)
+                        .transpose()?
+                        .unwrap_or(true)
+                {
+                    fujimod_emulator_boot::prefer_dynarmic(&mut resolved)?;
+                }
                 let selection = resolved.reference.clone();
                 let boot_request = fujimod_emulator_boot::Request {
                     update: fujimod_emulator_boot::FirmwareFile::Path(update),
@@ -244,8 +257,9 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
                 };
                 let mut camera = fujimod_emulator_boot::open_request(resolved, boot_request)
                     .inspect_err(|error| log_session(format!("session: {error}")))?;
-                if let Some(path) = request.load_snapshot {
-                    fujimod_emulator_boot::load_snapshot(&mut camera.session, &path)
+                if let Some(snapshot) = snapshot {
+                    snapshot
+                        .restore(&mut camera.session)
                         .inspect_err(|error| log_session(format!("session: {error}")))?;
                 }
                 log_session("session: camera opened");

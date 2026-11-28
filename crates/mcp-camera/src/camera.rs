@@ -9,7 +9,6 @@ use fujimod_catalog_remote::Facts;
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot as boot;
 use fujimod_emulator_cpu::ExecutionPolicy;
-use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_session::{Session, checkpoint::Snapshot};
 use fujimod_remote::{BoardRemote, Control, operations};
 use serde_json::{Value, json};
@@ -145,18 +144,9 @@ impl fujimod_emulator_gui::Run for Camera {
 fn checkpoint_engine(
     library: &Library,
     request: &CameraRequest,
-    checkpoint: &Checkpoint,
+    checkpoint: &boot::SnapshotFile,
 ) -> Result<Option<RunEngine>, String> {
-    let definition = Snapshot::definition(checkpoint)?;
-    let has_dynarmic = definition
-        .pointer("/execution/processors")
-        .and_then(Value::as_array)
-        .is_some_and(|processors| {
-            processors
-                .iter()
-                .any(|processor| processor["cpu_backend"] == "dynarmic")
-        });
-    if has_dynarmic || request.policy != ExecutionPolicy::Exact {
+    if request.policy != ExecutionPolicy::Exact || checkpoint.uses_dynarmic()? {
         return Ok(None);
     }
     let mut resolved = library
@@ -181,21 +171,11 @@ impl Camera {
         let policy = camera_request.policy;
         let opened = match &request.snapshot {
             Some(path) => {
-                let encoded = {
-                    let bytes = std::fs::read(path)
-                        .map_err(|error| format!("{}: {error}", path.display()))?;
-                    Checkpoint::from_bytes(&bytes)
-                        .map_err(|error| format!("{}: {error}", path.display()))?
-                };
-                camera_request.engine = checkpoint_engine(&library, &camera_request, &encoded)
-                    .map_err(|error| format!("{}: {error}", path.display()))?;
+                let snapshot = boot::SnapshotFile::read(path)?;
+                camera_request.engine = checkpoint_engine(&library, &camera_request, &snapshot)?;
                 let mut opened = open_unbooted(&library, &state, camera_request)
                     .map_err(|error| error.to_string())?;
-                let session = &mut opened.camera.camera.session;
-                session
-                    .import_checkpoint(&encoded)
-                    .and_then(|snapshot| session.restore(&snapshot))
-                    .map_err(|error| format!("{}: {error}", path.display()))?;
+                snapshot.restore(&mut opened.camera.camera.session)?;
                 opened.camera.stage = match boot::status(&opened.camera.camera.session) {
                     Ok(report) if report.status == "rec" => Stage::Rec,
                     _ => Stage::FirmwareLoaded,

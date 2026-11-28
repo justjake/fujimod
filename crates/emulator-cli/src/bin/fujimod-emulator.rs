@@ -134,6 +134,7 @@ struct Boot {
     card_files: Vec<String>,
     second_card_files: Vec<String>,
     pokes: Vec<String>,
+    snapshot: Option<boot::SnapshotFile>,
     discovery: bool,
     gui: bool,
 }
@@ -158,6 +159,7 @@ fn parse(args: impl Iterator<Item = OsString>) -> Result<Option<Boot>, String> {
         card_files: Vec::new(),
         second_card_files: Vec::new(),
         pokes: Vec::new(),
+        snapshot: None,
         discovery: false,
         gui: false,
     };
@@ -391,6 +393,15 @@ impl Boot {
             })
             .transpose()?;
         let mut resolved = ResolvedConfiguration::with_overlays(configuration_id, &self.overlays)?;
+        if boot::is_exr2_run(&resolved)
+            || matches!(resolved.reference.soc.id.as_str(), "xp4" | "xpp")
+        {
+            self.snapshot = self
+                .path("--load-snapshot")
+                .as_deref()
+                .map(boot::SnapshotFile::read)
+                .transpose()?;
+        }
         if let Some(engine) = engine {
             resolved.override_engine(engine)?;
         }
@@ -402,6 +413,12 @@ impl Boot {
                 .values
                 .get("--execution-policy")
                 .is_none_or(|value| value != "interactive")
+            && self
+                .snapshot
+                .as_ref()
+                .map(boot::SnapshotFile::uses_dynarmic)
+                .transpose()?
+                .unwrap_or(true)
         {
             boot::prefer_dynarmic(&mut resolved)?;
         }
@@ -623,8 +640,8 @@ fn run_exr2(
         .collect::<Result<Vec<_>, _>>()?;
     let mut session = boot::open(resolved, boot::StartupInputs::Exr2 { options, mode })?.session;
     session.board.install_discovery_callee_stubs(&stubs)?;
-    if let Some(path) = boot_options.path("--load-snapshot") {
-        boot::load_snapshot(&mut session, &path)?;
+    if let Some(snapshot) = boot_options.snapshot.take() {
+        snapshot.restore(&mut session)?;
     }
     boot::media::attach(
         &mut session,
@@ -861,7 +878,7 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     let output = options.path("--output");
     let screenshot = options.path("--screenshot");
     let status = options.duration("--status-every")?;
-    let load_snapshot = options.path("--load-snapshot");
+    let load_snapshot = options.snapshot.take();
     let save_snapshot = options.path("--save-snapshot");
     let save_nor = options.path("--save-nor");
     let mut power_inputs = std::collections::VecDeque::from(
@@ -914,10 +931,10 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
         .map(|specification| boot::host::parse_stub(specification))
         .collect::<Result<Vec<_>, _>>()?;
     let stubbed = stubs.iter().map(|stub| stub.address).collect::<Vec<_>>();
-    if let Some(path) = load_snapshot {
-        started.load_snapshot(&path)?;
-    }
     let boot::application::Board::Shared(session) = &mut started.board;
+    if let Some(snapshot) = load_snapshot {
+        snapshot.restore(session)?;
+    }
     session.board.set_execution_policy(policy)?;
     session.board.install_discovery_callee_stubs(&stubs)?;
     let trace = trace_output
@@ -1067,7 +1084,10 @@ fn run_window(mut options: Boot, resolved: ResolvedConfiguration) -> Result<Outc
         card_initialization_fault: None,
     };
     let selection = resolved.reference.clone();
-    let camera = boot::open_request(resolved, request)?;
+    let mut camera = boot::open_request(resolved, request)?;
+    if let Some(snapshot) = options.snapshot.take() {
+        snapshot.restore(&mut camera.session)?;
+    }
     let room = fujimod_emulator_gui::Room::loopback()?;
     let mut window = fujimod_emulator_gui::launch::connect(&room.endpoint().url)?;
     let report = fujimod_emulator_gui::serve(
