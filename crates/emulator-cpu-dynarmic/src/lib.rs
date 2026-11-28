@@ -3565,6 +3565,10 @@ mod tests {
                 0x2182_20a3,    // orrcs r2, r2, r3, lsr #1
                 0x31a0_4101,    // movcc r4, r1, lsl #2
                 0x23a0_4050,    // movcs r4, #80
+                0x4284_4005,    // addmi r4, r4, #5
+                0x4084_4083,    // addmi r4, r4, r3, lsl #1
+                0x4264_4064,    // rsbmi r4, r4, #100
+                0x4060_0083,    // rsbmi r0, r0, r3, lsl #1
             ]
             .into_iter()
             .enumerate()
@@ -3589,10 +3593,10 @@ mod tests {
             let flags = unsafe { ffi::dynarmic_get_cpsr(cpu.inst) } >> 28;
             (regs, flags)
         };
-        for count in 1..=9 {
+        for count in 1..=13 {
             assert_eq!(run(true, count), run(false, count), "budget {count}");
         }
-        assert_eq!(run(true, 9), ([6, 9, 44, 0x1024], 8));
+        assert_eq!(run(true, 13), ([10, 9, 35, 0x1034], 8));
     }
 
     #[test]
