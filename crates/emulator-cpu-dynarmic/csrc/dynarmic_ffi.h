@@ -52,6 +52,7 @@ void dynarmic_destroy(DynarmicInstance* inst);
 void dynarmic_set_translation_context(DynarmicInstance* inst, uint32_t value, bool vfp_enabled);
 void dynarmic_observe_stores(DynarmicInstance* inst, bool enabled);
 void dynarmic_read_gprs(DynarmicInstance* inst, uint32_t* values);
+void dynarmic_write_loop_state(DynarmicInstance* inst, const uint32_t* values, uint32_t cpsr, bool flags_changed);
 void dynarmic_read_snapshot(DynarmicInstance* inst, uint32_t* ext_regs, uint32_t* cp15, uint32_t* cache_ids);
 void dynarmic_write_snapshot(DynarmicInstance* inst, const uint32_t* ext_regs, const uint32_t* cp15, const uint32_t* cache_ids);
 uint8_t** dynarmic_data_pages(DynarmicInstance* inst);

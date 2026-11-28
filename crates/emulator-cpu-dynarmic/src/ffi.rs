@@ -88,6 +88,12 @@ unsafe extern "C" {
     );
     pub fn dynarmic_observe_stores(inst: *mut DynarmicInstance, enabled: bool);
     pub fn dynarmic_read_gprs(inst: *mut DynarmicInstance, values: *mut u32);
+    pub fn dynarmic_write_loop_state(
+        inst: *mut DynarmicInstance,
+        values: *const u32,
+        cpsr: u32,
+        flags_changed: bool,
+    );
     pub fn dynarmic_read_snapshot(
         inst: *mut DynarmicInstance,
         ext_regs: *mut u32,

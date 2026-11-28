@@ -423,6 +423,14 @@ void dynarmic_read_gprs(DynarmicInstance* inst, uint32_t* values) {
     std::memcpy(values, registers.data(), 15 * sizeof(uint32_t));
 }
 
+void dynarmic_write_loop_state(DynarmicInstance* inst, const uint32_t* values, uint32_t cpsr, bool flags_changed) {
+    auto& registers = inst->jit->Regs();
+    std::memcpy(registers.data(), values, 15 * sizeof(uint32_t));
+    if (flags_changed) {
+        inst->jit->SetCpsr(cpsr);
+    }
+}
+
 void dynarmic_read_snapshot(DynarmicInstance* inst, uint32_t* ext_regs, uint32_t* cp15, uint32_t* cache_ids) {
     const auto& vectors = inst->jit->ExtRegs();
     const auto& system = *inst->cp15_impl;

@@ -181,13 +181,18 @@ impl Core {
         if skipped == 0 || skipped > remaining {
             return Ok(false);
         }
-        for (reg, value) in after.registers.into_iter().enumerate() {
-            if value != before.registers[reg] {
-                unsafe { ffi::dynarmic_set_reg(self.inst, reg as u32, value) };
+        if after != before {
+            // Loop proofs change only general registers and arithmetic
+            // flags. They cannot switch register banks or translation mode.
+            debug_assert_eq!(after.cpsr & 0x0fff_ffff, cpsr & 0x0fff_ffff);
+            unsafe {
+                ffi::dynarmic_write_loop_state(
+                    self.inst,
+                    after.registers.as_ptr(),
+                    after.cpsr,
+                    after.cpsr != cpsr,
+                );
             }
-        }
-        if after.cpsr != cpsr {
-            self.set_cpsr(after.cpsr)?;
         }
         self.charge_loop(skipped);
         Ok(true)
