@@ -1308,6 +1308,7 @@ pub struct Core {
     shared: Box<CoreShared>,
     memory_regions: RefCell<Vec<MemoryRegion>>,
     last_progress: Cell<u64>,
+    thumb_batches: Cell<u64>,
     pending_anchor: Cell<Option<DeviceReadAnchor>>,
 
     run_limit: Cell<Option<u64>>,
@@ -1426,6 +1427,7 @@ impl Core {
             shared,
             memory_regions: RefCell::new(Vec::new()),
             last_progress: Cell::new(0),
+            thumb_batches: Cell::new(0),
             pending_anchor: Cell::new(None),
 
             run_limit: Cell::new(None),
@@ -2099,7 +2101,7 @@ impl Cpu for Core {
 
     fn run(&self, request: Run) -> Result<Exit, ExecutionError> {
         if self.model == Model::CortexM4 {
-            return self.run_thumb(request, false);
+            return self.run_thumb(request, None);
         }
         if self.run_limit.get().is_some() {
             return Err("nested Dynarmic execution is unsupported".into());
@@ -2317,11 +2319,16 @@ impl Cpu for Core {
         Self::finish_run(status)
     }
 
-    fn run_mprofile_batch(&self, request: Run) -> Result<Exit, ExecutionError> {
+    fn run_mprofile_batch(
+        &self,
+        request: Run,
+        observe: &mut MProfileObserver<'_>,
+    ) -> Result<Exit, ExecutionError> {
         if self.model != Model::CortexM4 {
             return Err("M-profile batch requires a Cortex-M4".into());
         }
-        self.run_thumb(request, true)
+        self.thumb_batches.set(self.thumb_batches.get() + 1);
+        self.run_thumb(request, Some(observe))
     }
 
     fn set_loop_window(&self, stable: bool) -> Result<(), String> {
@@ -2476,10 +2483,14 @@ impl Cpu for Core {
     }
 
     fn exit_counters(&self) -> Result<BTreeMap<&'static str, u64>, String> {
-        Ok(BTreeMap::from([
+        let mut counters = BTreeMap::from([
             ("loop_accelerated_instructions", self.loops.skipped.get()),
             ("projected_mmio_reads", self.shared.projected_reads.get()),
-        ]))
+        ]);
+        if self.model == Model::CortexM4 {
+            counters.insert("mprofile_batches", self.thumb_batches.get());
+        }
+        Ok(counters)
     }
 }
 
@@ -2500,12 +2511,15 @@ mod tests {
         cpu.write_memory(0x1ffe, &[0x40, 0xf2, 1, 0, 0xfe, 0xe7])
             .unwrap();
         let run = |begin, expected| {
-            cpu.run_mprofile_batch(Run {
-                begin,
-                until: None,
-                watchdog_us: 0,
-                instructions: Some(2),
-            })
+            cpu.run_mprofile_batch(
+                Run {
+                    begin,
+                    until: None,
+                    watchdog_us: 0,
+                    instructions: Some(2),
+                },
+                &mut |_| Ok(MProfileAction::Execute),
+            )
             .unwrap();
             assert_eq!(cpu.instruction_progress(), Some(2));
             assert_eq!(cpu.reg(0), expected);

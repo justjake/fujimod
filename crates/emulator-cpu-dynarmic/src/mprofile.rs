@@ -86,6 +86,10 @@ impl Registers {
     fn uses_psp(self) -> bool {
         self.ipsr == 0 && self.control & SPSEL != 0
     }
+
+    fn interrupt_masks(self) -> (u32, u32, u32) {
+        (self.primask, self.basepri, self.faultmask)
+    }
 }
 
 pub(super) struct Snapshot {
@@ -381,7 +385,11 @@ impl Core {
         Ok(true)
     }
 
-    pub(super) fn run_thumb(&self, request: Run, batch: bool) -> Result<Exit, ExecutionError> {
+    pub(super) fn run_thumb(
+        &self,
+        request: Run,
+        mut observe: Option<&mut MProfileObserver<'_>>,
+    ) -> Result<Exit, ExecutionError> {
         if self.run_limit.get().is_some() {
             return Err("nested Dynarmic execution is unsupported".into());
         }
@@ -424,9 +432,19 @@ impl Core {
             }
         }
         self.shared.before_run(!single_entry);
+        let mut recheck = false;
         while remaining() != 0 {
             let pc = self.reg(15);
             if request.until == Some(u64::from(pc)) || self.shared.stopped.get() {
+                break;
+            }
+            if std::mem::take(&mut recheck)
+                && let Some(observe) = observe.as_mut()
+                && matches!(
+                    observe(MProfileObservation::Recheck { pc })?,
+                    MProfileAction::Stop
+                )
+            {
                 break;
             }
             if let Some(exit) = self.thumb_exit() {
@@ -456,10 +474,12 @@ impl Core {
                 {
                     return Self::finish_run(status);
                 }
-                if executed != 0 {
-                    if batch {
-                        break;
-                    }
+                if remaining() == 0 {
+                    break;
+                }
+                // A replay identifies the next instruction precisely. Step
+                // it here even when the native run retired a prefix.
+                if executed != 0 && !replay && status != ffi::DynarmicExitReason::Replay {
                     continue;
                 }
                 // The entry is observed, needs a slow access, or is in a
@@ -468,6 +488,20 @@ impl Core {
 
             let pc = self.reg(15);
             let first = self.thumb_halfword(pc)?;
+            if thumb::mprofile_observed(first)
+                && first != 0xf3ef
+                && first & 0xff87 != 0x4700
+                && let Some(observe) = observe.as_mut()
+            {
+                match observe(MProfileObservation::Instruction { pc, first })? {
+                    MProfileAction::Emulated => {
+                        self.last_progress.set(self.last_progress.get() + 1);
+                        break;
+                    }
+                    MProfileAction::Stop => break,
+                    MProfileAction::Execute => (),
+                }
+            }
             let bytes = if first < 0xe800 { 2 } else { 4 };
             self.shared.observe_instruction(pc, bytes);
             if self.shared.stopped.get() || remaining() == 0 {
@@ -486,13 +520,12 @@ impl Core {
             {
                 return Ok(Self::thumb_fault(thumb::NOCP, pc));
             }
+            let masks = self.mprofile.get().interrupt_masks();
             if self.thumb_special(first, second, cpsr)? {
                 self.write_thumb_flags(thumb::advance_it(self.cpsr()));
                 self.set_reg(15, pc.wrapping_add(bytes));
                 self.last_progress.set(self.last_progress.get() + 1);
-                if batch {
-                    break;
-                }
+                recheck = single_entry || self.mprofile.get().interrupt_masks() != masks;
                 continue;
             }
 
@@ -515,9 +548,13 @@ impl Core {
             if executed == 0 {
                 return Err(format!("Dynarmic did not advance at {pc:#010x}").into());
             }
-            if batch || self.shared.device_accessed.get() {
+            let device_accessed = self.shared.device_accessed.replace(false);
+            if device_accessed && observe.is_none() {
                 break;
             }
+            // A slow device access may have published an interrupt or moved
+            // a deadline. A store observer may have dirtied aliased code.
+            recheck = device_accessed || single_entry || observe_stores;
         }
         Ok(Exit::Stopped)
     }

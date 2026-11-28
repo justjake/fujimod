@@ -441,6 +441,32 @@ pub enum Exit {
     Trap(Trap),
     Timer,
 }
+/// Owner work needed between M-profile instructions, with the core stopped
+/// and its retired instruction count available.
+#[derive(Clone, Copy)]
+pub enum MProfileObservation {
+    Instruction {
+        pc: u32,
+        first: u16,
+    },
+    /// An instruction changed inputs to interrupt admission or scheduling.
+    Recheck {
+        pc: u32,
+    },
+}
+
+pub enum MProfileAction {
+    /// Continue, executing the observed instruction if there is one.
+    Execute,
+    /// End the batch before the next instruction.
+    Stop,
+    /// End the batch and count the instruction already emulated by the owner.
+    Emulated,
+}
+
+pub type MProfileObserver<'a> =
+    dyn FnMut(MProfileObservation) -> Result<MProfileAction, ExecutionError> + 'a;
+
 #[derive(Clone, Debug)]
 pub enum ExecutionError {
     InvalidInstruction(String),
@@ -959,10 +985,15 @@ pub trait Cpu {
         self.invalidate_code(None)
     }
     fn run(&self, request: Run) -> Result<Exit, ExecutionError>;
-    /// Run an M-profile batch after the controller has observed its first
-    /// entry. Return at the next architectural observation or budget boundary.
-    fn run_mprofile_batch(&self, request: Run) -> Result<Exit, ExecutionError> {
-        self.run(request)
+    /// Run until the controller stops the batch, an architectural exit occurs,
+    /// or the instruction budget expires. Internal translation and replay
+    /// boundaries do not need an observation.
+    fn run_mprofile_batch(
+        &self,
+        _request: Run,
+        _observe: &mut MProfileObserver<'_>,
+    ) -> Result<Exit, ExecutionError> {
+        Err("backend does not support M-profile batches".into())
     }
     /// Start a run without waiting for its next callback or completion.
     fn start_run(&self, _request: Run) -> Result<RunToken, ExecutionError> {

@@ -4,7 +4,9 @@
     any(target_os = "linux", target_os = "macos")
 ))]
 
-use fujimod_emulator_cpu::{Cpu, Exit, Hook, HookRange, Model, Register, Run, arm};
+use fujimod_emulator_cpu::{
+    Cpu, Exit, Hook, HookRange, MProfileAction, MProfileObservation, Model, Register, Run, arm,
+};
 use fujimod_emulator_cpu_dynarmic::Core;
 use fujimod_emulator_cpu_unicorn::Library;
 use std::{cell::Cell, ffi::c_void};
@@ -232,23 +234,30 @@ fn cpacr_changes_invalidate_warm_thumb_translations() {
 }
 
 #[test]
-fn native_batches_stop_before_observations_and_reobserve_after_cps() {
+fn native_batch_continues_across_cps_and_stops_at_wfi() {
     let cpu = Core::new(Model::CortexM4).unwrap();
     install_program(&cpu, &[0x3001, 0x3001, 0x3001, 0xb672, 0x3001, 0xbf30]);
-    for (begin, end, progress, primask, r0) in [
-        (CODE, CODE + 6, 3, 0, 3),
-        (CODE + 6, CODE + 8, 1, 1, 3),
-        (CODE + 8, CODE + 10, 1, 1, 4),
-    ] {
-        assert!(matches!(
-            cpu.run_mprofile_batch(request(begin, 20)).unwrap(),
-            Exit::Stopped
-        ));
-        assert_eq!(cpu.instruction_progress(), Some(progress));
-        assert_eq!(get(&cpu, Register::Pc), end);
-        assert_eq!(get(&cpu, Register::Arm32(Arm::Primask)), primask);
-        assert_eq!(get(&cpu, Register::Arm32(Arm::R(0))), r0);
-    }
+    let mut rechecked = false;
+    let exit = cpu
+        .run_mprofile_batch(request(CODE, 20), &mut |observation| match observation {
+            MProfileObservation::Recheck { pc } => {
+                assert_eq!(pc, CODE + 8);
+                assert_eq!(cpu.instruction_progress(), Some(4));
+                assert_eq!(get(&cpu, Register::Arm32(Arm::Primask)), 1);
+                rechecked = true;
+                Ok(MProfileAction::Execute)
+            }
+            MProfileObservation::Instruction { pc, first } => {
+                assert_eq!((pc, first), (CODE + 10, 0xbf30));
+                Ok(MProfileAction::Stop)
+            }
+        })
+        .unwrap();
+    assert!(matches!(exit, Exit::Stopped));
+    assert!(rechecked);
+    assert_eq!(cpu.instruction_progress(), Some(5));
+    assert_eq!(get(&cpu, Register::Pc), CODE + 10);
+    assert_eq!(get(&cpu, Register::Arm32(Arm::R(0))), 4);
 }
 
 #[test]
@@ -365,13 +374,15 @@ fn an_a53_store_through_an_alias_invalidates_compiled_thumb_code() {
     a53.write_register(Register::X(1), &0x9000u64.to_le_bytes())
         .unwrap();
 
-    m4.run_mprofile_batch(request(0x1ffe, 2)).unwrap();
+    m4.run_mprofile_batch(request(0x1ffe, 2), &mut |_| Ok(MProfileAction::Execute))
+        .unwrap();
     assert_eq!(get(&m4, arm::CORE[0]), 1);
     a53.run(Run {
         begin: 0x4000,
         ..request(0x4000, 1)
     })
     .unwrap();
-    m4.run_mprofile_batch(request(0x1ffe, 2)).unwrap();
+    m4.run_mprofile_batch(request(0x1ffe, 2), &mut |_| Ok(MProfileAction::Execute))
+        .unwrap();
     assert_eq!(get(&m4, arm::CORE[0]), 9);
 }
