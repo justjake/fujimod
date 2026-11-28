@@ -48,6 +48,7 @@ extern "C" fn batch_instruction(word: u32) -> u32 {
     if word >> 28 == 15
         || armv7a::framework_instruction(word)
         || armv7a::exclusive_instruction(word)
+        || loops::is_self_branch(word)
     {
         return 0;
     }
@@ -3289,6 +3290,43 @@ mod tests {
             assert_eq!(cpu.instruction_progress(), Some(18));
             assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 1) }, value);
             assert!(cpu.loops.skipped.get() > skipped);
+        }
+    }
+
+    #[test]
+    fn a_self_branch_can_only_use_the_current_instruction_budget() {
+        use fujimod_emulator_cpu::loops::LoopMode;
+
+        for (word, condition) in [(0xeaff_fffeu32, true), (0x0aff_fffe, false)] {
+            let run = |mode| {
+                let cpu = Core::new(Model::CortexA7).unwrap();
+                cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+                cpu.write_memory(0x1000, &word.to_le_bytes()).unwrap();
+                for address in (0x1004..0x1200).step_by(4) {
+                    cpu.write_memory(address, &0xe280_0001u32.to_le_bytes())
+                        .unwrap(); // add r0, r0, #1
+                }
+                cpu.set_armv7a_owner_exclusives(true).unwrap();
+                cpu.set_loop_mode(mode).unwrap();
+                cpu.set_loop_window(true).unwrap();
+                cpu.run(Run {
+                    begin: 0x1000,
+                    until: None,
+                    watchdog_us: 0,
+                    instructions: Some(97),
+                })
+                .unwrap();
+                assert_eq!(cpu.instruction_progress(), Some(97));
+                (
+                    cpu.snapshot(None).unwrap().export().unwrap(),
+                    cpu.loops.skipped.get(),
+                )
+            };
+            let (stepped, no_skips) = run(LoopMode::Disabled);
+            let (accelerated, skips) = run(LoopMode::Accelerate);
+            assert_eq!(accelerated, stepped);
+            assert_eq!(no_skips, 0);
+            assert_eq!(skips, if condition { 97 } else { 0 });
         }
     }
 }

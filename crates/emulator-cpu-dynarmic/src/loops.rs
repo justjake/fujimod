@@ -9,6 +9,11 @@ use std::cell::{Cell, RefCell};
 
 const PROOF_CACHE_SLOTS: usize = 16;
 
+/// A direct A32 B to its own address. Its condition is evaluated by the CPU.
+pub(super) fn is_self_branch(word: u32) -> bool {
+    word >> 28 != 15 && word & 0x0fff_ffff == 0x0aff_fffe
+}
+
 #[derive(Default)]
 pub(super) struct Loops {
     pub stable: Cell<bool>,
@@ -58,6 +63,12 @@ impl Core {
                 )
         }) {
             return Ok(false);
+        }
+        if is_self_branch(word) {
+            // The taken branch changes neither registers nor flags. The
+            // owner has bounded the window before the next input can change.
+            self.charge_loop(remaining);
+            return Ok(true);
         }
         let size = (address - start) as usize + 4;
         let mut bytes = [0; 64];
@@ -137,10 +148,14 @@ impl Core {
         if after.cpsr != cpsr {
             self.set_cpsr(after.cpsr)?;
         }
+        self.charge_loop(skipped);
+        Ok(true)
+    }
+
+    fn charge_loop(&self, skipped: u64) {
         self.last_progress.set(self.last_progress.get() + skipped);
         self.loops
             .skipped
             .set(self.loops.skipped.get().saturating_add(skipped));
-        Ok(true)
     }
 }
