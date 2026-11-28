@@ -219,14 +219,14 @@
             "44": 0,
             "45": 0
           },
-          "disable_writes": [
-            {
-              "register": 25,
-              "value": 0
-            }
-          ],
+          "disable_writes": [],
           "retained_registers": [2, 14, 18, 29, 30, 36, 37, 38, 42, 43, 44, 45],
-          "basis": "Declared virtual X-E4 startup inputs; physical SPI levels and power-controller register values are not measured. Register 16 is declared 4 as in the X-T3 virtual cold-boot input and a successful X-E4 loader run; the physical X-E4 value is unmeasured. Register 18 is virtual volatile storage for the observed loader write 0x0097, without a physical power effect. Registers 42\u201345 initialize to zero as observed with declared virtual inputs. The firmware tests register 25 bits 0x30 for USB power status. This virtual input declares 0x10 continuously, including when a virtual host attaches; the physical register value is unmeasured. Register 25 accepts a zero disable write following the X-S10 profile; its physical effect is not measured."
+          "alarm": {
+            "enable": 25,
+            "seconds": 37,
+            "basis": "The stock power-off with a wake deadline writes register 25 = 0, stores the countdown in seconds in register 37, then writes register 25 = 1 before cutting power; without a deadline it writes neither. The physical alarm, its countdown and the wake are not measured."
+          },
+          "basis": "Declared virtual X-E4 startup inputs; physical SPI levels and power-controller register values are not measured. Register 16 is declared 4 as in the X-T3 virtual cold-boot input and a successful X-E4 loader run; the physical X-E4 value is unmeasured. Register 18 is virtual volatile storage for the observed loader write 0x0097, without a physical power effect. Registers 42\u201345 initialize to zero as observed with declared virtual inputs. The firmware tests register 25 bits 0x30 for USB power status. This virtual input declares 0x10 continuously, including when a virtual host attaches; the physical register value is unmeasured. Register 25 writes control the declared wake alarm."
         }
       },
       "2": {

@@ -431,7 +431,11 @@ impl Catalog {
                         power["inputs"],
                         writes,
                         power.get("rtc").cloned().unwrap_or(Value::Null),
-                        power["retained_registers"]
+                        power["retained_registers"],
+                        power.get("alarm").map_or(Value::Null, |a| json!({
+                            "enable": a["enable"],
+                            "seconds": a["seconds"]
+                        }))
                     ]),
                 );
             } else {
@@ -1148,5 +1152,15 @@ mod tests {
         assert_eq!(fields["timer_routes"][0], json!([0, 57]));
         assert_eq!(fields["storage_irq"], 37);
         assert_eq!(fields["decompressor"], json!([0xfff79000u64, 128]));
+    }
+
+    #[test]
+    fn xe4_checksum_power_peer_carries_its_declared_wake_alarm() {
+        let resolved = ResolvedConfiguration::bundled("xe4-201-handoff").unwrap();
+        let fields = Catalog::new(&resolved).unwrap().body_fields().unwrap();
+        let peer = &fields["checksum_power_spi"];
+        assert_eq!(peer[6], json!([]));
+        assert_eq!(peer[9], json!({"enable": 25, "seconds": 37}));
+        assert!(peer[8].as_array().unwrap().contains(&json!(37)));
     }
 }
