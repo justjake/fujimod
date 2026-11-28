@@ -219,6 +219,10 @@ impl Board {
     }
 
     fn interactive_cohort(&mut self, cores: &[usize], quantum: usize) -> Result<(), String> {
+        let in_place = cores.iter().all(|&core| {
+            let cpu = &self.cpus[core];
+            cpu.model() == Model::ArmV8A && cpu.features().shared_physical_maps
+        });
         let mprofile = cores
             .iter()
             .copied()
@@ -267,11 +271,14 @@ impl Board {
                 let mut state = self.state.borrow_mut();
                 for &core in &runnable {
                     let epoch = state.parallel.as_ref().unwrap();
-                    // A peer must not spend the whole epoch while another is
-                    // parked in a host callback. Bound each segment to one
-                    // processor quantum so every runnable core gets a turn
-                    // before the epoch can end.
-                    let room = epoch.room(core).min(quantum as u64);
+                    let room = epoch.room(core);
+                    // Cohorts that rendezvous on every callback still give
+                    // each runnable peer a bounded turn.
+                    let room = if in_place {
+                        room
+                    } else {
+                        room.min(quantum as u64)
+                    };
                     let cpu = &self.cpus[core];
                     if cpu.features().guest_clock {
                         cpu.set_guest_clock(epoch.clock(core)?)?;
@@ -306,7 +313,7 @@ impl Board {
                     ));
                 }
             }
-            let result = self.interactive_segment(prepared, quantum, mprofile);
+            let result = self.interactive_segment(prepared, quantum, mprofile, in_place);
             if let Some(core) = mprofile {
                 let mut state = self.state.borrow_mut();
                 state.end_code_slice(&*self.cpus[core], core);
@@ -403,12 +410,9 @@ impl Board {
         prepared: Vec<(usize, u64, u64, u64, fujimod_perf::EngineEndReason, Run)>,
         quantum: usize,
         mprofile: Option<usize>,
+        in_place: bool,
     ) -> Result<(), String> {
         let mut entries = Vec::with_capacity(prepared.len());
-        let in_place = prepared.iter().all(|&(core, ..)| {
-            let cpu = &self.cpus[core];
-            cpu.model() == Model::ArmV8A && cpu.features().shared_physical_maps
-        });
         let mut error = None;
         for (core, pc, start_instructions, instruction_limit, boundary, request) in prepared {
             let cpu = &self.cpus[core];
