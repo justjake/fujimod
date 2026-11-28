@@ -38,7 +38,9 @@
             "2": 0,
             "14": 17,
             "16": 0,
-            "25": 16
+            "25": 16,
+            "37": 0,
+            "38": 0
           },
           "disable_writes": [
             {
@@ -65,7 +67,7 @@
             "initial_seconds": 0,
             "ticks_per_second": 54000000
           },
-          "basis": "Four-byte checksum transport; synthetic status inputs and unset RTC. Registers 2 and 14 read 0x0000 and 0x0011, physical service-mode samples stable over five seconds (register 14 with the headphone field clear); writes to them refuse. Register 25 (USB power status) reads 0x0010, the declared value of the X-E4 and X100V runs; the physical X-S10 value is unmeasured. Stored words initially read zero. Clock loads preserve retained validity. Control reads retain the load strobe through the declared set window, refuse the unresolved interval, then clear it. After fresh writes to every retained word, the declared validity update latches without a clock reload or persistence effect. Independent control operations and alarm enables refuse."
+          "basis": "Four-byte checksum transport; synthetic status inputs and unset RTC. Registers 2 and 14 read 0x0000 and 0x0011, physical service-mode samples stable over five seconds (register 14 with the headphone field clear); writes to them refuse. Register 25 (USB power status) reads 0x0010, the declared value of the X-E4 and X100V runs; registers 37 and 38 read zero, as the X-E4 run declares; the physical X-S10 values are unmeasured. Stored words initially read zero. Clock loads preserve retained validity. Control reads retain the load strobe through the declared set window, refuse the unresolved interval, then clear it. Once every retained word has been written since reset, the declared validity update latches; X-S10 3.11 repeats it without rewriting the words without a clock reload or persistence effect. Independent control operations and alarm enables refuse."
         }
       },
       "2": {
