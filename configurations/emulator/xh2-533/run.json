@@ -79,6 +79,12 @@
   "overlays": [],
   "preset": {
     "factory_options": {},
-    "firmware_profile_id": "xh2-533"
+    "firmware_profile_id": "xh2-533",
+    "settings": {
+      "requested": {
+        "language": "en",
+        "setup": "done"
+      }
+    }
   }
 }

@@ -18127,6 +18127,31 @@
         }
       ]
     },
+    "IdentityCheck": {
+      "additionalProperties": false,
+      "description": "A stock code range whose digest must hold while REC is observed.",
+      "properties": {
+        "address": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "size": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
     "InputBinding": {
       "description": "A debug key, native input name, or exact located scanner-row identity.",
       "oneOf": [
@@ -23881,6 +23906,87 @@
         "mode_address",
         "mode_size",
         "rec_mode"
+      ],
+      "type": "object"
+    },
+    "RecReadiness": {
+      "additionalProperties": false,
+      "description": "The located REC state of one firmware.",
+      "properties": {
+        "$schema": {
+          "type": "string"
+        },
+        "firmware_id": {
+          "type": "string"
+        },
+        "firmware_sha256": {
+          "description": "SHA-256 of the update the addresses were located in.",
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "identity_checks": {
+          "description": "Stock code that must be unchanged while REC is observed.",
+          "items": {
+            "$ref": "#/$defs/IdentityCheck"
+          },
+          "type": "array"
+        },
+        "menu_active": {
+          "$ref": "#/$defs/StateWord",
+          "description": "The menu flag; zero while no menu is open."
+        },
+        "pending_mode": {
+          "$ref": "#/$defs/StateWord",
+          "description": "The UI mode a mode change is about to commit; zero when none is pending."
+        },
+        "rec_system_mode": {
+          "description": "The system mode value the firmware holds at REC.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rec_ui_mode": {
+          "description": "The UI mode value of REC.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "schema": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "settle_milliseconds": {
+          "description": "How long REC with a drawn screen must hold before the camera is at REC.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "system_mode": {
+          "$ref": "#/$defs/StateWord",
+          "description": "The system mode the located getter returns."
+        },
+        "ui_mode": {
+          "$ref": "#/$defs/StateWord",
+          "description": "The current UI mode."
+        }
+      },
+      "required": [
+        "$schema",
+        "schema",
+        "id",
+        "firmware_id",
+        "firmware_sha256",
+        "ui_mode",
+        "pending_mode",
+        "system_mode",
+        "menu_active",
+        "rec_ui_mode",
+        "rec_system_mode",
+        "settle_milliseconds",
+        "identity_checks"
       ],
       "type": "object"
     },
@@ -31729,6 +31835,30 @@
       ],
       "type": "object"
     },
+    "StateWord": {
+      "additionalProperties": false,
+      "description": "One located state word: its address and width.",
+      "properties": {
+        "address": {
+          "description": "Physical address of the word.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "bytes": {
+          "description": "Width in bytes, 1 to 4, little-endian.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "bytes"
+      ],
+      "type": "object"
+    },
     "StatusRegister": {
       "additionalProperties": false,
       "description": "An SPI status register initialized by a physical control part.",
@@ -32529,6 +32659,17 @@
         }
       ],
       "description": "The body's hand-authored physical controls, when documented."
+    },
+    "rec_readiness": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RecReadiness"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Where the firmware keeps the state that says the camera is at REC."
     },
     "restart": {
       "anyOf": [

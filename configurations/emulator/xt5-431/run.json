@@ -79,7 +79,13 @@
   "overlays": [],
   "preset": {
     "factory_options": {},
-    "firmware_profile_id": "xt5-431"
+    "firmware_profile_id": "xt5-431",
+    "settings": {
+      "requested": {
+        "language": "en",
+        "setup": "done"
+      }
+    }
   },
   "audio_signals": [
     {

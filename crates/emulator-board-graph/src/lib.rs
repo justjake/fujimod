@@ -881,6 +881,7 @@ mod tests {
             control_ids: None,
             first_start: None,
             ui_scene_names: None,
+            rec_readiness: None,
             ui_setting_names: None,
             ui_event_codes: None,
             bulk: None,

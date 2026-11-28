@@ -33,6 +33,9 @@ use std::{
 
 /// Largest instruction budget an open run may execute.
 const INSTRUCTION_LIMIT: u64 = 2_000_000_000;
+/// The instructions of all cores an X-Processor 5 open runs to REC: its four
+/// cores reach REC at about 1.5 billion each.
+const XP5_INSTRUCTION_LIMIT: u64 = 12_000_000_000;
 
 /// Where a request's firmware files come from.
 #[derive(Clone, Debug)]
@@ -613,19 +616,22 @@ pub fn plan(library: &Library, request: &Request) -> Result<Plan, OpenError> {
             "an internal-flash image is modeled for EXR II only, not {processor}"
         )));
     }
-    let rec_unobserved = resolved
-        .reference
-        .firmware
-        .generated_facts
-        .as_ref()
-        .and_then(|facts| facts.observation.as_ref())
-        .is_none()
-        .then(|| {
-            format!(
-                "firmware {firmware} declares no REC readiness facts, so the open cannot observe \
-                 REC; the camera is built and returned before its first instruction"
-            )
-        });
+    let observed = match path {
+        StartupPath::Exr2 => resolved
+            .reference
+            .firmware
+            .generated_facts
+            .as_ref()
+            .is_some_and(|facts| facts.observation.is_some()),
+        StartupPath::Xp5 => resolved.reference.rec_readiness.is_some(),
+        StartupPath::Application => false,
+    };
+    let rec_unobserved = (!observed).then(|| {
+        format!(
+            "firmware {firmware} declares no REC readiness facts, so the open cannot observe \
+             REC; the camera is built and returned before its first instruction"
+        )
+    });
     Ok(Plan {
         firmware,
         resolved,
@@ -770,8 +776,17 @@ fn boot_holds(
 fn boot_camera(opened: &mut Opened) -> Result<(), OpenError> {
     opened.apply_holds()?;
     let card_before = card_revision(&opened.camera.session, &opened.start);
-    let report = boot::to_rec(&mut opened.camera.session, INSTRUCTION_LIMIT)
-        .map_err(|error| OpenError::at(Stage::BootRom, error))?;
+    let report = match &opened.resolved.reference.rec_readiness {
+        Some(readiness) => boot::xp5_rec::to_rec(
+            &mut opened.camera.session,
+            readiness,
+            opened.camera.quantum,
+            opened.camera.ticks_per_second,
+            XP5_INSTRUCTION_LIMIT,
+        ),
+        None => boot::to_rec(&mut opened.camera.session, INSTRUCTION_LIMIT),
+    }
+    .map_err(|error| OpenError::at(Stage::BootRom, error))?;
     if report.status == "rec" && !report.pending && report.scanout_instance.is_some() {
         opened.release_holds()?;
         opened.stage = Stage::Rec;
@@ -907,6 +922,15 @@ pub(crate) fn construct(
             card_initialization_fault: first.initialization_fault.clone(),
             camera_settings: if path == StartupPath::Exr2 {
                 BTreeMap::new()
+            } else if request.settings.is_empty() {
+                // The run's power-on settings are the session default.
+                resolved
+                    .configuration
+                    .preset
+                    .as_ref()
+                    .and_then(|preset| preset.settings.as_ref())
+                    .map(|settings| settings.requested.clone())
+                    .unwrap_or_default()
             } else {
                 request.settings.clone()
             },

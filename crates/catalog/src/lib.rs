@@ -16,6 +16,7 @@ pub mod reference;
 pub mod rom_start;
 pub mod soc;
 pub mod ui_event_codes;
+pub mod rec_readiness;
 pub mod ui_scene_names;
 pub mod ui_setting_names;
 

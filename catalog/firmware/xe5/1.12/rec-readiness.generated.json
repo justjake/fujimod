@@ -1,0 +1,38 @@
+{
+  "$schema": "https://fujimod.com/schemas/rec-readiness.generated.schema.json",
+  "schema": 1,
+  "id": "xe5-112-rec-readiness",
+  "firmware_id": "xe5-112",
+  "firmware_sha256": "0982ffa51332e148134df378ecd3e485e798eeb4ce91738509bfa0b6629e1e52",
+  "ui_mode": {
+    "address": 44221352,
+    "bytes": 4
+  },
+  "pending_mode": {
+    "address": 44221364,
+    "bytes": 4
+  },
+  "system_mode": {
+    "address": 45089952,
+    "bytes": 4
+  },
+  "menu_active": {
+    "address": 40111144,
+    "bytes": 4
+  },
+  "rec_ui_mode": 3,
+  "rec_system_mode": 1,
+  "settle_milliseconds": 2000,
+  "identity_checks": [
+    {
+      "address": 22763440,
+      "size": 36,
+      "sha256": "77d23bba50582be37a6c9453a11d152a1baa881058e6b3627a1503cb04b81934"
+    },
+    {
+      "address": 52819360,
+      "size": 180,
+      "sha256": "9ae5ff2e7d4f376b5d4642e57e2ddabe4d4c5b14e036de47ba128e3bea4f70ac"
+    }
+  ]
+}

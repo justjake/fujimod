@@ -153,6 +153,12 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         ),
     );
     documents.insert(
+        "rec-readiness.generated.schema.json",
+        schema::<fujimod_catalog::rec_readiness::RecReadiness>(
+            fujimod_catalog::rec_readiness::REC_READINESS_SCHEMA_URI,
+        ),
+    );
+    documents.insert(
         "ui-scene-names.generated.schema.json",
         schema::<fujimod_catalog::ui_scene_names::UiSceneNames>(
             fujimod_catalog::ui_scene_names::UI_SCENE_NAMES_SCHEMA_URI,

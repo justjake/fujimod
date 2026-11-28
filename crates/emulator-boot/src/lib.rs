@@ -24,6 +24,8 @@ mod exr2;
 mod x70;
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 pub mod xp5;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub mod xp5_rec;
 pub mod xpp;
 
 pub use firmware_file::FirmwareFile;

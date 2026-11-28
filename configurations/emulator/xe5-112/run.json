@@ -79,6 +79,12 @@
   "overlays": [],
   "preset": {
     "factory_options": {},
-    "firmware_profile_id": "xe5-112"
+    "firmware_profile_id": "xe5-112",
+    "settings": {
+      "requested": {
+        "language": "en",
+        "setup": "done"
+      }
+    }
   }
 }

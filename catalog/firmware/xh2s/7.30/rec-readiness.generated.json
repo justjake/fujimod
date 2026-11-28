@@ -1,0 +1,38 @@
+{
+  "$schema": "https://fujimod.com/schemas/rec-readiness.generated.schema.json",
+  "schema": 1,
+  "id": "xh2s-730-rec-readiness",
+  "firmware_id": "xh2s-730",
+  "firmware_sha256": "87c566c1ff6343e4c7463a4ef968183f41d1f24cc63d610433d3a387b13f731b",
+  "ui_mode": {
+    "address": 43862192,
+    "bytes": 4
+  },
+  "pending_mode": {
+    "address": 43862204,
+    "bytes": 4
+  },
+  "system_mode": {
+    "address": 44351264,
+    "bytes": 4
+  },
+  "menu_active": {
+    "address": 41206800,
+    "bytes": 4
+  },
+  "rec_ui_mode": 3,
+  "rec_system_mode": 1,
+  "settle_milliseconds": 2000,
+  "identity_checks": [
+    {
+      "address": 24881600,
+      "size": 36,
+      "sha256": "02f11956be36692eb4e363b89a400eff86e1842590ef1f17c2eb273aca3520a2"
+    },
+    {
+      "address": 52083508,
+      "size": 180,
+      "sha256": "22c85a4a42ea7b12fe1a90140b3a45eff17fd11e4ce01ce3ed5096c196496083"
+    }
+  ]
+}

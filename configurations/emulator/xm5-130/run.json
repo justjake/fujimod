@@ -79,6 +79,12 @@
   "overlays": [],
   "preset": {
     "factory_options": {},
-    "firmware_profile_id": "xm5-130"
+    "firmware_profile_id": "xm5-130",
+    "settings": {
+      "requested": {
+        "language": "en",
+        "setup": "done"
+      }
+    }
   }
 }

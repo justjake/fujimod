@@ -87,7 +87,13 @@
   "overlays": [],
   "preset": {
     "factory_options": {},
-    "firmware_profile_id": "xh2s-730"
+    "firmware_profile_id": "xh2s-730",
+    "settings": {
+      "requested": {
+        "language": "en",
+        "setup": "done"
+      }
+    }
   },
   "audio_signals": [
     {
