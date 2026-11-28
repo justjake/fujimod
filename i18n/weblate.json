@@ -1,0 +1,12 @@
+{
+  "project": "FujiMod",
+  "component": "Camera interface",
+  "repository": "https://github.com/justjake/fujimod.git",
+  "branch": "main",
+  "push_branch": "weblate/fujimod",
+  "file_format": "gettext PO file",
+  "file_mask": "i18n/<language>.po",
+  "source_language": "en",
+  "template": "i18n/fujimod.pot",
+  "push": "pull request"
+}
