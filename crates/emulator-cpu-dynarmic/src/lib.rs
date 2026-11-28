@@ -118,7 +118,7 @@ extern "C" fn batch_instruction(word: u32) -> u32 {
         }
         2 | 3 => {
             let register_shift = body & (1 << 25) != 0 && body & 16 != 0;
-            if !writeback && !register_shift && (pre || (rn != 15 && rd != 15)) {
+            if !writeback && !register_shift && (pre || (rn != 15 && rd != 15 && rn != rd)) {
                 2
             } else if unconditional
                 && pre
@@ -3290,13 +3290,17 @@ mod tests {
                 window: None,
             })
         }
-        for mapped in [true, false] {
+        for (mapped, post_indexed) in [(true, false), (false, false), (true, true), (false, true)] {
             let cpu = Core::new(Model::CortexA7).unwrap();
             cpu.map_zeroed(0x1000, 4096, 7).unwrap();
             let instructions = [
                 0xe3a0_0005u32,
                 0xe280_0007,
-                0xe591_0000,
+                if post_indexed {
+                    0xe491_0004
+                } else {
+                    0xe591_0000
+                },
                 0xe280_0001,
                 0xe592_0000,
                 0xeaff_fffe,
@@ -3342,11 +3346,13 @@ mod tests {
                 instructions: Some(8),
             });
             let loaded = unsafe { ffi::dynarmic_get_reg(cpu.inst, 0) };
+            let base = unsafe { ffi::dynarmic_get_reg(cpu.inst, 1) };
             if mapped {
                 result.unwrap();
                 assert_eq!(*observed.borrow(), [102, 104]);
                 assert_eq!(cpu.instruction_progress(), Some(8));
                 assert_eq!(loaded, 42);
+                assert_eq!(base, if post_indexed { 0x8004 } else { 0x8000 });
             } else {
                 assert!(matches!(
                     result,

@@ -236,10 +236,12 @@ bool UserCallbacksImpl::PreCodeReadHook(bool thumb, VAddr pc, IREmitter& ir) {
         if (pc - start.PC() < max_block_instructions * 4) {
             if (kind == 1) return consume_word();
 #if defined(__aarch64__)
-            constexpr uint32_t pre_index_without_writeback_mask = 0xf1200000;
-            constexpr uint32_t pre_index_without_writeback = 0xe1000000;
+            constexpr uint32_t condition_and_writeback = 0xf0200000;
+            constexpr uint32_t unconditional_without_explicit_writeback = 0xe0000000;
+            // The replay path can recover a post-indexed base directly
+            // from the faulting address, even after a retired block prefix.
             if (kind == 2 && !compiled_multiple_transfer
-                && (*word & pre_index_without_writeback_mask) == pre_index_without_writeback
+                && (*word & condition_and_writeback) == unconditional_without_explicit_writeback
                 && ((*word >> 12) & 15) != 15) {
                 return consume_word();
             }
