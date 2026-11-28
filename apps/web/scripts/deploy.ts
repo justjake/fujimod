@@ -4,6 +4,7 @@ import { existsSync, writeFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { resolve } from 'node:path';
 import { carrySite } from './carry-site.ts';
+import { filmEditorDemoPath } from './film-editor-demo.ts';
 import { stageSite } from './stage-site.ts';
 import { sdkDocsManifest, sdkDocsPath } from './sdk-docs.ts';
 // pnpm forwards the optional argument separator to the script.
@@ -15,21 +16,29 @@ const { values } = parseArgs({
     media: { type: 'string' },
     'sdk-docs': { type: 'string' },
     'carry-from': { type: 'string' },
+    'film-editor-demo': { type: 'string' },
     'prepare-only': { type: 'boolean', default: false },
   },
 });
-const { runtime, media, 'sdk-docs': sdkDocs, 'carry-from': origin } = values;
+const {
+  runtime,
+  media,
+  'sdk-docs': sdkDocs,
+  'carry-from': origin,
+  'film-editor-demo': filmEditorDemo,
+} = values;
 const usage =
-  'Provide either --runtime DIRECTORY --media DIRECTORY --sdk-docs DIRECTORY or --carry-from ORIGIN.';
+  'Provide either --runtime DIRECTORY --media DIRECTORY --sdk-docs DIRECTORY [--film-editor-demo DIRECTORY] or --carry-from ORIGIN.';
 if (origin) {
-  if (runtime || media || sdkDocs) throw Error(usage);
+  if (runtime || media || sdkDocs || filmEditorDemo) throw Error(usage);
   console.log(await carrySite(origin));
 } else {
   if (!runtime || !media || !sdkDocs) throw Error(usage);
-  console.log(await stageSite({ runtime, media, sdkDocs }));
+  console.log(await stageSite({ runtime, media, sdkDocs, filmEditorDemo }));
 }
 if (!values['prepare-only']) {
   const stagedSdkDocs = resolve('public', sdkDocsPath);
+  const stagedFilmEditorDemo = resolve('public', filmEditorDemoPath);
   const run = (command: string, args: string[]) =>
     execFileSync(command, args, {
       stdio: 'inherit',
@@ -39,6 +48,9 @@ if (!values['prepare-only']) {
         FUJIMOD_MEDIA: resolve('public/artifacts/docs'),
         FUJIMOD_SDK_DOCS: existsSync(resolve(stagedSdkDocs, sdkDocsManifest))
           ? stagedSdkDocs
+          : undefined,
+        FUJIMOD_FILM_EDITOR_DEMO: existsSync(stagedFilmEditorDemo)
+          ? stagedFilmEditorDemo
           : undefined,
       },
     });

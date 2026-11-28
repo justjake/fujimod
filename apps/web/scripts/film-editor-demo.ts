@@ -16,7 +16,7 @@ export interface FilmEditorDemo {
 }
 
 /** The demo's manifest.json: schema 1, the flat file names the page loads and
- * an optional `developmentOnly` flag. */
+ * an optional `developmentOnly` flag. The manifest names no other manifest. */
 export function parseFilmEditorDemo(json: string): FilmEditorDemo {
   const manifest = JSON.parse(json) as {
     schema?: unknown;
@@ -29,7 +29,12 @@ export function parseFilmEditorDemo(json: string): FilmEditorDemo {
   if (!files.includes('index.html'))
     throw Error('The Film Editor demo manifest has no index.html.');
   for (const name of files)
-    if (typeof name !== 'string' || !file.test(name) || name.startsWith('.'))
+    if (
+      typeof name !== 'string' ||
+      !file.test(name) ||
+      name.startsWith('.') ||
+      name === 'manifest.json'
+    )
       throw Error(`The Film Editor demo manifest names an invalid file: ${String(name)}`);
   if (manifest.developmentOnly !== undefined && typeof manifest.developmentOnly !== 'boolean')
     throw Error('The Film Editor demo manifest has an invalid developmentOnly flag.');
