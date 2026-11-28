@@ -58,6 +58,9 @@ pub struct Throughput {
 const CHANNELS: usize = 8;
 const STEP_LIMIT: usize = 1 << 24;
 const REGISTERS: u64 = 0x1000;
+// CCR allows up to sixteen beats of up to 128 bytes each.
+const MAX_BURST_BYTES: usize = 16 * 128;
+const ZERO_BURST: [u8; MAX_BURST_BYTES] = [0; MAX_BURST_BYTES];
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 struct Thread {
@@ -206,11 +209,10 @@ impl Pl330 {
         ));
     }
 
-    fn load(&self, cx: &Cx<'_>, address: u64, len: usize) -> Result<Vec<u8>, String> {
-        match self.sources.iter().find(|s| s.contains(address, len)) {
-            Some(source) => source.read(address, len),
-            None => cx.ram_bytes(address, len),
-        }
+    fn read_program<const N: usize>(cx: &Cx<'_>, address: u64) -> Result<[u8; N], String> {
+        let mut bytes = [0; N];
+        cx.ram_read(address, &mut bytes)?;
+        Ok(bytes)
     }
 
     /// Whether `t` currently addresses a paced window.
@@ -221,11 +223,15 @@ impl Pl330 {
         })
     }
 
-    /// Adds `count` bytes to the paced total of the window holding `address`.
-    fn pace(&self, paced: &mut [u64], address: u64, count: usize) {
-        if let Some(i) = self.sources.iter().position(|s| s.contains(address, count)) {
-            paced[i] += count as u64;
-        }
+    /// Resolve a burst's peripheral and account its bytes in the same pass.
+    fn burst_source(&self, paced: &mut [u64], address: u64, count: usize) -> Option<&dyn Source> {
+        let (i, source) = self
+            .sources
+            .iter()
+            .enumerate()
+            .find(|(_, source)| source.contains(address, count))?;
+        paced[i] += count as u64;
+        Some(source.as_ref())
     }
 
     fn paced_ticks(&self, paced: &[u64]) -> Option<u64> {
@@ -299,27 +305,27 @@ impl Pl330 {
     fn run_instant(&self, cx: &Cx<'_>, t: &mut Thread) -> Result<(), String> {
         for _ in 0..STEP_LIMIT {
             let pc = t.pc;
-            let op = cx.ram_bytes(u64::from(pc), 1)?[0];
+            let [op] = Self::read_program(cx, u64::from(pc))?;
             let len = match op {
                 0x12 | 0x13 | 0x18 => 1,
                 0xbc => self.mov(cx, t, pc)?,
                 0x20 | 0x22 => {
                     t.lc[usize::from(op >> 1 & 1)] =
-                        u32::from(cx.ram_bytes(u64::from(pc) + 1, 1)?[0]);
+                        u32::from(Self::read_program::<1>(cx, u64::from(pc) + 1)?[0]);
                     2
                 }
                 0x38 | 0x3c => {
                     let lc = usize::from(op >> 2 & 1);
                     if t.lc[lc] != 0 {
                         t.lc[lc] -= 1;
-                        t.pc = pc.wrapping_sub(u32::from(cx.ram_bytes(u64::from(pc) + 1, 1)?[0]));
+                        let [displacement] = Self::read_program(cx, u64::from(pc) + 1)?;
+                        t.pc = pc.wrapping_sub(u32::from(displacement));
                         continue;
                     }
                     2
                 }
                 0x54 | 0x56 | 0x5c | 0x5e => {
-                    let b = cx.ram_bytes(u64::from(pc) + 1, 2)?;
-                    let raw = u16::from_le_bytes([b[0], b[1]]);
+                    let raw = u16::from_le_bytes(Self::read_program(cx, u64::from(pc) + 1)?);
                     let add = if op & 0x08 == 0 {
                         u32::from(raw)
                     } else {
@@ -344,9 +350,9 @@ impl Pl330 {
     /// thing everywhere: unknown selectors and data values that are not a CCR
     /// refuse.
     fn mov(&self, cx: &Cx<'_>, t: &mut Thread, pc: u32) -> Result<u32, String> {
-        let b = cx.ram_bytes(u64::from(pc) + 1, 5)?;
-        let v = u32::from_le_bytes([b[1], b[2], b[3], b[4]]);
-        match b[0] {
+        let [register, value @ ..] = Self::read_program::<5>(cx, u64::from(pc) + 1)?;
+        let v = u32::from_le_bytes(value);
+        match register {
             0 => t.sar = v,
             1 if v >> 28 & 7 == 0 => t.ccr = v,
             2 => t.dar = v,
@@ -363,7 +369,7 @@ impl Pl330 {
     fn setup_registers(&self, cx: &Cx<'_>, t: &mut Thread) -> Result<(), String> {
         for _ in 0..STEP_LIMIT {
             let pc = t.pc;
-            if cx.ram_bytes(u64::from(pc), 1)?[0] != 0xbc {
+            if Self::read_program(cx, u64::from(pc))? != [0xbc] {
                 return Ok(());
             }
             let len = self.mov(cx, t, pc)?;
@@ -378,10 +384,11 @@ impl Pl330 {
     fn run(&mut self, cx: &mut Cx<'_>, n: usize, apply: bool) -> Result<RunOutcome, String> {
         let mut t = self.threads[n].clone();
         let mut paced = vec![0u64; self.sources.len()];
-        let fetch = |cx: &Cx<'_>, pc: u32, len: usize| cx.ram_bytes(u64::from(pc), len);
+        let mut load_buffer = [0; MAX_BURST_BYTES];
+        let mut preview_fifo_bytes = t.fifo.len();
         for _ in 0..STEP_LIMIT {
             let pc = t.pc;
-            let op = fetch(cx, pc, 1)?[0];
+            let [op] = Self::read_program(cx, u64::from(pc))?;
             let mut len = 1;
             match op {
                 // DMAEND
@@ -411,11 +418,20 @@ impl Pl330 {
                     }
                     let count = ((1u32 << (t.ccr >> 1 & 7)) * ((t.ccr >> 4 & 15) + 1)) as usize;
                     t.source.get_or_insert(t.sar);
-                    self.pace(&mut paced, u64::from(t.sar), count);
+                    let at = u64::from(t.sar);
+                    let source = self.burst_source(&mut paced, at, count);
                     if apply {
-                        t.fifo.extend(self.load(cx, u64::from(t.sar), count)?);
+                        if let Some(source) = source {
+                            t.fifo.extend(source.read(at, count)?);
+                        } else {
+                            let bytes = &mut load_buffer[..count];
+                            cx.ram_read(at, bytes)?;
+                            t.fifo.extend(bytes.iter().copied());
+                        }
                     } else {
-                        t.fifo.extend(std::iter::repeat_n(0, count));
+                        preview_fifo_bytes = preview_fifo_bytes
+                            .checked_add(count)
+                            .ok_or("PL330 preview FIFO size overflow")?;
                     }
                     if t.ccr & 1 != 0 {
                         t.sar = t.sar.wrapping_add(count as u32);
@@ -427,22 +443,32 @@ impl Pl330 {
                         len = 2;
                     }
                     let count = ((1u32 << (t.ccr >> 15 & 7)) * ((t.ccr >> 18 & 15) + 1)) as usize;
-                    if t.fifo.len() < count {
+                    let available = if apply {
+                        t.fifo.len()
+                    } else {
+                        preview_fifo_bytes
+                    };
+                    if available < count {
                         return Err("PL330 store exceeds loaded data".into());
                     }
-                    let data: Vec<u8> = t.fifo.drain(..count).collect();
                     t.destination.get_or_insert(t.dar);
                     let at = u64::from(t.dar);
-                    self.pace(&mut paced, at, count);
-                    match self.sources.iter().find(|s| s.contains(at, count)) {
+                    match self.burst_source(&mut paced, at, count) {
                         Some(source) if !source.writable() => {
                             return Err(format!(
                                 "PL330 store into a read-only source at {at:#x} ({count} bytes)"
                             ));
                         }
-                        Some(source) if apply => source.write(at, &data)?,
-                        None if apply => cx.ram_write(at, &data)?,
+                        Some(source) if apply => {
+                            source.write(at, &t.fifo.make_contiguous()[..count])?;
+                        }
+                        None if apply => cx.ram_write(at, &t.fifo.make_contiguous()[..count])?,
                         _ => {}
+                    }
+                    if apply {
+                        drop(t.fifo.drain(..count));
+                    } else {
+                        preview_fifo_bytes -= count;
                     }
                     t.bytes += count as u64;
                     if t.ccr >> 14 & 1 != 0 {
@@ -455,16 +481,15 @@ impl Pl330 {
                     let count = ((1u32 << (t.ccr >> 15 & 7)) * ((t.ccr >> 18 & 15) + 1)) as usize;
                     t.destination.get_or_insert(t.dar);
                     let at = u64::from(t.dar);
-                    self.pace(&mut paced, at, count);
-                    let zeros = vec![0u8; count];
-                    match self.sources.iter().find(|s| s.contains(at, count)) {
+                    let zeros = &ZERO_BURST[..count];
+                    match self.burst_source(&mut paced, at, count) {
                         Some(source) if !source.writable() => {
                             return Err(format!(
                                 "PL330 store into a read-only source at {at:#x} ({count} bytes)"
                             ));
                         }
-                        Some(source) if apply => source.write(at, &zeros)?,
-                        None if apply => cx.ram_write(at, &zeros)?,
+                        Some(source) if apply => source.write(at, zeros)?,
+                        None if apply => cx.ram_write(at, zeros)?,
                         _ => {}
                     }
                     t.bytes += count as u64;
@@ -479,14 +504,16 @@ impl Pl330 {
                 // DMALP lc0/lc1
                 0x20 | 0x22 => {
                     len = 2;
-                    t.lc[usize::from(op >> 1 & 1)] = u32::from(fetch(cx, pc + 1, 1)?[0]);
+                    let [count] = Self::read_program(cx, u64::from(pc + 1))?;
+                    t.lc[usize::from(op >> 1 & 1)] = u32::from(count);
                 }
                 // DMALPEND lc0/lc1
                 0x38 | 0x3c => {
                     let lc = usize::from(op >> 2 & 1);
                     if t.lc[lc] != 0 {
                         t.lc[lc] -= 1;
-                        t.pc = pc.wrapping_sub(u32::from(fetch(cx, pc + 1, 1)?[0]));
+                        let [displacement] = Self::read_program(cx, u64::from(pc + 1))?;
+                        t.pc = pc.wrapping_sub(u32::from(displacement));
                         continue;
                     }
                     len = 2;
@@ -494,7 +521,8 @@ impl Pl330 {
                 // DMASEV
                 0x34 => {
                     len = 2;
-                    let event = u32::from(fetch(cx, pc + 1, 1)?[0] >> 3);
+                    let [encoded] = Self::read_program(cx, u64::from(pc + 1))?;
+                    let event = u32::from(encoded >> 3);
                     if apply {
                         self.signal(cx, event)?;
                     }
@@ -516,7 +544,8 @@ impl Pl330 {
                 // DMAWFE. Wait at this PC until the event arrives.
                 0x36 => {
                     len = 2;
-                    let event = u32::from(fetch(cx, pc + 1, 1)?[0] >> 3);
+                    let [encoded] = Self::read_program(cx, u64::from(pc + 1))?;
+                    let event = u32::from(encoded >> 3);
                     if t.waiting == Some(event) {
                         t.waiting = None;
                         if apply && self.inten >> event & 1 == 0 {
@@ -544,8 +573,7 @@ impl Pl330 {
                 // DMAADDH/DMAADNH SAR/DAR. DMAADNH's immediate is signed.
                 0x54 | 0x56 | 0x5c | 0x5e => {
                     len = 3;
-                    let b = fetch(cx, pc + 1, 2)?;
-                    let raw = u16::from_le_bytes([b[0], b[1]]);
+                    let raw = u16::from_le_bytes(Self::read_program(cx, u64::from(pc + 1))?);
                     let add = if op & 0x08 == 0 {
                         u32::from(raw)
                     } else {
