@@ -249,9 +249,10 @@ export class ShareRoom extends DurableObject<Env> {
       }
       if (storedHash || suppliedKey !== undefined)
         integer(this.env.SHARE_IDLE_SECONDS, 604800, 1, 31536000);
-      if (
-        this.sockets().some((peer) => ['host', 'preparing'].includes(attachment(peer)?.role ?? ''))
-      )
+      const incumbent = this.sockets().find((peer) =>
+        ['host', 'preparing'].includes(attachment(peer)?.role ?? ''),
+      );
+      if (incumbent && (!storedHash || attachment(incumbent)?.role !== 'host'))
         throw Error('Room already has an owner');
       ttl = integer(this.env.TURN_TTL_SECONDS, 86400, 60, 86400);
       if (socket.readyState !== WebSocket.OPEN) return;
@@ -268,6 +269,16 @@ export class ShareRoom extends DurableObject<Env> {
         if (storedHash || suppliedKey !== undefined) await this.ownerOffline();
         else await this.revokeRoom();
         return;
+      }
+      if (incumbent) {
+        // The authenticated owner restarted while its old socket still looks
+        // live. Retire its clients too so pending offers are sent again.
+        for (const peer of this.sockets()) {
+          const previous = attachment(peer);
+          if (!previous || (peer !== incumbent && previous.role !== 'client')) continue;
+          peer.serializeAttachment({ ...previous, role: 'closed' });
+          peer.close(1012, 'Sharing owner reconnected');
+        }
       }
       state.role = 'preparing';
       state.peer = 'host';
