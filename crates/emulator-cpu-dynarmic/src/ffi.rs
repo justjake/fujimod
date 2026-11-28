@@ -52,6 +52,7 @@ pub struct DynarmicCallbacks {
     pub user_data: *mut c_void,
     pub inline_read32: *mut DynarmicDirectRead,
     pub batch_instruction: extern "C" fn(u32) -> u32,
+    pub is_counted_loop: extern "C" fn(u32, u32, u32, u32) -> bool,
     pub guard_transfer: unsafe extern "C" fn(*mut c_void, u32, u32),
     pub read_code: unsafe extern "C" fn(*mut c_void, u32, *mut u32) -> bool,
     pub read: unsafe extern "C" fn(*mut c_void, u32, u32) -> u64,
@@ -69,16 +70,42 @@ pub struct DynarmicMemoryControl {
     pub dacr: u32,
     pub fcseidr: u32,
     pub cpsr: u32,
+    pub cpacr: u32,
 }
 
 pub enum DynarmicInstance {}
 
 unsafe extern "C" {
-    pub fn dynarmic_create(callbacks: *const DynarmicCallbacks) -> *mut DynarmicInstance;
+    pub fn dynarmic_create(
+        callbacks: *const DynarmicCallbacks,
+        rprofile: bool,
+    ) -> *mut DynarmicInstance;
     pub fn dynarmic_destroy(inst: *mut DynarmicInstance);
-    pub fn dynarmic_set_translation_context(inst: *mut DynarmicInstance, value: u32);
+    pub fn dynarmic_set_translation_context(
+        inst: *mut DynarmicInstance,
+        value: u32,
+        vfp_enabled: bool,
+    );
     pub fn dynarmic_observe_stores(inst: *mut DynarmicInstance, enabled: bool);
     pub fn dynarmic_read_gprs(inst: *mut DynarmicInstance, values: *mut u32);
+    pub fn dynarmic_write_loop_state(
+        inst: *mut DynarmicInstance,
+        values: *const u32,
+        cpsr: u32,
+        flags_changed: bool,
+    );
+    pub fn dynarmic_read_snapshot(
+        inst: *mut DynarmicInstance,
+        ext_regs: *mut u32,
+        cp15: *mut u32,
+        cache_ids: *mut u32,
+    );
+    pub fn dynarmic_write_snapshot(
+        inst: *mut DynarmicInstance,
+        ext_regs: *const u32,
+        cp15: *const u32,
+        cache_ids: *const u32,
+    );
     pub fn dynarmic_data_pages(inst: *mut DynarmicInstance) -> *mut *mut u8;
     pub fn dynarmic_run(
         inst: *mut DynarmicInstance,

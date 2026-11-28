@@ -19,6 +19,11 @@ pub struct Ratio {
     numerator: u64,
     denominator: u64,
 }
+impl serde::Serialize for Ratio {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serde::Serialize::serialize(&self.parts(), serializer)
+    }
+}
 impl<'de> serde::Deserialize<'de> for Ratio {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let (numerator, denominator) =

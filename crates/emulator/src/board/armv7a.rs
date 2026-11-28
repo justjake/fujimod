@@ -57,6 +57,14 @@ impl Profile {
             owner: Some(owner),
         }
     }
+    pub(super) fn restore_checkpoint(&mut self, saved: &Self) {
+        // The receiving board owns the live monitor slot. The portable CPU
+        // profile carries PMU state and omits the process-local owner.
+        self.pmcr = saved.pmcr;
+        self.enabled = saved.enabled;
+        self.counter = saved.counter;
+        self.anchor = saved.anchor;
+    }
     fn cycles(&self, now: u64) -> u32 {
         if self.pmcr & 1 == 0 || !self.enabled {
             return self.counter;
@@ -485,7 +493,11 @@ mod tests {
             assert_eq!(bytes, [0x11, 0x22, 0x33, 0x44], "size {size}");
             // Without a peer store the retried pair succeeds.
             set(board.cpu(0).unwrap(), Register::Pc, 0x1000).unwrap();
-            board.run_core(0, 2, 10).unwrap();
+            board.run_core(0, 1, 10).unwrap();
+            let archive = board.checkpoint(None).unwrap().export().unwrap();
+            let restored = board.import_keyframe(&archive).unwrap();
+            board.restore_keyframe(&restored).unwrap();
+            board.run_core(0, 1, 10).unwrap();
             assert_eq!(reg(&board, 0, 4), 0, "size {size}");
         }
     }

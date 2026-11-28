@@ -6,8 +6,11 @@ use crate::{
     accounting::{Accounting, Span},
     memory::{Memory, OwnerBarrierLease},
 };
-use fujimod_emulator_cpu::memory::Backing;
 use fujimod_emulator_cpu::*;
+use fujimod_emulator_cpu::{
+    armv7r::{pmu, tcm as tcm_banks},
+    memory::Backing,
+};
 use std::cell::{Cell, RefCell, UnsafeCell};
 use std::collections::BTreeMap;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -23,7 +26,6 @@ mod exclusive;
 mod loops;
 mod mapping;
 use crate::observers;
-mod pmu;
 mod run;
 mod snapshot;
 mod tcm;
@@ -54,7 +56,7 @@ const SCTLR_V: u64 = 1 << 13;
 #[serde(deny_unknown_fields)]
 pub struct Options {
     pub cp14_identity: u32,
-    pub tcm: super::tcm::Options,
+    pub tcm: tcm_banks::Options,
     /// The processor's VINITHI input: exception vectors start at 0xffff0000 (SCTLR.V set at reset).
     #[serde(default)]
     pub high_vectors: bool,
@@ -134,7 +136,7 @@ pub(super) struct Execution {
     policy: Cell<ExecutionPolicy>,
     parallel_tcg: bool,
     pmu: Cell<pmu::Counter>,
-    tcm: [super::tcm::Bank; 2],
+    tcm: [tcm_banks::Bank; 2],
     tcm_pending: Cell<Option<(usize, u32)>>,
     observed_backings: RefCell<Vec<BackingObserver>>,
     maps: RefCell<Vec<Mapping>>,
@@ -237,7 +239,7 @@ impl Core {
         let record = cpu
             .accounting()
             .ok_or("missing R-profile accounting record")?;
-        let tcm = super::tcm::banks(options.tcm)?;
+        let tcm = tcm_banks::banks(options.tcm)?;
         let monitor = wiring
             .memory
             .monitors
@@ -1236,5 +1238,32 @@ impl crate::memory::CodeOwner for Execution {
     }
     fn prepare_code_write(&self) -> Result<(), String> {
         self.prepare_flush()
+    }
+}
+
+impl Execution {
+    pub(super) fn pmu_access(
+        &self,
+        crm: u32,
+        opc2: u32,
+        value: Option<u32>,
+    ) -> Result<u32, String> {
+        pmu::Counter::check(crm, opc2)?;
+        let clock = self
+            .clock
+            .get()
+            .ok_or("R-profile PMU requires an explicit guest clock")?;
+        let now = clock
+            .after(if self.active.get() {
+                self.progress()
+                    .ok_or("missing R-profile PMU instruction progress")?
+            } else {
+                0
+            })?
+            .now;
+        let mut counter = self.pmu.get();
+        let result = counter.access(crm, opc2, value, now)?;
+        self.pmu.set(counter);
+        Ok(result)
     }
 }

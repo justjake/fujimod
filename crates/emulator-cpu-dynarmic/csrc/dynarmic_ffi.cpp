@@ -10,6 +10,7 @@
 #include <array>
 #include <cstring>
 #include <atomic>
+#include <bit>
 #include <utility>
 
 using Dynarmic::ExclusiveMonitor;
@@ -19,8 +20,12 @@ struct DynarmicInstance;
 
 class CP15Impl final : public Coprocessor {
 public:
-    explicit CP15Impl(DynarmicInstance* inst) : instance(inst) {
+    explicit CP15Impl(DynarmicInstance* inst, bool rprofile) : instance(inst) {
         regs.fill(0);
+        if (rprofile) {
+            regs[encode(0, 0, 0, 0)] = 0x411fc153; // MIDR (ARM Cortex-R5 r1p3)
+            return;
+        }
         regs[encode(0, 0, 0, 0)] = 0x410fc075; // MIDR (ARM Cortex-A7 r0p5)
         regs[encode(0, 0, 0, 1)] = 0x8444c004; // CTR
         regs[encode(0, 0, 0, 5)] = 0x80000000; // MPIDR (Multiprocessor Affinity, Core 0 default)
@@ -187,6 +192,9 @@ private:
     };
 
     std::optional<std::uint32_t> ReadCheckedCode(VAddr address);
+#if defined(__aarch64__)
+    std::optional<Dynarmic::IR::A32RestoringDivision> MatchRestoringDivision(VAddr pc, uint32_t first);
+#endif
     std::optional<PrefetchedCode> prefetched_code;
     bool compiled_multiple_transfer = false;
     DynarmicCallbacks callbacks;
@@ -204,6 +212,7 @@ struct DynarmicInstance {
     std::unique_ptr<Jit> jit;
     DynarmicExitReason exit_reason = DYNARMIC_EXIT_REASON_TIMEOUT;
     std::atomic<bool> stop_requested{false};
+    bool vfp_enabled = false;
 };
 
 extern "C" void fujimod_dynarmic_guard_transfer(std::uint64_t ctx, std::uint64_t word, std::uint64_t base) {
@@ -213,6 +222,55 @@ extern "C" void fujimod_dynarmic_guard_transfer(std::uint64_t ctx, std::uint64_t
 constexpr uint32_t exit_before_instruction = 0x01000000;
 constexpr uint32_t max_block_instructions = 24;
 
+#if defined(__aarch64__)
+std::optional<Dynarmic::IR::A32RestoringDivision> UserCallbacksImpl::MatchRestoringDivision(VAddr pc, uint32_t first) {
+    using Dynarmic::IR::A32RestoringDivision;
+    constexpr uint32_t bytes = A32RestoringDivision::instruction_count * 4;
+    if ((first & 0xfff0fff0) != 0xe1500000 || pc > UINT32_MAX - bytes) {
+        return std::nullopt;
+    }
+    const uint32_t remainder = (first >> 16) & 15;
+    const uint32_t divisor = first & 15;
+    const uint32_t remainder_operand = remainder << 16;
+    const uint32_t compare = 0xe1500000 | remainder_operand | divisor;
+    const uint32_t subtract = 0x20400000 | remainder_operand | (remainder << 12) | divisor;
+    if (ReadCheckedCode(pc + 4) != subtract) {
+        return std::nullopt;
+    }
+    const auto accumulate = ReadCheckedCode(pc + 8);
+    if (!accumulate) {
+        return std::nullopt;
+    }
+    const uint32_t quotient = (*accumulate >> 12) & 15;
+    const uint32_t place = *accumulate & 15;
+    const uint32_t registers = (1u << remainder) | (1u << divisor) | (1u << quotient) | (1u << place);
+    const uint32_t or_result = 0x21800000 | (quotient << 16) | (quotient << 12) | place;
+    if (std::popcount(registers) != 4 || (registers & (1u << 15)) != 0 || *accumulate != or_result) {
+        return std::nullopt;
+    }
+    for (uint32_t shift = 1; shift < 4; ++shift) {
+        const uint32_t lsr = (shift << 7) | (1 << 5);
+        const uint32_t group = pc + shift * 12;
+        if (ReadCheckedCode(group) != (compare | lsr)
+            || ReadCheckedCode(group + 4) != (subtract | lsr)
+            || ReadCheckedCode(group + 8) != (or_result | lsr)) {
+            return std::nullopt;
+        }
+    }
+    const auto branch = ReadCheckedCode(pc + bytes - 4);
+    // BNE back to the first comparison, relative to the architectural PC.
+    constexpr uint32_t branch_offset = (0u - (bytes + 4) / 4) & 0x00ffffff;
+    if (ReadCheckedCode(pc + 48) != (0xe3500000 | remainder_operand)
+        || ReadCheckedCode(pc + 52) != (0x11b00220 | (place << 12) | place)
+        || ReadCheckedCode(pc + 56) != (0x11a00220 | (divisor << 12) | divisor)
+        || branch != (0x1a000000 | branch_offset)) {
+        return std::nullopt;
+    }
+    return A32RestoringDivision{static_cast<uint8_t>(remainder), static_cast<uint8_t>(divisor),
+                                static_cast<uint8_t>(place), static_cast<uint8_t>(quotient)};
+}
+#endif
+
 bool UserCallbacksImpl::PreCodeReadHook(bool thumb, VAddr pc, IREmitter& ir) {
     const LocationDescriptor start{ir.block.Location()};
     if (start.SingleStepping()) return true;
@@ -220,6 +278,13 @@ bool UserCallbacksImpl::PreCodeReadHook(bool thumb, VAddr pc, IREmitter& ir) {
     prefetched_code.reset();
     if (entry) compiled_multiple_transfer = false;
     const auto word = thumb ? std::nullopt : ReadCheckedCode(pc);
+#if defined(__aarch64__)
+    if (entry && word) {
+        if (auto division = MatchRestoringDivision(pc, *word)) {
+            ir.block.SetRestoringDivision(*division);
+        }
+    }
+#endif
     const auto consume_word = [&] {
         if (word) {
             prefetched_code = PrefetchedCode{pc, *word};
@@ -228,14 +293,31 @@ bool UserCallbacksImpl::PreCodeReadHook(bool thumb, VAddr pc, IREmitter& ir) {
     };
     uint32_t kind = word ? callbacks.batch_instruction(*word) : 0;
     if (kind >= 4 && kind <= 6 && (instance->jit->Cpsr() & 31) == 0x10) kind = 0;
+    if (kind == 8) kind = instance->vfp_enabled ? 1 : 0;
+    if (kind == 9 || kind == 10) {
+        // This affects dispatch only. The runtime proof checks the current
+        // instruction bytes again before advancing the loop.
+        const uint32_t span = kind == 9 ? 12 : 8;
+        kind = 1;
+        if (pc >= span) {
+            const auto first = ReadCheckedCode(pc - span);
+            const auto second = ReadCheckedCode(pc - span + 4);
+            const auto third = span == 12 ? ReadCheckedCode(pc - 4) : std::optional<std::uint32_t>{0};
+            if (first && second && third && callbacks.is_counted_loop(*word, *first, *second, *third)) {
+                kind = 7;
+            }
+        }
+    }
     if (!entry) {
         if (pc - start.PC() < max_block_instructions * 4) {
             if (kind == 1) return consume_word();
 #if defined(__aarch64__)
-            constexpr uint32_t pre_index_without_writeback_mask = 0xf1200000;
-            constexpr uint32_t pre_index_without_writeback = 0xe1000000;
+            constexpr uint32_t condition_and_writeback = 0xf0200000;
+            constexpr uint32_t unconditional_without_explicit_writeback = 0xe0000000;
+            // The replay path can recover a post-indexed base directly
+            // from the faulting address, even after a retired block prefix.
             if (kind == 2 && !compiled_multiple_transfer
-                && (*word & pre_index_without_writeback_mask) == pre_index_without_writeback
+                && (*word & condition_and_writeback) == unconditional_without_explicit_writeback
                 && ((*word >> 12) & 15) != 15) {
                 return consume_word();
             }
@@ -263,7 +345,7 @@ bool UserCallbacksImpl::PreCodeReadHook(bool thumb, VAddr pc, IREmitter& ir) {
         // Fall-through retires the branch in the JIT. A taken back edge
         // exits with no ticks so the caller can try to accelerate the loop.
         ir.current_location = ir.current_location.AdvancePC(4);
-        ir.block.SetCondition(Dynarmic::IR::Cond::GE);
+        ir.block.SetCondition(static_cast<Dynarmic::IR::Cond>(*word >> 28));
         ir.block.SetConditionFailedLocation(ir.current_location);
         ir.block.ConditionFailedCycleCount() = 1;
     } else if (kind != 0) {
@@ -343,12 +425,12 @@ void UserCallbacksImpl::ExceptionRaised(VAddr pc, Exception exception) {
 
 extern "C" {
 
-DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks) {
+DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks, bool rprofile) {
     auto inst = std::make_unique<DynarmicInstance>();
     inst->callbacks = *callbacks;
 
     inst->callbacks_impl = std::make_unique<UserCallbacksImpl>(inst->callbacks, inst.get());
-    inst->cp15_impl = std::make_shared<CP15Impl>(inst.get());
+    inst->cp15_impl = std::make_shared<CP15Impl>(inst.get(), rprofile);
 
     UserConfig conf;
     conf.callbacks = inst->callbacks_impl.get();
@@ -356,6 +438,7 @@ DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks) {
     conf.arch_version = ArchVersion::v7;
     // ARM64's inline page table callback path checks MemoryAbort.
     conf.page_table = &inst->page_table;
+    conf.absolute_offset_page_table = true;
     conf.timed_read32_cache = static_cast<Dynarmic::A32::TimedRead32Cache*>(callbacks->inline_read32);
     conf.page_table_pointer_mask_bits = 1;
     conf.detect_misaligned_access_via_page_table = 16 | 32 | 64;
@@ -383,7 +466,8 @@ void dynarmic_destroy(DynarmicInstance* inst) {
     }
 }
 
-void dynarmic_set_translation_context(DynarmicInstance* inst, uint32_t value) {
+void dynarmic_set_translation_context(DynarmicInstance* inst, uint32_t value, bool vfp_enabled) {
+    inst->vfp_enabled = vfp_enabled;
 #if defined(__aarch64__)
     inst->jit->SetTranslationContext(value);
 #endif
@@ -398,6 +482,31 @@ void dynarmic_observe_stores(DynarmicInstance* inst, bool enabled) {
 void dynarmic_read_gprs(DynarmicInstance* inst, uint32_t* values) {
     const auto& registers = inst->jit->Regs();
     std::memcpy(values, registers.data(), 15 * sizeof(uint32_t));
+}
+
+void dynarmic_write_loop_state(DynarmicInstance* inst, const uint32_t* values, uint32_t cpsr, bool flags_changed) {
+    auto& registers = inst->jit->Regs();
+    std::memcpy(registers.data(), values, 15 * sizeof(uint32_t));
+    if (flags_changed) {
+        inst->jit->SetCpsr(cpsr);
+    }
+}
+
+void dynarmic_read_snapshot(DynarmicInstance* inst, uint32_t* ext_regs, uint32_t* cp15, uint32_t* cache_ids) {
+    const auto& vectors = inst->jit->ExtRegs();
+    const auto& system = *inst->cp15_impl;
+    std::memcpy(ext_regs, vectors.data(), vectors.size() * sizeof(uint32_t));
+    std::memcpy(cp15, system.regs.data(), system.regs.size() * sizeof(uint32_t));
+    std::memcpy(cache_ids, system.cache_ids.data(), system.cache_ids.size() * sizeof(uint32_t));
+}
+
+void dynarmic_write_snapshot(DynarmicInstance* inst, const uint32_t* ext_regs, const uint32_t* cp15, const uint32_t* cache_ids) {
+    auto& vectors = inst->jit->ExtRegs();
+    auto& system = *inst->cp15_impl;
+    std::memcpy(vectors.data(), ext_regs, vectors.size() * sizeof(uint32_t));
+    std::memcpy(system.regs.data(), cp15, system.regs.size() * sizeof(uint32_t));
+    std::memcpy(system.cache_ids.data(), cache_ids, system.cache_ids.size() * sizeof(uint32_t));
+    inst->jit->ClearExclusiveState();
 }
 
 uint8_t** dynarmic_data_pages(DynarmicInstance* inst) {
@@ -444,6 +553,7 @@ void dynarmic_memory_control(DynarmicInstance* inst, DynarmicMemoryControl* cont
     control->dacr = cp.Read(0, 3, 0, 0); // DACR
     control->fcseidr = cp.Read(0, 13, 0, 0); // FCSEIDR
     control->cpsr = inst->jit->Cpsr();
+    control->cpacr = cp.Read(0, 1, 0, 2); // CPACR
 }
 
 void dynarmic_stop(DynarmicInstance* inst) {

@@ -192,28 +192,52 @@ pub fn composite_snapshot(
         }
         return Ok(());
     }
-    let row_start = if yuv { p.source_x & !1 } else { p.source_x };
-    for (n, row) in s.rows.iter().enumerate() {
-        let y = p.work_y + n as u32;
-        for x in p.work_x..(p.work_x + p.work_width).min(width) {
-            let sx = p.sampling.map_or_else(
-                || (x - p.work_x) * p.source_width / p.work_width,
-                |q| (x - p.work_x) * q[0] / 4096,
-            );
-            let c = if yuv {
-                let pixel = sx + p.source_x - row_start;
-                let i = (pixel & !1) as usize * 2;
-                p.order
-                    .rgba(&[row[i + (pixel & 1) as usize], row[i + 2], row[i + 3], 0])
-            } else {
-                p.order.rgba(&row[sx as usize * 4..sx as usize * 4 + 4])
-            };
-            let out = &mut rgba[(y as usize * width as usize + x as usize) * 4..][..4];
-            let a = c[3] as u32;
-            for n in 0..3 {
-                out[n] = ((c[n] as u32 * a + out[n] as u32 * (255 - a) + 127) / 255) as u8;
+    let end = p.work_x.saturating_add(p.work_width).min(width);
+    if s.rows.is_empty() || p.work_x >= end {
+        return Ok(());
+    }
+    // Horizontal sampling is invariant across every captured row. Retain the
+    // low bit of a cropped YUV column so it selects the correct luma.
+    let source_phase = if yuv { p.source_x & 1 } else { 0 };
+    let columns: Vec<_> = (0..end - p.work_x)
+        .map(|x| {
+            let sample = p
+                .sampling
+                .map_or_else(|| x * p.source_width / p.work_width, |q| x * q[0] / 4096);
+            (sample + source_phase) as usize
+        })
+        .collect();
+    let output_rows = rgba
+        .chunks_exact_mut(width as usize * 4)
+        .skip(p.work_y as usize);
+    let output_span = p.work_x as usize * 4..end as usize * 4;
+    for (row, output) in s.rows.iter().zip(output_rows) {
+        let (pixels, _) = output[output_span.clone()].as_chunks_mut::<4>();
+        if yuv {
+            for (&column, out) in columns.iter().zip(pixels) {
+                let pair = (column & !1) * 2;
+                *out = p
+                    .order
+                    .rgba(&[row[pair + (column & 1)], row[pair + 2], row[pair + 3]]);
             }
-            out[3] = 255;
+        } else {
+            for (&column, out) in columns.iter().zip(pixels) {
+                let offset = column * 4;
+                let color = p.order.rgba(&row[offset..offset + 4]);
+                match color[3] {
+                    255 => *out = color,
+                    0 => out[3] = 255,
+                    alpha => {
+                        let a = u32::from(alpha);
+                        for n in 0..3 {
+                            out[n] =
+                                ((u32::from(color[n]) * a + u32::from(out[n]) * (255 - a) + 127)
+                                    / 255) as u8;
+                        }
+                        out[3] = 255;
+                    }
+                }
+            }
         }
     }
     Ok(())
@@ -231,6 +255,56 @@ pub fn composite(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scaled_abgr_blends_only_inside_the_clipped_work_area() {
+        let plane = Plane {
+            address: 0,
+            stride: 16,
+            source_x: 1,
+            source_y: 0,
+            source_width: 3,
+            source_height: 1,
+            sampling: Some([2048, 4096]),
+            work_x: 1,
+            work_y: 1,
+            work_width: 7,
+            work_height: 1,
+            order: PixelOrder::Abgr,
+        };
+        let source = [
+            [0, 0, 0, 0],
+            [0, 20, 30, 40],
+            [128, 50, 25, 10],
+            [255, 180, 80, 20],
+        ]
+        .concat();
+        let untouched = [20, 40, 60, 7];
+        let mut canvas = untouched.repeat(7 * 3);
+        composite(
+            |address, size| Ok(source[address as usize..][..size].to_vec()),
+            plane,
+            7,
+            3,
+            &mut canvas,
+        )
+        .unwrap();
+        assert_eq!(canvas[..28], untouched.repeat(7));
+        assert_eq!(
+            canvas[28..56],
+            [
+                untouched,
+                [20, 40, 60, 255],
+                [20, 40, 60, 255],
+                [15, 32, 55, 255],
+                [15, 32, 55, 255],
+                [20, 80, 180, 255],
+                [20, 80, 180, 255],
+            ]
+            .concat()
+        );
+        assert_eq!(canvas[56..], untouched.repeat(7));
+    }
 
     #[test]
     fn unscaled_opaque_yuv_matches_identity_sampling_with_clipping() {

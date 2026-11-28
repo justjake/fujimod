@@ -13,6 +13,7 @@ name = "fujimod-emulator"
 path = "src/bin/fujimod-emulator.rs"
 
 [features]
+default = ["dynarmic"]
 dynarmic = ["fujimod-emulator-boot/dynarmic"]
 
 [dependencies]

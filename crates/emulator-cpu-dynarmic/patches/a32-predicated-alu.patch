@@ -1,0 +1,362 @@
+diff --git a/src/dynarmic/frontend/A32/translate/impl/data_processing.cpp b/src/dynarmic/frontend/A32/translate/impl/data_processing.cpp
+--- a/src/dynarmic/frontend/A32/translate/impl/data_processing.cpp
++++ b/src/dynarmic/frontend/A32/translate/impl/data_processing.cpp
+@@ -6,6 +6,16 @@
+ #include "dynarmic/frontend/A32/translate/impl/a32_translate_impl.h"
+
+ namespace Dynarmic::A32 {
++namespace {
++
++bool CanSelectArmResult(ConditionalState state, Cond cond, Reg dest, bool set_flags) {
++    // These forms have no effect except the destination write. Selecting the
++    // old value on the false path keeps them inside an unconditional block.
++    return state == ConditionalState::None
++        && cond != Cond::AL && cond != Cond::NV && dest != Reg::PC && !set_flags;
++}
++
++}  // namespace
+
+ // ADC{S}<c> <Rd>, <Rn>, #<imm>
+ bool TranslatorVisitor::arm_ADC_imm(Cond cond, bool S, Reg n, Reg d, int rotate, Imm<8> imm8) {
+@@ -85,12 +95,13 @@ bool TranslatorVisitor::arm_ADC_rsr(Cond cond, bool S, Reg n, Reg d, Reg s, Shif
+
+ // ADD{S}<c> <Rd>, <Rn>, #<const>
+ bool TranslatorVisitor::arm_ADD_imm(Cond cond, bool S, Reg n, Reg d, int rotate, Imm<8> imm8) {
+-    if (!ArmConditionPassed(cond)) {
++    const bool select = CanSelectArmResult(cond_state, cond, d, S);
++    if (!select && !ArmConditionPassed(cond)) {
+         return true;
+     }
+
+     const u32 imm32 = ArmExpandImm(rotate, imm8);
+-    const auto result = ir.AddWithCarry(ir.GetRegister(n), ir.Imm32(imm32), ir.Imm1(0));
++    const IR::U32 result = ir.AddWithCarry(ir.GetRegister(n), ir.Imm32(imm32), ir.Imm1(0));
+     if (d == Reg::PC) {
+         if (S) {
+             // This is UNPREDICTABLE when in user-mode.
+@@ -102,7 +113,7 @@ bool TranslatorVisitor::arm_ADD_imm(Cond cond, bool S, Reg n, Reg d, int rotate,
+         return false;
+     }
+
+-    ir.SetRegister(d, result);
++    ir.SetRegister(d, select ? ir.ConditionalSelect(cond, result, ir.GetRegister(d)) : result);
+     if (S) {
+         ir.SetCpsrNZCV(ir.NZCVFrom(result));
+     }
+@@ -112,12 +123,13 @@ bool TranslatorVisitor::arm_ADD_imm(Cond cond, bool S, Reg n, Reg d, int rotate,
+
+ // ADD{S}<c> <Rd>, <Rn>, <Rm>{, <shift>}
+ bool TranslatorVisitor::arm_ADD_reg(Cond cond, bool S, Reg n, Reg d, Imm<5> imm5, ShiftType shift, Reg m) {
+-    if (!ArmConditionPassed(cond)) {
++    const bool select = CanSelectArmResult(cond_state, cond, d, S);
++    if (!select && !ArmConditionPassed(cond)) {
+         return true;
+     }
+
+     const auto shifted = EmitImmShift(ir.GetRegister(m), shift, imm5, ir.GetCFlag());
+-    const auto result = ir.AddWithCarry(ir.GetRegister(n), shifted.result, ir.Imm1(0));
++    const IR::U32 result = ir.AddWithCarry(ir.GetRegister(n), shifted.result, ir.Imm1(0));
+     if (d == Reg::PC) {
+         if (S) {
+             // This is UNPREDICTABLE when in user-mode.
+@@ -129,7 +141,7 @@ bool TranslatorVisitor::arm_ADD_reg(Cond cond, bool S, Reg n, Reg d, Imm<5> imm5
+         return false;
+     }
+
+-    ir.SetRegister(d, result);
++    ir.SetRegister(d, select ? ir.ConditionalSelect(cond, result, ir.GetRegister(d)) : result);
+     if (S) {
+         ir.SetCpsrNZCV(ir.NZCVFrom(result));
+     }
+@@ -485,24 +497,25 @@
+
+ // MOV{S}<c> <Rd>, #<const>
+ bool TranslatorVisitor::arm_MOV_imm(Cond cond, bool S, Reg d, int rotate, Imm<8> imm8) {
+-    if (!ArmConditionPassed(cond)) {
++    const bool select = CanSelectArmResult(cond_state, cond, d, S);
++    if (!select && !ArmConditionPassed(cond)) {
+         return true;
+     }
+
+     const auto imm_carry = ArmExpandImm_C(rotate, imm8, ir.GetCFlag());
+-    const auto result = ir.Imm32(imm_carry.imm32);
+-    if (d == Reg::PC) {
+-        if (S) {
+-            // This is UNPREDICTABLE when in user-mode.
+-            return UnpredictableInstruction();
+-        }
+-
+-        ir.ALUWritePC(result);
+-        ir.SetTerm(IR::Term::ReturnToDispatch{});
+-        return false;
+-    }
+-
+-    ir.SetRegister(d, result);
++    const IR::U32 result = ir.Imm32(imm_carry.imm32);
++    if (d == Reg::PC) {
++        if (S) {
++            // This is UNPREDICTABLE when in user-mode.
++            return UnpredictableInstruction();
++        }
++
++        ir.ALUWritePC(result);
++        ir.SetTerm(IR::Term::ReturnToDispatch{});
++        return false;
++    }
++
++    ir.SetRegister(d, select ? ir.ConditionalSelect(cond, result, ir.GetRegister(d)) : result);
+     if (S) {
+         ir.SetCpsrNZC(ir.NZFrom(result), imm_carry.carry);
+     }
+@@ -512,25 +525,26 @@
+
+ // MOV{S}<c> <Rd>, <Rm>
+ bool TranslatorVisitor::arm_MOV_reg(Cond cond, bool S, Reg d, Imm<5> imm5, ShiftType shift, Reg m) {
+-    if (!ArmConditionPassed(cond)) {
++    const bool select = CanSelectArmResult(cond_state, cond, d, S);
++    if (!select && !ArmConditionPassed(cond)) {
+         return true;
+     }
+
+     const auto carry_in = ir.GetCFlag();
+     const auto shifted = EmitImmShift(ir.GetRegister(m), shift, imm5, carry_in);
+-    const auto result = shifted.result;
+-    if (d == Reg::PC) {
+-        if (S) {
+-            // This is UNPREDICTABLE when in user-mode.
+-            return UnpredictableInstruction();
+-        }
+-
+-        ir.ALUWritePC(result);
+-        ir.SetTerm(IR::Term::ReturnToDispatch{});
+-        return false;
+-    }
+-
+-    ir.SetRegister(d, result);
++    const IR::U32 result = shifted.result;
++    if (d == Reg::PC) {
++        if (S) {
++            // This is UNPREDICTABLE when in user-mode.
++            return UnpredictableInstruction();
++        }
++
++        ir.ALUWritePC(result);
++        ir.SetTerm(IR::Term::ReturnToDispatch{});
++        return false;
++    }
++
++    ir.SetRegister(d, select ? ir.ConditionalSelect(cond, result, ir.GetRegister(d)) : result);
+     if (S) {
+         ir.SetCpsrNZC(ir.NZFrom(result), shifted.carry);
+     }
+@@ -639,24 +653,25 @@
+
+ // ORR{S}<c> <Rd>, <Rn>, #<const>
+ bool TranslatorVisitor::arm_ORR_imm(Cond cond, bool S, Reg n, Reg d, int rotate, Imm<8> imm8) {
+-    if (!ArmConditionPassed(cond)) {
++    const bool select = CanSelectArmResult(cond_state, cond, d, S);
++    if (!select && !ArmConditionPassed(cond)) {
+         return true;
+     }
+
+     const auto imm_carry = ArmExpandImm_C(rotate, imm8, ir.GetCFlag());
+-    const auto result = ir.Or(ir.GetRegister(n), ir.Imm32(imm_carry.imm32));
+-    if (d == Reg::PC) {
+-        if (S) {
+-            // This is UNPREDICTABLE when in user-mode.
+-            return UnpredictableInstruction();
+-        }
+-
+-        ir.ALUWritePC(result);
+-        ir.SetTerm(IR::Term::ReturnToDispatch{});
+-        return false;
+-    }
+-
+-    ir.SetRegister(d, result);
++    const IR::U32 result = ir.Or(ir.GetRegister(n), ir.Imm32(imm_carry.imm32));
++    if (d == Reg::PC) {
++        if (S) {
++            // This is UNPREDICTABLE when in user-mode.
++            return UnpredictableInstruction();
++        }
++
++        ir.ALUWritePC(result);
++        ir.SetTerm(IR::Term::ReturnToDispatch{});
++        return false;
++    }
++
++    ir.SetRegister(d, select ? ir.ConditionalSelect(cond, result, ir.GetRegister(d)) : result);
+     if (S) {
+         ir.SetCpsrNZC(ir.NZFrom(result), imm_carry.carry);
+     }
+@@ -666,25 +681,26 @@
+
+ // ORR{S}<c> <Rd>, <Rn>, <Rm>{, <shift>}
+ bool TranslatorVisitor::arm_ORR_reg(Cond cond, bool S, Reg n, Reg d, Imm<5> imm5, ShiftType shift, Reg m) {
+-    if (!ArmConditionPassed(cond)) {
++    const bool select = CanSelectArmResult(cond_state, cond, d, S);
++    if (!select && !ArmConditionPassed(cond)) {
+         return true;
+     }
+
+     const auto carry_in = ir.GetCFlag();
+     const auto shifted = EmitImmShift(ir.GetRegister(m), shift, imm5, carry_in);
+-    const auto result = ir.Or(ir.GetRegister(n), shifted.result);
+-    if (d == Reg::PC) {
+-        if (S) {
+-            // This is UNPREDICTABLE when in user-mode.
+-            return UnpredictableInstruction();
+-        }
+-
+-        ir.ALUWritePC(result);
+-        ir.SetTerm(IR::Term::ReturnToDispatch{});
+-        return false;
+-    }
+-
+-    ir.SetRegister(d, result);
++    const IR::U32 result = ir.Or(ir.GetRegister(n), shifted.result);
++    if (d == Reg::PC) {
++        if (S) {
++            // This is UNPREDICTABLE when in user-mode.
++            return UnpredictableInstruction();
++        }
++
++        ir.ALUWritePC(result);
++        ir.SetTerm(IR::Term::ReturnToDispatch{});
++        return false;
++    }
++
++    ir.SetRegister(d, select ? ir.ConditionalSelect(cond, result, ir.GetRegister(d)) : result);
+     if (S) {
+         ir.SetCpsrNZC(ir.NZFrom(result), shifted.carry);
+     }
+@@ -717,12 +733,13 @@ bool TranslatorVisitor::arm_ORR_rsr(Cond cond, bool S, Reg n, Reg d, Reg s, Shif
+
+ // RSB{S}<c> <Rd>, <Rn>, #<const>
+ bool TranslatorVisitor::arm_RSB_imm(Cond cond, bool S, Reg n, Reg d, int rotate, Imm<8> imm8) {
+-    if (!ArmConditionPassed(cond)) {
++    const bool select = CanSelectArmResult(cond_state, cond, d, S);
++    if (!select && !ArmConditionPassed(cond)) {
+         return true;
+     }
+
+     const u32 imm32 = ArmExpandImm(rotate, imm8);
+-    const auto result = ir.SubWithCarry(ir.Imm32(imm32), ir.GetRegister(n), ir.Imm1(1));
++    const IR::U32 result = ir.SubWithCarry(ir.Imm32(imm32), ir.GetRegister(n), ir.Imm1(1));
+     if (d == Reg::PC) {
+         if (S) {
+             // This is UNPREDICTABLE when in user-mode.
+@@ -734,7 +751,7 @@ bool TranslatorVisitor::arm_RSB_imm(Cond cond, bool S, Reg n, Reg d, int rotate,
+         return false;
+     }
+
+-    ir.SetRegister(d, result);
++    ir.SetRegister(d, select ? ir.ConditionalSelect(cond, result, ir.GetRegister(d)) : result);
+     if (S) {
+         ir.SetCpsrNZCV(ir.NZCVFrom(result));
+     }
+@@ -744,12 +761,13 @@ bool TranslatorVisitor::arm_RSB_imm(Cond cond, bool S, Reg n, Reg d, int rotate,
+
+ // RSB{S}<c> <Rd>, <Rn>, <Rm>{, <shift>}
+ bool TranslatorVisitor::arm_RSB_reg(Cond cond, bool S, Reg n, Reg d, Imm<5> imm5, ShiftType shift, Reg m) {
+-    if (!ArmConditionPassed(cond)) {
++    const bool select = CanSelectArmResult(cond_state, cond, d, S);
++    if (!select && !ArmConditionPassed(cond)) {
+         return true;
+     }
+
+     const auto shifted = EmitImmShift(ir.GetRegister(m), shift, imm5, ir.GetCFlag());
+-    const auto result = ir.SubWithCarry(shifted.result, ir.GetRegister(n), ir.Imm1(1));
++    const IR::U32 result = ir.SubWithCarry(shifted.result, ir.GetRegister(n), ir.Imm1(1));
+     if (d == Reg::PC) {
+         if (S) {
+             // This is UNPREDICTABLE when in user-mode.
+@@ -761,7 +779,7 @@ bool TranslatorVisitor::arm_RSB_reg(Cond cond, bool S, Reg n, Reg d, Imm<5> imm5
+         return false;
+     }
+
+-    ir.SetRegister(d, result);
++    ir.SetRegister(d, select ? ir.ConditionalSelect(cond, result, ir.GetRegister(d)) : result);
+     if (S) {
+         ir.SetCpsrNZCV(ir.NZCVFrom(result));
+     }
+@@ -947,24 +965,25 @@
+
+ // SUB{S}<c> <Rd>, <Rn>, #<const>
+ bool TranslatorVisitor::arm_SUB_imm(Cond cond, bool S, Reg n, Reg d, int rotate, Imm<8> imm8) {
+-    if (!ArmConditionPassed(cond)) {
++    const bool select = CanSelectArmResult(cond_state, cond, d, S);
++    if (!select && !ArmConditionPassed(cond)) {
+         return true;
+     }
+
+     const u32 imm32 = ArmExpandImm(rotate, imm8);
+-    const auto result = ir.SubWithCarry(ir.GetRegister(n), ir.Imm32(imm32), ir.Imm1(1));
+-    if (d == Reg::PC) {
+-        if (S) {
+-            // This is UNPREDICTABLE when in user-mode.
+-            return UnpredictableInstruction();
+-        }
+-
+-        ir.ALUWritePC(result);
+-        ir.SetTerm(IR::Term::ReturnToDispatch{});
+-        return false;
+-    }
+-
+-    ir.SetRegister(d, result);
++    const IR::U32 result = ir.SubWithCarry(ir.GetRegister(n), ir.Imm32(imm32), ir.Imm1(1));
++    if (d == Reg::PC) {
++        if (S) {
++            // This is UNPREDICTABLE when in user-mode.
++            return UnpredictableInstruction();
++        }
++
++        ir.ALUWritePC(result);
++        ir.SetTerm(IR::Term::ReturnToDispatch{});
++        return false;
++    }
++
++    ir.SetRegister(d, select ? ir.ConditionalSelect(cond, result, ir.GetRegister(d)) : result);
+     if (S) {
+         ir.SetCpsrNZCV(ir.NZCVFrom(result));
+     }
+@@ -974,24 +993,25 @@
+
+ // SUB{S}<c> <Rd>, <Rn>, <Rm>{, <shift>}
+ bool TranslatorVisitor::arm_SUB_reg(Cond cond, bool S, Reg n, Reg d, Imm<5> imm5, ShiftType shift, Reg m) {
+-    if (!ArmConditionPassed(cond)) {
++    const bool select = CanSelectArmResult(cond_state, cond, d, S);
++    if (!select && !ArmConditionPassed(cond)) {
+         return true;
+     }
+
+     const auto shifted = EmitImmShift(ir.GetRegister(m), shift, imm5, ir.GetCFlag());
+-    const auto result = ir.SubWithCarry(ir.GetRegister(n), shifted.result, ir.Imm1(1));
+-    if (d == Reg::PC) {
+-        if (S) {
+-            // This is UNPREDICTABLE when in user-mode.
+-            return UnpredictableInstruction();
+-        }
+-
+-        ir.ALUWritePC(result);
+-        ir.SetTerm(IR::Term::ReturnToDispatch{});
+-        return false;
+-    }
+-
+-    ir.SetRegister(d, result);
++    const IR::U32 result = ir.SubWithCarry(ir.GetRegister(n), shifted.result, ir.Imm1(1));
++    if (d == Reg::PC) {
++        if (S) {
++            // This is UNPREDICTABLE when in user-mode.
++            return UnpredictableInstruction();
++        }
++
++        ir.ALUWritePC(result);
++        ir.SetTerm(IR::Term::ReturnToDispatch{});
++        return false;
++    }
++
++    ir.SetRegister(d, select ? ir.ConditionalSelect(cond, result, ir.GetRegister(d)) : result);
+     if (S) {
+         ir.SetCpsrNZCV(ir.NZCVFrom(result));
+     }

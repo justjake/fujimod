@@ -28,6 +28,9 @@ pub struct StandaloneDma {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Definition {
+    /// Explicit ARM backend for a session built directly from this definition.
+    #[serde(default)]
+    pub cpu_backend: Option<fujimod_catalog_configuration::RunCpuBackend>,
     /// Physically addressed RAM ranges where device access observes data-cache maintenance.
     #[serde(default)]
     pub coherent_ranges: Option<fujimod_emulator_cpu_unicorn::aprofile::CoherenceOptions>,

@@ -12,8 +12,22 @@ set(DYNARMIC_FRONTENDS A32 CACHE STRING "")
 find_package(Git REQUIRED)
 set(DYNARMIC_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/dynarmic-source")
 set(DYNARMIC_PATCHES
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/a32-decoder-fixed-bits.patch"
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/a32-predicated-alu.patch"
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/a32-predicated-branch.patch"
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-a32-branch-flags.patch"
     "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-embedder.patch"
-    "${CMAKE_CURRENT_SOURCE_DIR}/patches/x64-exact-budget.patch")
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/x64-exact-budget.patch"
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/a32-select-nzcv.patch"
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-entry-budget.patch"
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-deferred-transfer-guard.patch"
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/ir-verification.patch"
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-local-arithmetic.patch"
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-guarded-word-page.patch"
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-translation-overhead.patch"
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-regalloc-locks.patch"
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-fpcr-switch.patch"
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-restoring-division.patch")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${DYNARMIC_PATCHES})
 file(REMOVE_RECURSE "${DYNARMIC_SOURCE}")
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/vendor/dynarmic/"
@@ -27,6 +41,7 @@ execute_process(
     COMMAND_ERROR_IS_FATAL ANY)
 add_subdirectory("${DYNARMIC_SOURCE}" "${CMAKE_CURRENT_BINARY_DIR}/dynarmic")
 
+find_package(Boost 1.57 REQUIRED)
 add_library(dynarmic_ffi STATIC csrc/dynarmic_ffi.cpp)
 target_compile_features(dynarmic_ffi PRIVATE cxx_std_20)
-target_link_libraries(dynarmic_ffi PRIVATE dynarmic merry::mcl)
+target_link_libraries(dynarmic_ffi PRIVATE dynarmic merry::mcl Boost::boost)

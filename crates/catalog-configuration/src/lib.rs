@@ -104,7 +104,7 @@ pub struct RunConfiguration {
 }
 
 impl RunConfiguration {
-    /// Backend selected for Cortex-A7 processors in this run.
+    /// Backend selected for Cortex-A7 and Cortex-R5F processors in this run.
     pub fn cpu_backend(&self) -> RunCpuBackend {
         self.preset
             .as_ref()

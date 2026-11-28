@@ -134,6 +134,7 @@ struct Boot {
     card_files: Vec<String>,
     second_card_files: Vec<String>,
     pokes: Vec<String>,
+    snapshot: Option<boot::SnapshotFile>,
     discovery: bool,
     gui: bool,
 }
@@ -158,6 +159,7 @@ fn parse(args: impl Iterator<Item = OsString>) -> Result<Option<Boot>, String> {
         card_files: Vec::new(),
         second_card_files: Vec::new(),
         pokes: Vec::new(),
+        snapshot: None,
         discovery: false,
         gui: false,
     };
@@ -391,26 +393,34 @@ impl Boot {
             })
             .transpose()?;
         let mut resolved = ResolvedConfiguration::with_overlays(configuration_id, &self.overlays)?;
+        if boot::is_exr2_run(&resolved)
+            || matches!(resolved.reference.soc.id.as_str(), "xp4" | "xpp")
+        {
+            self.snapshot = self
+                .path("--load-snapshot")
+                .as_deref()
+                .map(boot::SnapshotFile::read)
+                .transpose()?;
+        }
         if let Some(engine) = engine {
             resolved.override_engine(engine)?;
         }
         if let Some(backend) = self.text("--cpu-backend")? {
-            let backend = match backend.as_str() {
-                "unicorn" => RunCpuBackend::Unicorn,
-                "dynarmic" => RunCpuBackend::Dynarmic,
-                _ => return Err("--cpu-backend must be unicorn or dynarmic".into()),
-            };
-            resolved
-                .configuration
-                .preset
-                .as_mut()
-                .ok_or("--cpu-backend requires a run configuration with factory options")?
-                .factory_options
-                .cpu_backend = Some(backend);
-            fujimod_catalog_resolution::validate_selection(
-                &resolved.configuration,
-                &resolved.reference,
-            )?;
+            resolved.override_cpu_backend(backend.parse()?)?;
+        } else if engine.is_none()
+            && !self.discovery
+            && self
+                .values
+                .get("--execution-policy")
+                .is_none_or(|value| value != "interactive")
+            && self
+                .snapshot
+                .as_ref()
+                .map(boot::SnapshotFile::uses_dynarmic)
+                .transpose()?
+                .unwrap_or(true)
+        {
+            boot::prefer_dynarmic(&mut resolved)?;
         }
         Ok(resolved)
     }
@@ -619,7 +629,9 @@ fn run_exr2(
     let screenshot = boot_options.path("--screenshot");
     let limit = boot_options.instruction_limit()?.unwrap_or(2_000_000_000);
     let pc_trace = boot_options.pc_trace()?;
-    let execution_policy = boot_options.execution_policy(pc_trace.is_some())?;
+    let cpu_backend = resolved.configuration.cpu_backend();
+    let execution_policy = boot_options
+        .execution_policy(pc_trace.is_some() || cpu_backend == RunCpuBackend::Dynarmic)?;
     let mode = boot::discovery_mode(boot_options.discovery);
     let stubs = boot_options
         .stubs
@@ -628,8 +640,8 @@ fn run_exr2(
         .collect::<Result<Vec<_>, _>>()?;
     let mut session = boot::open(resolved, boot::StartupInputs::Exr2 { options, mode })?.session;
     session.board.install_discovery_callee_stubs(&stubs)?;
-    if let Some(path) = boot_options.path("--load-snapshot") {
-        boot::load_snapshot(&mut session, &path)?;
+    if let Some(snapshot) = boot_options.snapshot.take() {
+        snapshot.restore(&mut session)?;
     }
     boot::media::attach(
         &mut session,
@@ -727,6 +739,7 @@ fn run_exr2(
         boot::save_snapshot(&session, &path)?;
     }
     let mut receipt = serde_json::to_value(&report).map_err(|error| error.to_string())?;
+    receipt["cpu_backend"] = serde_json::json!(cpu_backend);
     if let Some(loaded) = loaded_mod {
         receipt["mod"] = loaded.report(&boot::mod_loader::BoardMachine(&session.board));
     }
@@ -865,7 +878,7 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     let output = options.path("--output");
     let screenshot = options.path("--screenshot");
     let status = options.duration("--status-every")?;
-    let load_snapshot = options.path("--load-snapshot");
+    let load_snapshot = options.snapshot.take();
     let save_snapshot = options.path("--save-snapshot");
     let save_nor = options.path("--save-nor");
     let mut power_inputs = std::collections::VecDeque::from(
@@ -918,10 +931,10 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
         .map(|specification| boot::host::parse_stub(specification))
         .collect::<Result<Vec<_>, _>>()?;
     let stubbed = stubs.iter().map(|stub| stub.address).collect::<Vec<_>>();
-    if let Some(path) = load_snapshot {
-        started.load_snapshot(&path)?;
-    }
     let boot::application::Board::Shared(session) = &mut started.board;
+    if let Some(snapshot) = load_snapshot {
+        snapshot.restore(session)?;
+    }
     session.board.set_execution_policy(policy)?;
     session.board.install_discovery_callee_stubs(&stubs)?;
     let trace = trace_output
@@ -1071,7 +1084,10 @@ fn run_window(mut options: Boot, resolved: ResolvedConfiguration) -> Result<Outc
         card_initialization_fault: None,
     };
     let selection = resolved.reference.clone();
-    let camera = boot::open_request(resolved, request)?;
+    let mut camera = boot::open_request(resolved, request)?;
+    if let Some(snapshot) = options.snapshot.take() {
+        snapshot.restore(&mut camera.session)?;
+    }
     let room = fujimod_emulator_gui::Room::loopback()?;
     let mut window = fujimod_emulator_gui::launch::connect(&room.endpoint().url)?;
     let report = fujimod_emulator_gui::serve(
@@ -1096,6 +1112,7 @@ fn run_open(open: Open) -> Result<Outcome, String> {
     let opened = camera::open(&library, &state, request).map_err(|error| error.to_string())?;
     let mut report = serde_json::json!({
         "firmware": opened.firmware,
+        "cpu_backend": opened.resolved.configuration.cpu_backend(),
         "boot": open.boot.name(),
         "sd_card": open
             .sd_card
@@ -1170,10 +1187,10 @@ fn run_boot(mut boot_options: Boot) -> Result<Outcome, String> {
         return run_application(boot_options, resolved);
     }
     match resolved.configuration.inputs.as_ref() {
-        Some(RunInputs::Exr2(_)) => run_exr2(boot_options, resolved),
         Some(RunInputs::Xp5(_)) => run_xp5(boot_options, resolved),
         Some(RunInputs::Xp4(_)) => Err("XP4 inputs declared for another SoC".into()),
-        None => Err(format!(
+        _ if boot::is_exr2_run(&resolved) => run_exr2(boot_options, resolved),
+        _ => Err(format!(
             "configuration {configuration_id} declares no startup inputs"
         )),
     }
@@ -1595,5 +1612,48 @@ mod tests {
             boot.execution_policy(false).unwrap_err(),
             "unknown CPU execution policy: approximate"
         );
+    }
+
+    #[test]
+    fn native_default_honors_explicit_cpu_and_policy_overrides() {
+        let default = if cfg!(all(
+            feature = "dynarmic",
+            any(target_arch = "aarch64", target_arch = "x86_64"),
+            any(target_os = "linux", target_os = "macos")
+        )) {
+            RunCpuBackend::Dynarmic
+        } else {
+            RunCpuBackend::Unicorn
+        };
+        for (configuration, flags, expected) in [
+            ("xt3-511", &["boot"][..], default),
+            ("xt20-211", &["boot"], default),
+            ("x70-110-rec", &["boot"], default),
+            ("xe2-411", &["boot"], default),
+            ("xt5-431", &["boot"], RunCpuBackend::Unicorn),
+            (
+                "xt3-511",
+                &["boot", "--cpu-backend", "unicorn"],
+                RunCpuBackend::Unicorn,
+            ),
+            (
+                "xt20-211",
+                &["boot", "--execution-policy", "interactive"],
+                RunCpuBackend::Unicorn,
+            ),
+            (
+                "xt3-511",
+                &["boot", "--engine", "unicorn"],
+                RunCpuBackend::Unicorn,
+            ),
+            ("xt3-511", &["boot", "--discovery"], RunCpuBackend::Unicorn),
+        ] {
+            let resolved = parse(args(flags))
+                .unwrap()
+                .unwrap()
+                .resolve(configuration)
+                .unwrap();
+            assert_eq!(resolved.configuration.cpu_backend(), expected, "{flags:?}");
+        }
     }
 }

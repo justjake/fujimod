@@ -90,6 +90,18 @@ impl ResolvedConfiguration {
         Ok(())
     }
 
+    /// Apply an explicit CPU backend after catalog overlays have resolved.
+    pub fn override_cpu_backend(&mut self, backend: RunCpuBackend) -> Result<(), String> {
+        validate_cpu_backend(backend, &self.reference)?;
+        self.configuration
+            .preset
+            .as_mut()
+            .ok_or("CPU backend selection requires a run preset with factory options")?
+            .factory_options
+            .cpu_backend = Some(backend);
+        Ok(())
+    }
+
     /// Resolve the selected caller-neutral body reset inputs, if the run names one.
     pub fn hardware_inputs(&self) -> Result<Option<HardwareInputs>, String> {
         let Some(id) = self
@@ -343,6 +355,24 @@ fn check_overlay_hardware(
     Ok(())
 }
 
+fn validate_cpu_backend(
+    backend: RunCpuBackend,
+    selection: &ResolvedSelection,
+) -> Result<(), String> {
+    if backend == RunCpuBackend::Dynarmic
+        && !selection.soc.processors.iter().any(|processor| {
+            use fujimod_catalog::reference::ProcessorModel;
+            matches!(
+                processor.model,
+                ProcessorModel::CortexA7 | ProcessorModel::CortexR5f
+            )
+        })
+    {
+        return Err("cpu_backend=dynarmic requires a Cortex-A7 or Cortex-R5F processor".into());
+    }
+    Ok(())
+}
+
 /// Check that every run-input identity exists in the selected hardware.
 pub fn validate_selection(
     configuration: &RunConfiguration,
@@ -356,13 +386,7 @@ pub fn validate_selection(
         return Err("run configuration identities differ from resolved hardware".into());
     }
 
-    if configuration.cpu_backend() == RunCpuBackend::Dynarmic
-        && !selection.soc.processors.iter().any(|processor| {
-            processor.model == fujimod_catalog::reference::ProcessorModel::CortexA7
-        })
-    {
-        return Err("cpu_backend=dynarmic requires a Cortex-A7 processor".into());
-    }
+    validate_cpu_backend(configuration.cpu_backend(), selection)?;
 
     if selection.body.dram_bytes.is_none() && configuration.dram_address_space.is_none() {
         return Err(format!(
@@ -1031,6 +1055,21 @@ mod tests {
                     .unwrap_or_else(|error| panic!("run overlay {id}: {error}"));
             assert_eq!(resolved.configuration.overlays, [id]);
         }
+    }
+
+    #[test]
+    fn explicit_cpu_backend_is_checked_against_processor_models() {
+        let mut exr2 = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
+        exr2.override_cpu_backend("dynarmic".parse().unwrap())
+            .unwrap();
+        assert_eq!(exr2.configuration.cpu_backend(), RunCpuBackend::Dynarmic);
+        exr2.override_cpu_backend("unicorn".parse().unwrap())
+            .unwrap();
+        assert_eq!(exr2.configuration.cpu_backend(), RunCpuBackend::Unicorn);
+
+        let mut xp5 = ResolvedConfiguration::bundled("xt5-431").unwrap();
+        assert!(xp5.override_cpu_backend(RunCpuBackend::Dynarmic).is_err());
+        assert_eq!(xp5.configuration.cpu_backend(), RunCpuBackend::Unicorn);
     }
 
     #[test]

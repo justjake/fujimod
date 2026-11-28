@@ -3,6 +3,90 @@
 //! invariant in the outer loop.
 use super::{Op, Operand, Proof, State, a32};
 
+/// A counting loop that shifts an unsigned register right until it is at
+/// most an immediate bound, incrementing a separate register each iteration.
+pub struct ShiftCountLoop {
+    shifted: usize,
+    counter: usize,
+    shift: u32,
+    step: u32,
+    bound: u32,
+    compare: Op,
+}
+
+impl ShiftCountLoop {
+    /// Decode the three instructions before a BHI back to the shift.
+    pub fn decode([shift, increment, compare]: [u32; 3]) -> Option<Self> {
+        let Op::Data {
+            opcode: 13,
+            flags: false,
+            dst: shifted,
+            lhs: 0,
+            rhs: Operand::Register(source, 1, shift),
+        } = a32::decode(shift)?
+        else {
+            return None;
+        };
+        let Op::Data {
+            opcode: 4,
+            flags: false,
+            dst: counter,
+            lhs,
+            rhs: Operand::Immediate(step, _),
+        } = a32::decode(increment)?
+        else {
+            return None;
+        };
+        let compare = a32::decode(compare)?;
+        let Op::Data {
+            opcode: 10,
+            flags: true,
+            lhs: compared,
+            rhs: Operand::Immediate(bound, _),
+            ..
+        } = compare
+        else {
+            return None;
+        };
+        if shifted != source || shifted != compared || counter != lhs || shifted == counter {
+            return None;
+        }
+        Some(Self {
+            shifted,
+            counter,
+            shift: if shift == 0 { 32 } else { shift },
+            step,
+            bound,
+            compare,
+        })
+    }
+
+    /// Consume complete iterations from the taken branch, leaving the PC at
+    /// the branch after the last comparison.
+    pub fn advance(&self, mut state: State, budget: u64) -> Option<(State, u64)> {
+        const COST: u64 = 4;
+        if !crate::arm::condition_passes(8, state.cpsr) || budget < COST {
+            return None;
+        }
+        let value = state.registers[self.shifted];
+        let bit_difference = self
+            .bound
+            .leading_zeros()
+            .saturating_sub(value.leading_zeros());
+        let estimate = bit_difference.div_ceil(self.shift).max(1);
+        let shifted = |rounds| value.checked_shr(rounds * self.shift).unwrap_or(0);
+        // At the estimate the value has at most as many bits as the bound.
+        // If it is still larger, one more right shift makes it smaller.
+        let until_exit = estimate + u32::from(shifted(estimate) > self.bound);
+        let rounds = u64::from(until_exit).min(budget / COST) as u32;
+        state.registers[self.shifted] = shifted(rounds);
+        state.registers[self.counter] =
+            state.registers[self.counter].wrapping_add(self.step.wrapping_mul(rounds));
+        let state = Proof::apply_ops(state, &[self.compare], |_, _| None).ok()?;
+        Some((state, u64::from(rounds) * COST))
+    }
+}
+
 pub struct RegisterLoop {
     counter: usize,
     before: Vec<Op>,

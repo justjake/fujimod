@@ -81,6 +81,7 @@ class emulator:
             camera_settings: Mapping[str, str] = ...,
             flash_seeds: Sequence[tuple[int, str | PathLike[str]]] = ...,
             engine: str | None = None,
+            cpu_backend: str | None = None,
             manifest: str | PathLike[str] | None = None,
             application_plan: str | PathLike[str] | None = None,
             discovery: bool = False,

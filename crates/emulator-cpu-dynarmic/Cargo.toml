@@ -14,6 +14,8 @@ jit = ["dep:cmake"]
 [dependencies]
 fujimod-emulator-cpu.workspace = true
 fujimod-workspace-hack.workspace = true
+postcard = { version = "1", default-features = false, features = ["alloc"] }
+serde.workspace = true
 
 [build-dependencies]
 cmake = { version = "0.1", optional = true }

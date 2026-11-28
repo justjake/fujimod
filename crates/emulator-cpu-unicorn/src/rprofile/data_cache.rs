@@ -20,6 +20,7 @@
 //! replacement policy, so a line written long ago leaves the cache the way it
 //! would on the processor. Cacheability comes from the processor's SCTLR and
 //! PMSAv7 regions.
+use fujimod_emulator_cpu::armv7r::{Region, matching_region};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -95,35 +96,12 @@ pub(crate) enum Policy {
 /// take priority. An address no enabled region covers, a disabled MPU or a
 /// disabled data cache is non-cacheable. Shareable Normal memory is not
 /// cached by the Cortex-R4/R5 L1 data cache.
-pub(crate) fn policy(sctlr: u32, regions: &[(u32, u32, u32)], address: u32) -> Policy {
+pub(crate) fn policy(sctlr: u32, regions: &[Region], address: u32) -> Policy {
     if sctlr & 1 == 0 || sctlr & (1 << 2) == 0 {
         return Policy::NonCacheable;
     }
-    for &(base, size, access) in regions.iter().rev() {
-        if size & 1 == 0 {
-            continue;
-        }
-        let bits = ((size >> 1) & 31) + 1;
-        if bits < 5 {
-            continue;
-        }
-        let mask = if bits >= 32 {
-            u32::MAX
-        } else {
-            (1u32 << bits) - 1
-        };
-        if address & !mask != base & !mask {
-            continue;
-        }
-        if bits >= 8 {
-            let subregion = (address & mask) >> (bits - 3);
-            if size >> 8 & (1 << subregion) != 0 {
-                continue;
-            }
-        }
-        return attributes(access);
-    }
-    Policy::NonCacheable
+    matching_region(regions, address)
+        .map_or(Policy::NonCacheable, |region| attributes(region.attributes))
 }
 
 fn attributes(access: u32) -> Policy {
@@ -153,23 +131,11 @@ pub(crate) struct Span {
 
 /// Split each mapped range at every region and subregion edge, then give
 /// each piece the policy of the region that wins there.
-pub(crate) fn spans(
-    sctlr: u32,
-    regions: &[(u32, u32, u32)],
-    maps: &[(u64, u64, u64)],
-) -> Vec<Span> {
-    let mut edges = Vec::new();
-    for &(base, size, _) in regions {
-        if size & 1 == 0 {
-            continue;
-        }
-        let bits = ((size >> 1) & 31) + 1;
-        let bytes = 1u64 << bits;
-        let base = base as u64 & !(bytes - 1);
-        for part in 0..=8 {
-            edges.push(base + bytes / 8 * part);
-        }
-    }
+pub(crate) fn spans(sctlr: u32, regions: &[Region], maps: &[(u64, u64, u64)]) -> Vec<Span> {
+    let edges: Vec<u64> = regions
+        .iter()
+        .flat_map(|region| region.boundaries())
+        .collect();
     let mut result = Vec::new();
     for &(begin, end, physical) in maps {
         let mut cuts: Vec<u64> = edges

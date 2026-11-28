@@ -23,12 +23,17 @@ impl Boot for CatalogBoot {
         {
             return Err("flash seeds require an XP5 run configuration".into());
         }
-        if let Some(engine) = inputs.engine {
+        if let Some(engine) = &inputs.engine {
             resolved.override_engine(
                 engine
                     .parse()
                     .map_err(|error| format!("invalid CPU engine: {error}"))?,
             )?;
+        }
+        if let Some(backend) = inputs.cpu_backend {
+            resolved.override_cpu_backend(backend.parse()?)?;
+        } else if inputs.engine.is_none() && !inputs.discovery {
+            boot::prefer_dynarmic(&mut resolved)?;
         }
         if let Some((numerator, denominator)) = inputs.instruction_rate {
             let rate = RunInstructionRate {

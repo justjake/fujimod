@@ -58,8 +58,8 @@ fn graph(private_peer: bool) -> Graph {
                 parked_until_sgi: false,
                 rprofile: Some(rprofile::core::Options {
                     tcm: if private_peer && core == 1 {
-                        rprofile::tcm::Options {
-                            atcm: rprofile::tcm::BankOptions {
+                        fujimod_emulator_cpu::armv7r::tcm::Options {
+                            atcm: fujimod_emulator_cpu::armv7r::tcm::BankOptions {
                                 bytes: 0x1000,
                                 reset: 1,
                             },

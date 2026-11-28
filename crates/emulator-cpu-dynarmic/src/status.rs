@@ -6,7 +6,15 @@ const MODE: u32 = 0x1f;
 const USER: u32 = 0x10;
 const SYSTEM: u32 = 0x1f;
 
-fn bank(cpsr: u32) -> Result<usize, String> {
+pub(super) fn vfp_permitted(cpacr: u32, cpsr: u32) -> bool {
+    let privileged = cpsr & MODE != USER;
+    [20, 22].into_iter().all(|shift| {
+        let access = (cpacr >> shift) & 3;
+        access == 3 || (access == 1 && privileged)
+    })
+}
+
+pub(super) fn bank(cpsr: u32) -> Result<usize, String> {
     match cpsr & MODE {
         USER | SYSTEM => Ok(0),
         0x11 => Ok(1), // FIQ
@@ -19,7 +27,7 @@ fn bank(cpsr: u32) -> Result<usize, String> {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 pub(super) struct Banks {
     /// R13/R14 are banked by mode. User and System share a bank.
     sp_lr: [[u32; 2]; 7],
@@ -71,11 +79,7 @@ impl Core {
 
     fn vfp_permitted(&self) -> bool {
         let cpacr = unsafe { ffi::dynarmic_get_cp15(self.inst, 0, 1, 0, 2) };
-        let privileged = self.cpsr() & MODE != USER;
-        [20, 22].into_iter().all(|shift| {
-            let access = (cpacr >> shift) & 3;
-            access == 3 || (access == 1 && privileged)
-        })
+        vfp_permitted(cpacr, self.cpsr())
     }
 
     pub(super) fn vfp_accessible(&self) -> bool {
@@ -143,6 +147,9 @@ impl Core {
         }
         if !arm::condition_passes(condition, cpsr) {
             return Ok(None);
+        }
+        if self.rprofile_instruction(word, user)? {
+            return Ok(Some(next));
         }
         if !user && armv7a::data_cache_set_way(word) {
             // This backend has a coherent RAM view and no private data cache.

@@ -11,6 +11,9 @@ license.workspace = true
 [lib]
 doctest = false
 
+[features]
+dynarmic = ["fujimod-emulator-boot/dynarmic"]
+
 [dependencies]
 fujimod-mcp-core.workspace = true
 fujimod-camera.workspace = true

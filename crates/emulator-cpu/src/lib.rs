@@ -12,6 +12,7 @@ use std::sync::{Arc, Condvar, Mutex};
 pub mod arm;
 pub mod arm64;
 pub mod armv7a;
+pub mod armv7r;
 pub mod exclusive;
 pub mod loop_proof;
 pub mod loops;
@@ -189,7 +190,7 @@ impl ExecutionPolicy {
 }
 /// Guest-clock anchor for architectural registers implemented by a backend.
 /// Its phase and ratio are supplied by the execution owner, never host time.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Clock {
     pub now: u64,
     pub phase: u64,
@@ -723,6 +724,16 @@ pub trait Cpu {
     /// Framework architectural adapters join this domain through checked RAM views.
     fn exclusive_domain(&self) -> Option<exclusive::Shared> {
         None
+    }
+    /// Reservation identity of a mapped address, shared by all bus aliases.
+    /// Private RAM must use a domain that no bus alias can name.
+    fn exclusive_address(
+        &self,
+        mapped: u64,
+        _bytes: usize,
+        _access: Access,
+    ) -> Result<u64, String> {
+        Ok(mapped)
     }
     fn model(&self) -> Model;
     fn features(&self) -> Features;

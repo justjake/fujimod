@@ -187,6 +187,17 @@ impl Device for Controller {
         )
     }
 
+    fn read_without_advance(&self, address: u64, size: u8, now: u64) -> Option<u64> {
+        // An ordinary read advances the whole controller first, including
+        // channels other than the one that owns this register.
+        if self.next_deadline(now).is_some_and(|due| due <= now) {
+            return None;
+        }
+        self.modes[self.mode(address, size)?]
+            .device
+            .read_without_advance(address, size, now)
+    }
+
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         self.advance(cx);
         let Some(index) = self.mode(address, size) else {
@@ -382,11 +393,18 @@ mod tests {
         assert_eq!(d.next_deadline(0), Some(2));
         let saved = d.checkpoint().unwrap();
         let before = d.fingerprint().unwrap();
+        let status = BASE + 0x24;
+        assert_eq!(d.read_without_advance(status, 4, 1), Some(1));
+        assert_eq!(d.read_without_advance(status, 2, 1), None);
+        assert_eq!(d.read_without_advance(status, 4, 2), None);
+        assert_eq!(&host.ram[0x2000..0x2040], &[0; 64]);
+        assert_eq!(d.fingerprint().unwrap(), before);
         advance(&mut d, &mut host, 1);
         assert_eq!(d.fingerprint().unwrap(), before);
         advance(&mut d, &mut host, 2);
         assert_eq!(&host.ram[0x2000..0x2040], &[0x6d; 64]);
-        assert_eq!(read(&mut d, &mut host, BASE + 0x24), 0x40);
+        assert_eq!(d.read_without_advance(status, 4, 2), Some(0x40));
+        assert_eq!(read(&mut d, &mut host, status), 0x40);
         assert_eq!(read(&mut d, &mut host, BASE + 0x44), 0x3000);
         assert_eq!(d.next_deadline(2), None);
         let completed = d.fingerprint().unwrap();

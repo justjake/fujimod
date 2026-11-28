@@ -3,9 +3,8 @@
 //!
 //! The key is everything that decides what a boot reaches: the firmware
 //! update, the resolved run configuration, the start, the SD card's files and
-//! options, the execution policy, the engine and this builder's version. A
-//! saved boot lives in `<state>/boot-cache/<firmware>/v<format>-<version>-<start>-<policy>-<engine>-<key>.snapshot.zst`;
-//! saving one removes the other keys of the same slot.
+//! options, the execution policy, the engine, the CPU backend and this builder's
+//! version. Saving a boot replaces older keys in its own execution slot.
 //!
 //! The cache holds at most `FUJIMOD_BOOT_CACHE_MAX` bytes (1 GiB by default).
 //! Saving past the limit deletes the least recently used saves first. Opening
@@ -16,7 +15,7 @@
 //! freshly built session and the session still reports REC. Anything else
 //! boots the camera and replaces the entry.
 use crate::{Flash, Library, OpenError, Opened, Request, Stage, Start, StateDir};
-use fujimod_catalog_configuration::RunEngine;
+use fujimod_catalog_configuration::{RunCpuBackend, RunEngine};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot as boot;
 use sha2::{Digest, Sha256};
@@ -68,7 +67,7 @@ fn prefix() -> String {
 /// One saved boot's place in the state directory.
 pub(crate) struct Key {
     directory: PathBuf,
-    /// Shared by every key of one firmware, start, policy and engine.
+    /// Shared by every key of one firmware, start, policy, engine and CPU backend.
     slot: String,
     file: String,
 }
@@ -85,7 +84,7 @@ impl Key {
             Start::Loader(_) => "loader".to_owned(),
         };
         let policy = request.policy.name();
-        let engine = engine_name(resolved);
+        let engine = execution_name(resolved);
         let slot = format!("{start}-{policy}-{engine}");
         let key = identity(request, resolved)?;
         let file = format!("{}{slot}-{key}.snapshot.zst", prefix());
@@ -255,14 +254,18 @@ fn saved(directory: &Path) -> Vec<Save> {
 }
 
 /// The engine a boot runs, from the request's override or the configuration.
-fn engine_name(resolved: &ResolvedConfiguration) -> String {
-    match resolved
+fn execution_name(resolved: &ResolvedConfiguration) -> String {
+    let engine = match resolved
         .configuration
         .execution
         .map(|execution| execution.engine)
     {
         Some(engine) => name(engine),
         None => "none".into(),
+    };
+    match resolved.configuration.cpu_backend() {
+        RunCpuBackend::Unicorn => engine,
+        RunCpuBackend::Dynarmic => format!("dynarmic-{engine}"),
     }
 }
 
@@ -313,7 +316,7 @@ fn identity(request: &Request, resolved: &ResolvedConfiguration) -> Result<Strin
         part(value.as_bytes());
     }
     part(request.policy.name().as_bytes());
-    part(engine_name(resolved).as_bytes());
+    part(execution_name(resolved).as_bytes());
     match &request.face_result_profile {
         Some(profile) => {
             part(b"face-result-profile");
@@ -389,6 +392,36 @@ fn identity(request: &Request, resolved: &ResolvedConfiguration) -> Result<Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn boot_cache_slots_distinguish_cpu_backends() {
+        let state = StateDir::at("state");
+        let request = Request {
+            firmware: "x70-110".into(),
+            files: crate::FirmwareInput::Library,
+            overlays: Vec::new(),
+            start: Start::Rom,
+            flash: Flash::Stock,
+            card: Default::default(),
+            policy: crate::ExecutionPolicy::Exact,
+            engine: None,
+            cache: crate::BootCache::Reuse,
+            run_to_rec: true,
+            nand_image: None,
+            face_result_profile: None,
+            camera_settings: Default::default(),
+            kept: Default::default(),
+        };
+        let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
+        let unicorn = Key::new(&state, &request, &resolved).unwrap();
+        resolved
+            .override_cpu_backend(RunCpuBackend::Dynarmic)
+            .unwrap();
+        let dynarmic = Key::new(&state, &request, &resolved).unwrap();
+        assert_ne!(unicorn.path(), dynarmic.path());
+        assert!(!unicorn.supersedes(&dynarmic.file));
+        assert!(!dynarmic.supersedes(&unicorn.file));
+    }
 
     fn directory(name: &str) -> PathBuf {
         let path =

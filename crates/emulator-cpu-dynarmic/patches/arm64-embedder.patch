@@ -1,5 +1,5 @@
 diff --git a/src/dynarmic/backend/arm64/a32_address_space.cpp b/src/dynarmic/backend/arm64/a32_address_space.cpp
-index bbdf925f..23672d0a 100644
+index bbdf925f..bbdf925f 100644
 --- a/src/dynarmic/backend/arm64/a32_address_space.cpp
 +++ b/src/dynarmic/backend/arm64/a32_address_space.cpp
 @@ -42,8 +42,9 @@ static void* EmitCallTrampoline(oaknut::CodeGenerator& code, T* this_) {
@@ -103,7 +103,7 @@ index bbdf925f..23672d0a 100644
          Optimization::DeadCodeElimination(ir_block);
      }
      if (conf.HasOptimization(OptimizationFlag::ConstProp)) {
-@@ -176,13 +235,39 @@ IR::Block A32AddressSpace::GenerateIR(IR::LocationDescriptor descriptor) const {
+@@ -176,13 +235,44 @@ IR::Block A32AddressSpace::GenerateIR(IR::LocationDescriptor descriptor) const {
          Optimization::DeadCodeElimination(ir_block);
      }
      Optimization::IdentityRemovalPass(ir_block);
@@ -134,17 +134,22 @@ index bbdf925f..23672d0a 100644
 +}
 +
 +CodePtr A32AddressSpace::LookupForDispatch(IR::LocationDescriptor descriptor) {
-+    const auto entry = GetOrEmit(descriptor);
-+    if (conf.HasOptimization(OptimizationFlag::FastDispatch)) {
-+        const u64 bits = descriptor.Value();
-+        const size_t index = ((bits ^ (bits >> 32)) >> 2) & (dispatch_entries - 1);
-+        dispatch_cache[index] = {bits, entry};
++    if (!conf.HasOptimization(OptimizationFlag::FastDispatch)) {
++        return GetOrEmit(descriptor);
 +    }
++    const u64 bits = descriptor.Value();
++    const size_t index = ((bits ^ (bits >> 32)) >> 2) & (dispatch_entries - 1);
++    auto& cached = dispatch_cache[index];
++    if (cached.entry && cached.descriptor == bits) {
++        return cached.entry;
++    }
++    const auto entry = GetOrEmit(descriptor);
++    cached = {bits, entry};
 +    return entry;
  }
 
  void A32AddressSpace::EmitPrelude() {
-@@ -196,7 +281,9 @@ void A32AddressSpace::EmitPrelude() {
+@@ -196,7 +286,9 @@ void A32AddressSpace::EmitPrelude() {
      prelude_info.read_memory_64 = EmitCallTrampoline<&A32::UserCallbacks::MemoryRead64>(code, conf.callbacks);
      prelude_info.wrapped_read_memory_8 = EmitWrappedReadCallTrampoline<&A32::UserCallbacks::MemoryRead8>(code, conf.callbacks);
      prelude_info.wrapped_read_memory_16 = EmitWrappedReadCallTrampoline<&A32::UserCallbacks::MemoryRead16>(code, conf.callbacks);
@@ -155,7 +160,7 @@ index bbdf925f..23672d0a 100644
      prelude_info.wrapped_read_memory_64 = EmitWrappedReadCallTrampoline<&A32::UserCallbacks::MemoryRead64>(code, conf.callbacks);
      prelude_info.exclusive_read_memory_8 = EmitExclusiveReadCallTrampoline<&A32::UserCallbacks::MemoryRead8, u8>(code, conf);
      prelude_info.exclusive_read_memory_16 = EmitExclusiveReadCallTrampoline<&A32::UserCallbacks::MemoryRead16, u16>(code, conf);
-@@ -316,6 +403,23 @@ void A32AddressSpace::EmitPrelude() {
+@@ -316,6 +408,23 @@ void A32AddressSpace::EmitPrelude() {
              code.B(LE, return_from_run_code);
          }
 
@@ -179,7 +184,7 @@ index bbdf925f..23672d0a 100644
          code.LDR(X0, l_this);
          code.MOV(X1, Xstate);
          code.LDR(Xscratch0, l_addr);
-@@ -323,7 +427,7 @@ void A32AddressSpace::EmitPrelude() {
+@@ -323,7 +432,7 @@ void A32AddressSpace::EmitPrelude() {
          code.BR(X0);
 
          const auto fn = [](A32AddressSpace& self, A32JitState& context) -> CodePtr {
@@ -188,7 +193,7 @@ index bbdf925f..23672d0a 100644
          };
 
          code.align(8);
-@@ -362,7 +466,7 @@ void A32AddressSpace::EmitPrelude() {
+@@ -362,7 +471,7 @@ void A32AddressSpace::EmitPrelude() {
 
      prelude_info.end_of_prelude = code.offset();
 
@@ -197,7 +202,7 @@ index bbdf925f..23672d0a 100644
      ProtectCodeMemory();
  }
 
-@@ -379,6 +483,8 @@ EmitConfig A32AddressSpace::GetEmitConfig() {
+@@ -379,6 +488,8 @@ EmitConfig A32AddressSpace::GetEmitConfig() {
          .tpidr_el0{},
 
          .check_halt_on_memory_access = conf.check_halt_on_memory_access,
@@ -235,6 +240,26 @@ index 3b9e9fb2..eb1a2650 100644
  };
 
  }  // namespace Dynarmic::Backend::Arm64
+diff --git a/src/dynarmic/backend/arm64/a32_core.h b/src/dynarmic/backend/arm64/a32_core.h
+index 86f6f28..85801d8 100644
+--- a/src/dynarmic/backend/arm64/a32_core.h
++++ b/src/dynarmic/backend/arm64/a32_core.h
+@@ -16,13 +16,13 @@ public:
+
+     HaltReason Run(A32AddressSpace& process, A32JitState& thread_ctx, volatile u32* halt_reason) {
+         const auto location_descriptor = thread_ctx.GetLocationDescriptor();
+-        const auto entry_point = process.GetOrEmit(location_descriptor);
++        const auto entry_point = process.LookupForDispatch(location_descriptor);
+         return process.prelude_info.run_code(entry_point, &thread_ctx, halt_reason);
+     }
+
+     HaltReason Step(A32AddressSpace& process, A32JitState& thread_ctx, volatile u32* halt_reason) {
+         const auto location_descriptor = A32::LocationDescriptor{thread_ctx.GetLocationDescriptor()}.SetSingleStepping(true);
+-        const auto entry_point = process.GetOrEmit(location_descriptor);
++        const auto entry_point = process.LookupForDispatch(location_descriptor);
+         return process.prelude_info.step_code(entry_point, &thread_ctx, halt_reason);
+     }
+ };
 diff --git a/src/dynarmic/backend/arm64/a32_interface.cpp b/src/dynarmic/backend/arm64/a32_interface.cpp
 index 6b38c410..7c1e70ca 100644
 --- a/src/dynarmic/backend/arm64/a32_interface.cpp

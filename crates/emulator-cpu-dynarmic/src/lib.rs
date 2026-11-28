@@ -6,15 +6,19 @@
 
 mod ffi;
 mod loops;
+mod rprofile;
+mod snapshot;
 mod status;
 
+pub use rprofile::Config as RProfileConfig;
+
 use fujimod_emulator_cpu::{memory::Backing, *};
-use std::any::Any;
 use std::cell::{Cell, RefCell, UnsafeCell};
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::ffi::c_void;
 use std::ptr::NonNull;
 use std::rc::Rc;
+use std::sync::atomic::Ordering;
 
 #[derive(Clone, Copy)]
 enum Mapping {
@@ -22,12 +26,42 @@ enum Mapping {
         bytes: usize,
         permissions: u32,
         ptr: NonNull<u8>,
+        physical_base: u64,
     },
     Mmio {
         bytes: usize,
         callbacks: Mmio,
         project: Option<DeviceReadProjection>,
     },
+}
+
+impl Mapping {
+    fn bytes(self) -> usize {
+        match self {
+            Self::Backing { bytes, .. } | Self::Mmio { bytes, .. } => bytes,
+        }
+    }
+    fn permissions(self) -> u32 {
+        match self {
+            Self::Backing { permissions, .. } => permissions,
+            Self::Mmio { .. } => 3,
+        }
+    }
+}
+
+fn ram_window_end(address: u64, physical: u64, bytes: usize) -> Result<u64, String> {
+    let end = address
+        .checked_add(bytes as u64)
+        .ok_or("Dynarmic mapping overflows")?;
+    if bytes == 0
+        || end > 1 << 32
+        || physical.checked_add(bytes as u64).is_none()
+        || !address.is_multiple_of(4096)
+        || !bytes.is_multiple_of(4096)
+    {
+        return Err("Dynarmic requires a nonempty page-aligned 32-bit mapping".into());
+    }
+    Ok(end)
 }
 
 extern "C" fn batch_instruction(word: u32) -> u32 {
@@ -47,8 +81,12 @@ extern "C" fn batch_instruction(word: u32) -> u32 {
     if word >> 28 == 15
         || armv7a::framework_instruction(word)
         || armv7a::exclusive_instruction(word)
+        || loops::is_self_branch(word)
     {
         return 0;
+    }
+    if body & 0x0f00_0e10 == 0x0e00_0a00 {
+        return 8; // VFP data processing, gated by the translation context.
     }
     if body & 0x0fff_0fff == 0x010f_0000 && (body >> 12) & 15 != 15 {
         return 1;
@@ -71,7 +109,13 @@ extern "C" fn batch_instruction(word: u32) -> u32 {
     let unconditional = word >> 28 == 14;
     match (body >> 25) & 7 {
         5 => {
-            if word >> 28 != 10 {
+            if word == 0x1aff_fffd {
+                7 // A two-instruction BNE loop, subject to the runtime proof.
+            } else if loops::is_shift_count_branch(word) {
+                9 // A branch that may close a shift-counting loop.
+            } else if loops::is_word_fill_branch(word) {
+                10 // A branch that may close a counted RAM fill.
+            } else if word >> 28 != 10 {
                 1
             } else if body & 0x0180_0000 == 0x0080_0000 {
                 7
@@ -81,7 +125,7 @@ extern "C" fn batch_instruction(word: u32) -> u32 {
         }
         2 | 3 => {
             let register_shift = body & (1 << 25) != 0 && body & 16 != 0;
-            if !writeback && !register_shift && (pre || (rn != 15 && rd != 15)) {
+            if !writeback && !register_shift && (pre || (rn != 15 && rd != 15 && rn != rd)) {
                 2
             } else if unconditional
                 && pre
@@ -110,14 +154,17 @@ extern "C" fn batch_instruction(word: u32) -> u32 {
             }
         }
         0 | 1 => {
-            if unconditional
-                && body & 0x0e00_0090 == 0x0000_0090
-                && body & 0x60 != 0
-                && rn != 15
-                && rd < 14
-                && (pre || !writeback)
-            {
-                3
+            let extra_transfer = body & 0x0e00_0090 == 0x0000_0090 && body & 0x60 != 0;
+            if extra_transfer && rn != 15 && rd < 14 && (pre || !writeback) {
+                if unconditional {
+                    3
+                } else if pre && !writeback && body & 0x0e10_00d0 != 0x0000_00d0 {
+                    // A predicated single transfer with no base update needs
+                    // neither a preflight callback nor a writeback rollback.
+                    2
+                } else {
+                    0
+                }
             } else if body & 0x0fbf_0fff == 0x010f_0000
                 || body & 0x0fb0_fff0 == 0x0120_f000
                 || body & 0x0fb0_f000 == 0x0320_f000
@@ -185,6 +232,7 @@ impl NativePage {
                 bytes,
                 permissions,
                 ptr,
+                physical_base,
             } if end <= bytes => {
                 let required = match access {
                     Access::Read => 1,
@@ -192,7 +240,10 @@ impl NativePage {
                     Access::Fetch => 4,
                 };
                 (permissions & required != 0).then(|| {
-                    NativeAccess::Ram(unsafe { ptr.as_ptr().add(mapped_offset) }, physical)
+                    NativeAccess::Ram(
+                        unsafe { ptr.as_ptr().add(mapped_offset) },
+                        physical_base + mapped_offset as u64,
+                    )
                 })
             }
             Mapping::Mmio {
@@ -216,6 +267,40 @@ struct WatchedPage {
     contents: [u8; 4096],
 }
 
+impl WatchedPage {
+    fn overlaps(&self, first: usize, last: usize) -> bool {
+        let first_slot = first / 64;
+        let last_slot = last / 64;
+        let first_mask = u64::MAX << (first % 64);
+        let last_mask = u64::MAX >> (63 - last % 64);
+        if first_slot == last_slot {
+            return self.seen[first_slot] & first_mask & last_mask != 0;
+        }
+        self.seen[first_slot] & first_mask != 0
+            || self.seen[last_slot] & last_mask != 0
+            || self.seen[first_slot + 1..last_slot]
+                .iter()
+                .any(|&bits| bits != 0)
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn watched_byte_ranges_include_only_requested_bits() {
+    let mut watched = WatchedPage {
+        seen: [0; 64],
+        contents: [0; 4096],
+    };
+    watched.seen[0] = 1 << 62;
+    watched.seen[1] = 1 << 1;
+    assert!(!watched.overlaps(61, 61));
+    assert!(watched.overlaps(61, 62));
+    assert!(!watched.overlaps(63, 64));
+    assert!(watched.overlaps(63, 65));
+    assert!(watched.overlaps(63, 128));
+    assert!(!watched.overlaps(66, 4095));
+}
+
 #[derive(Default)]
 struct WatchedPages {
     pages: RefCell<HashMap<usize, Box<WatchedPage>>>,
@@ -235,12 +320,7 @@ impl CodeVisibility {
             .contains_key(&(pointer.addr() & !4095))
     }
 
-    fn overlapping_pages(
-        &self,
-        pointer: *const u8,
-        count: usize,
-        mut visit: impl FnMut(usize) -> bool,
-    ) -> bool {
+    fn overlaps(&self, pointer: *const u8, count: usize) -> bool {
         if count == 0 {
             return false;
         }
@@ -248,16 +328,10 @@ impl CodeVisibility {
         let pages = self.0.pages.borrow();
         let end = start + count;
         ((start & !4095)..end).step_by(4096).any(|page| {
-            pages.get(&page).is_some_and(|bytes| {
-                (start.saturating_sub(page)..(end - page).min(4096))
-                    .any(|byte| bytes.seen[byte / 64] & (1 << (byte % 64)) != 0)
-                    && visit(page)
+            pages.get(&page).is_some_and(|watched| {
+                watched.overlaps(start.saturating_sub(page), (end - page).min(4096) - 1)
             })
         })
-    }
-
-    fn overlaps(&self, pointer: *const u8, count: usize) -> bool {
-        self.overlapping_pages(pointer, count, |_| true)
     }
 
     fn note_write(&self, pointer: *const u8, count: usize) {
@@ -327,7 +401,36 @@ struct NativeReadWindow {
     additional_reads: u64,
 }
 
+/// Most translated backing words have a single guest address. Allocate a
+/// list only when another mapping actually translates the same word.
+enum CompiledAddresses {
+    One(u32),
+    Aliases(Vec<u32>),
+}
+
+impl CompiledAddresses {
+    fn insert(&mut self, address: u32) {
+        match self {
+            Self::One(first) if *first != address => {
+                *self = Self::Aliases(vec![*first, address]);
+            }
+            Self::Aliases(addresses) if !addresses.contains(&address) => {
+                addresses.push(address);
+            }
+            _ => {}
+        }
+    }
+
+    fn addresses(&self) -> &[u32] {
+        match self {
+            Self::One(address) => std::slice::from_ref(address),
+            Self::Aliases(addresses) => addresses,
+        }
+    }
+}
+
 struct CoreShared {
+    rprofile: Option<rprofile::Profile>,
     exclusive: RefCell<Option<BoardExclusive>>,
     observe_exclusive_stores: Cell<bool>,
     #[cfg(test)]
@@ -338,11 +441,11 @@ struct CoreShared {
     seen_watch_revision: Cell<u64>,
     memory_flushes: Cell<u64>,
     selective_pages: Cell<u64>,
-    compiled_words: RefCell<HashMap<usize, BTreeSet<u32>>>,
+    compiled_words: RefCell<HashMap<usize, CompiledAddresses>>,
     compiled_descriptors: RefCell<HashMap<usize, BTreeSet<u32>>>,
     control_flushes: Cell<u64>,
-    mmu_context: Cell<Option<ffi::DynarmicMemoryControl>>,
-    contexts: RefCell<Vec<ffi::DynarmicMemoryControl>>,
+    mmu_context: Cell<Option<TranslationContext>>,
+    contexts: RefCell<Vec<TranslationContext>>,
     fault_hooks: RefCell<Vec<FaultHook>>,
     next_hook_id: Cell<usize>,
     observers: RefCell<Vec<(usize, Hook)>>,
@@ -364,11 +467,19 @@ struct CoreShared {
     native_generation: Cell<u64>,
     direct_pages: Cell<*mut *mut u8>,
     touched_pages: RefCell<Vec<u32>>,
+    observed_backings: RefCell<Vec<BackingObserver>>,
 
     native_pages: [Cell<Option<NativePage>>; 24],
     fault: RefCell<Option<ExecutionError>>,
     abort: Cell<Option<(u32, u32, Access)>>,
     inst: Cell<*mut ffi::DynarmicInstance>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct TranslationContext {
+    control: ffi::DynarmicMemoryControl,
+    protection_regions: Option<rprofile::Regions>,
+    vfp_enabled: bool,
 }
 
 fn contains(range: HookRange, address: u64) -> bool {
@@ -379,6 +490,44 @@ fn contains(range: HookRange, address: u64) -> bool {
 }
 
 impl CoreShared {
+    fn clear_reservation(&self) -> Result<(), String> {
+        if let Some(context) = self.exclusive.borrow().as_ref() {
+            context
+                .monitors
+                .lock()
+                .map_err(|_| "exclusive monitors poisoned")?
+                .clear(context.owner);
+        }
+        Ok(())
+    }
+
+    fn mark_backing_write(&self, pointer: *mut u8, bytes: usize) {
+        let start = pointer.addr();
+        let end = start + bytes;
+        for range in self.observed_backings.borrow().iter() {
+            let base = range.backing.as_ptr().addr();
+            let first = start.max(base);
+            let limit = end.min(base + range.bytes);
+            if first >= limit {
+                continue;
+            }
+            let first_page = (first - base) >> range.page_shift;
+            let last_page = (limit - 1 - base) >> range.page_shift;
+            for page in first_page..=last_page {
+                let word = page / 64;
+                // SAFETY: observe_backings requires both bitmaps to cover the backing.
+                unsafe {
+                    (*range.bitmap.as_ptr().add(word))
+                        .fetch_or(1 << (page % 64), Ordering::Relaxed);
+                    if let Some(summary) = range.summary {
+                        (*summary.as_ptr().add(word / 64))
+                            .fetch_or(1 << (word % 64), Ordering::Relaxed);
+                    }
+                }
+            }
+        }
+    }
+
     fn refresh_exclusive_stores(&self) -> Result<(), String> {
         let context = self.exclusive.borrow();
         let observing = match &*context {
@@ -391,6 +540,10 @@ impl CoreShared {
         };
         if self.observe_exclusive_stores.replace(observing) != observing {
             unsafe { ffi::dynarmic_observe_stores(self.inst.get(), observing) };
+            if !cfg!(target_arch = "aarch64") {
+                // Without a native store guard, revoke writable inline pages.
+                self.clear_inline_pages();
+            }
         }
         Ok(())
     }
@@ -474,27 +627,56 @@ impl CoreShared {
     }
 
     fn mapping(&self, address: u64, bytes: usize) -> Option<(Mapping, usize)> {
+        if let Some(profile) = &self.rprofile
+            && profile.overlaps_tcm(address, bytes)
+        {
+            return profile.tcm_region(address, bytes);
+        }
         let mappings = self.mappings.borrow();
         let (&base, &mapping) = mappings.range(..=address).next_back()?;
-        let size = match mapping {
-            Mapping::Backing { bytes, .. } | Mapping::Mmio { bytes, .. } => bytes,
-        };
+        let size = mapping.bytes();
         let offset = usize::try_from(address - base).ok()?;
         (offset.checked_add(bytes)? <= size).then_some((mapping, offset))
     }
 
-    fn translate(&self, address: u32, access: Access) -> Result<u64, String> {
-        self.walk(address, access)?
-            .map_err(|status| format!("ARMv7 page fault at {address:#010x} (status {status:#04x})"))
+    fn has_mmio(&self, address: u64, bytes: usize) -> bool {
+        self.mappings.borrow().iter().any(|(&base, mapping)| {
+            matches!(mapping, Mapping::Mmio { bytes: length, .. }
+                if base < address + bytes as u64 && address < base + *length as u64)
+        })
     }
 
-    fn walk(&self, address: u32, access: Access) -> Result<Result<u64, u32>, String> {
-        self.walk_descriptors(address, access, |_, _| {})
+    fn translate(&self, address: u32, access: Access) -> Result<u64, String> {
+        self.walk(address, 1, access)?.map_err(|status| {
+            format!("ARMv7 memory fault at {address:#010x} (status {status:#04x})")
+        })
+    }
+
+    fn walk(&self, address: u32, bytes: usize, access: Access) -> Result<Result<u64, u32>, String> {
+        self.walk_descriptors(address, bytes, access, |_, _| {})
+    }
+
+    fn walk_native_page(
+        &self,
+        address: u32,
+        access: Access,
+        descriptor: impl FnMut(*const [u8; 4], u32),
+    ) -> Result<Result<u64, u32>, String> {
+        if self.rprofile.is_some() {
+            let begin = address & !4095;
+            // The MPU can change permissions inside a page. Cache a pointer
+            // only after checking the entire page for the requested access.
+            return self
+                .walk_descriptors(begin, 4096, access, descriptor)
+                .map(|result| result.map(|physical| physical + u64::from(address - begin)));
+        }
+        self.walk_descriptors(address, 1, access, descriptor)
     }
 
     fn walk_descriptors(
         &self,
         address: u32,
+        bytes: usize,
         access: Access,
         mut descriptor: impl FnMut(*const [u8; 4], u32),
     ) -> Result<Result<u64, u32>, String> {
@@ -509,7 +691,15 @@ impl CoreShared {
             dacr,
             fcseidr,
             cpsr,
+            ..
         } = control;
+        if let Some(profile) = &self.rprofile {
+            return Ok(profile
+                .mpu
+                .borrow()
+                .check(sctlr, cpsr, address, bytes, access)
+                .map(|()| u64::from(address)));
+        }
         if sctlr & 1 == 0 {
             return Ok(Ok(address.into()));
         }
@@ -546,8 +736,9 @@ impl CoreShared {
     fn watch_code_backing(&self, pointer: *const u8) {
         let page = pointer.addr() & !4095;
         let mut pages = self.code_visibility.0.pages.borrow_mut();
-        let new = !pages.contains_key(&page);
+        let mut new = false;
         let watched = pages.entry(page).or_insert_with(|| {
+            new = true;
             Box::new(WatchedPage {
                 seen: [0; 64],
                 contents: [0; 4096],
@@ -566,17 +757,17 @@ impl CoreShared {
         let revision = self.code_visibility.0.watch_revision.get().wrapping_add(1);
         self.code_visibility.0.watch_revision.set(revision);
         self.seen_watch_revision.set(revision);
-        for slot in self.touched_pages.borrow().iter().copied() {
-            if self.inline_page(slot << 12).addr() & !4095 == page {
-                self.clear_inline_page(slot);
-            }
-        }
+        self.revoke_inline_stores(|backing| backing == page);
     }
 
     fn before_run(&self, inline_allowed: bool) {
         let revision = self.code_visibility.0.watch_revision.get();
-        if self.seen_watch_revision.replace(revision) != revision || !inline_allowed {
+        let changed = self.seen_watch_revision.replace(revision) != revision;
+        if !inline_allowed {
             self.clear_inline_pages();
+        } else if changed {
+            let watched = self.code_visibility.0.pages.borrow();
+            self.revoke_inline_stores(|page| watched.contains_key(&page));
         }
     }
 
@@ -587,16 +778,23 @@ impl CoreShared {
         unsafe { ffi::dynarmic_clear_cache(self.inst.get()) };
     }
 
-    fn flush_changed_code(&self, read_context: bool) {
+    fn flush_changed_code(&self, read_context: bool, fpexc: u32) {
         let revision = self.code_visibility.0.revision.get();
         let mut recycle_contexts = false;
         if read_context {
             let mut control = ffi::DynarmicMemoryControl::default();
             unsafe { ffi::dynarmic_memory_control(self.inst.get(), &mut control) };
+            let vfp_enabled = fpexc != 0 && status::vfp_permitted(control.cpacr, control.cpsr);
+            control.cpacr = 0;
             // Key the native translations by the inputs the short-descriptor
             // walker uses. Guest reads still see unmodified CP15 registers.
             control.cpsr = u32::from(control.cpsr & 31 == 0x10);
-            control.sctlr &= (1 << 29) | (1 << 25) | (1 << 23) | 1;
+            let rprofile = self.rprofile.is_some();
+            control.sctlr &= if rprofile {
+                (1 << 17) | (1 << 13) | 1
+            } else {
+                (1 << 29) | (1 << 25) | (1 << 23) | 1
+            };
             control.ttbcr &= (1 << 31) | (1 << 5) | (1 << 4) | 7;
             let split = control.ttbcr & 7;
             control.ttbr0 &= u32::MAX << (14 - split);
@@ -606,36 +804,48 @@ impl CoreShared {
                 control.ttbr1 = 0;
                 control.ttbcr &= !(1 << 5);
             }
-            if control.sctlr & 1 == 0 {
+            if control.sctlr & 1 == 0 || rprofile {
                 control = ffi::DynarmicMemoryControl {
                     cpsr: control.cpsr,
+                    sctlr: if rprofile { control.sctlr } else { 0 },
                     ..Default::default()
                 };
             }
-            if self.mmu_context.replace(Some(control)) != Some(control) {
+            let context = TranslationContext {
+                control,
+                protection_regions: self
+                    .rprofile
+                    .as_ref()
+                    .filter(|_| control.sctlr & 1 != 0)
+                    .map(|profile| profile.mpu.borrow().regions),
+                vfp_enabled,
+            };
+            if self.mmu_context.replace(Some(context)) != Some(context) {
                 self.clear_inline_pages();
                 self.control_flushes.set(self.control_flushes.get() + 1);
-                if cfg!(target_arch = "aarch64") {
+                let position = if cfg!(target_arch = "aarch64") {
                     let mut contexts = self.contexts.borrow_mut();
                     let position =
                         contexts
                             .iter()
-                            .position(|c| *c == control)
+                            .position(|c| *c == context)
                             .unwrap_or_else(|| {
                                 if contexts.len() == 32 {
                                     contexts.clear();
                                     recycle_contexts = true;
                                 }
                                 let id = contexts.len();
-                                contexts.push(control);
+                                contexts.push(context);
                                 id
                             });
-                    unsafe {
-                        ffi::dynarmic_set_translation_context(self.inst.get(), position as u32)
-                    };
+                    position as u32
                 } else {
                     recycle_contexts = true;
-                }
+                    0
+                };
+                unsafe {
+                    ffi::dynarmic_set_translation_context(self.inst.get(), position, vfp_enabled)
+                };
             }
         }
         let previous = self.seen_revision.replace(revision);
@@ -649,7 +859,7 @@ impl CoreShared {
                 let mut descriptors = self.compiled_descriptors.borrow_mut();
                 let complete = self.code_visibility.changed_since(previous, |word| {
                     if let Some(targets) = compiled.remove(&word) {
-                        words.extend(targets);
+                        words.extend(targets.addresses().iter().copied());
                     }
                     if let Some(targets) = descriptors.remove(&word) {
                         pages.extend(targets);
@@ -689,8 +899,8 @@ impl CoreShared {
         self.compiled_words
             .borrow_mut()
             .entry(pointer.addr() & !3)
-            .or_default()
-            .insert(address);
+            .and_modify(|compiled| compiled.insert(address))
+            .or_insert(CompiledAddresses::One(address));
     }
 
     fn fetch_code(&self, address: u32, compiled: bool) -> Result<Result<u32, u32>, String> {
@@ -707,7 +917,7 @@ impl CoreShared {
                 pointer.cast::<[u8; 4]>().read()
             })));
         }
-        let physical = match self.walk_descriptors(address, Access::Fetch, |p, _| {
+        let physical = match self.walk_descriptors(address, 4, Access::Fetch, |p, _| {
             if compiled {
                 self.watch_compiled_descriptor(p, address);
             }
@@ -747,8 +957,14 @@ impl CoreShared {
         unsafe { ffi::dynarmic_abort_access(self.inst.get()) };
     }
 
-    fn walk_for_guest(&self, address: u32, access: Access, protected: Fault) -> Option<u64> {
-        match self.walk(address, access) {
+    fn walk_for_guest(
+        &self,
+        address: u32,
+        bytes: usize,
+        access: Access,
+        protected: Fault,
+    ) -> Option<u64> {
+        match self.walk(address, bytes, access) {
             Ok(Ok(physical)) => Some(physical),
             Ok(Err(status)) => {
                 self.abort.set(Some((address, status, access)));
@@ -778,17 +994,21 @@ impl CoreShared {
         let mut addresses = [(std::ptr::null_mut(), 0); 2];
         let needed = if output.is_some() { 2 } else { 1 };
         for (index, &(virtual_address, count)) in pieces.iter().enumerate() {
-            let Some(physical) = self.walk_for_guest(virtual_address, access, protected) else {
+            let Some(physical) = self.walk_for_guest(virtual_address, count, access, protected)
+            else {
                 return 0;
             };
-            let Some((Mapping::Backing { ptr, permissions, .. }, offset)) = self.mapping(physical, count)
+            let Some((Mapping::Backing { ptr, permissions, physical_base, .. }, offset)) = self.mapping(physical, count)
                 .filter(|(mapping, _)| matches!(mapping, Mapping::Backing { permissions, .. } if permissions & needed != 0))
             else {
                 self.fail(protected, format!("Dynarmic cross-page {access:?} requires RAM at {virtual_address:#010x}"));
                 return 0;
             };
             debug_assert!(permissions & needed != 0);
-            addresses[index] = (unsafe { ptr.as_ptr().add(offset) }, physical);
+            addresses[index] = (
+                unsafe { ptr.as_ptr().add(offset) },
+                physical_base + offset as u64,
+            );
         }
         let mut bytes = output.unwrap_or(0).to_le_bytes();
         let (first, second) = bytes.split_at_mut(split);
@@ -806,6 +1026,7 @@ impl CoreShared {
             if output.is_some() {
                 unsafe { std::ptr::copy_nonoverlapping(piece.as_ptr(), pointer, count) };
                 self.code_visibility.note_write(pointer, count);
+                self.mark_backing_write(pointer, count);
                 self.note_guest_store(physical, count);
             } else {
                 unsafe { std::ptr::copy_nonoverlapping(pointer, piece.as_mut_ptr(), count) };
@@ -815,7 +1036,11 @@ impl CoreShared {
     }
 
     fn inline_page(&self, address: u32) -> *mut u8 {
-        unsafe { self.direct_pages.get().add((address >> 12) as usize).read() }
+        let offset = unsafe { self.direct_pages.get().add((address >> 12) as usize).read() };
+        if offset.is_null() {
+            return offset;
+        }
+        offset.wrapping_add((address & !4095) as usize)
     }
 
     fn clear_inline_page(&self, page: u32) {
@@ -827,6 +1052,28 @@ impl CoreShared {
         }
     }
 
+    fn revoke_inline_stores(&self, watched: impl Fn(usize) -> bool) {
+        self.touched_pages.borrow_mut().retain(|&page| {
+            let pointer = self.inline_page(page << 12);
+            if pointer.is_null() {
+                return false;
+            }
+            if pointer.addr() & 1 != 0 || !watched(pointer.addr() & !4095) {
+                return true;
+            }
+            if cfg!(target_arch = "aarch64") {
+                // A new code watch changes store handling only. Reuse the
+                // read translation while keeping stores on the checked path.
+                let entry = unsafe { self.direct_pages.get().add(page as usize) };
+                unsafe { entry.write(entry.read().map_addr(|bias| bias | 1)) };
+                true
+            } else {
+                self.clear_inline_page(page);
+                false
+            }
+        });
+    }
+
     fn clear_inline_pages(&self) {
         self.native_generation
             .set(self.native_generation.get().wrapping_add(1));
@@ -836,37 +1083,64 @@ impl CoreShared {
     }
 
     fn install_inline_page(&self, address: u32, pointer: *mut u8, access: Access) {
-        if !self.inline_page(address).is_null() {
+        let previous = self.inline_page(address);
+        if !previous.is_null() && (previous.addr() & 1 == 0 || access != Access::Write) {
             return;
         }
-        let Ok(Ok(physical)) = self.walk_descriptors(address, Access::Read, |p, _| {
-            self.watch_code_backing(p.cast())
-        }) else {
+        let within = (address & 4095) as usize;
+        // A watched backing can never gain inline write access. Preserve its
+        // existing read entry when the checked store uses the same bytes.
+        if access == Access::Write
+            && (!cfg!(target_arch = "aarch64")
+                || (!previous.is_null()
+                    && previous.map_addr(|p| p & !1).wrapping_add(within) == pointer))
+            && self.code_visibility.watched(pointer)
+        {
             return;
-        };
-        let Some((
-            Mapping::Backing {
-                ptr, permissions, ..
-            },
-            offset,
-        )) = self.mapping(physical & !4095, 4096)
+        }
+        let page_address = address & !4095;
+        let Some((checked, NativeAccess::Ram(backing_page, _))) =
+            self.native_page(page_address, 4096, Access::Read)
         else {
             return;
         };
-        let within = (address & 4095) as usize;
-        if permissions & 1 == 0 || unsafe { ptr.as_ptr().add(offset + within) } != pointer {
+        if backing_page.addr() & 4095 != 0 || unsafe { backing_page.add(within) } != pointer {
             return;
         }
-        let write_allowed = !self.code_visibility.watched(pointer)
+        for (descriptor, _) in checked.descriptors.into_iter().flatten() {
+            self.watch_code_backing(descriptor.cast());
+        }
+        let Mapping::Backing { permissions, .. } = checked.mapping else {
+            unreachable!("a checked RAM page must have backing permissions");
+        };
+        // The first store after rearming must mark the backing before any
+        // generated store can bypass the callback. A read only installs a
+        // writable page when there are no backing observers.
+        let write_allowed = (access == Access::Write || self.observed_backings.borrow().is_empty())
+            && !self.code_visibility.watched(pointer)
             && permissions & 2 != 0
-            && (access == Access::Write
-                || self.walk(address, Access::Write).ok().and_then(Result::ok) == Some(physical));
+            && (self.rprofile.is_none() && access == Access::Write
+                || self
+                    .native_page(page_address, 4096, Access::Write)
+                    .is_some_and(|(page, _)| page.physical_page == checked.physical_page));
+        // Only the ARM64 emitter checks the write-protection tag on stores.
+        if !cfg!(target_arch = "aarch64") && (!write_allowed || self.observe_exclusive_stores.get())
+        {
+            return;
+        }
+        // The JIT adds the full guest address to this bias. Both page
+        // starts are aligned, leaving the low bit for write protection.
+        let bias = backing_page.wrapping_sub(page_address as usize);
+        if bias.is_null() {
+            return; // The JIT reserves zero for a missing page.
+        }
         let page = address >> 12;
         let slot = unsafe { self.direct_pages.get().add(page as usize) };
-        let tagged =
-            unsafe { ptr.as_ptr().add(offset) }.map_addr(|p| p | usize::from(!write_allowed));
+        let tagged = bias.map_addr(|p| p | usize::from(!write_allowed));
         unsafe { slot.write(tagged) };
-        self.touched_pages.borrow_mut().push(page);
+        if previous.is_null() {
+            self.touched_pages.borrow_mut().push(page);
+        }
     }
 
     fn write_transfer(word: u32) -> bool {
@@ -990,7 +1264,7 @@ impl CoreShared {
         let mut descriptors = [None; 2];
         let mut n = 0;
         let physical = self
-            .walk_descriptors(address, access, |ptr, value| {
+            .walk_native_page(address, access, |ptr, value| {
                 descriptors[n] = Some((ptr, value));
                 n += 1;
             })
@@ -1236,6 +1510,7 @@ impl CoreShared {
                     unsafe {
                         std::ptr::copy_nonoverlapping(value.to_le_bytes().as_ptr(), pointer, size)
                     };
+                    self.mark_backing_write(pointer, size);
                     self.note_guest_store(physical, size);
                 }
                 if room == size {
@@ -1267,7 +1542,7 @@ impl CoreShared {
         if size > room {
             return self.cross_page_ram(address, size, room, access, protected, output);
         }
-        let Some(physical) = self.walk_for_guest(address, access, protected) else {
+        let Some(physical) = self.walk_for_guest(address, size, access, protected) else {
             return 0;
         };
         let mut mapped = self.mapping(physical, size);
@@ -1327,17 +1602,19 @@ impl CoreShared {
                 };
                 u64::from_le_bytes(bytes)
             }
-            (Mapping::Backing { ptr, .. }, Some(value)) => {
+            (
+                Mapping::Backing {
+                    ptr, physical_base, ..
+                },
+                Some(value),
+            ) => {
+                let pointer = unsafe { ptr.as_ptr().add(offset) };
                 unsafe {
-                    std::ptr::copy_nonoverlapping(
-                        value.to_le_bytes().as_ptr(),
-                        ptr.as_ptr().add(offset),
-                        size,
-                    )
+                    std::ptr::copy_nonoverlapping(value.to_le_bytes().as_ptr(), pointer, size)
                 };
-                self.code_visibility
-                    .note_write(unsafe { ptr.as_ptr().add(offset) }, size);
-                self.note_guest_store(physical, size);
+                self.code_visibility.note_write(pointer, size);
+                self.mark_backing_write(pointer, size);
+                self.note_guest_store(physical_base + offset as u64, size);
                 0
             }
             (Mapping::Mmio { callbacks, .. }, value) => {
@@ -1360,7 +1637,6 @@ pub struct Core {
     identity: Identity,
     model: Model,
     shared: Box<CoreShared>,
-    memory_regions: RefCell<Vec<MemoryRegion>>,
     last_progress: Cell<u64>,
     pending_anchor: Cell<Option<DeviceReadAnchor>>,
 
@@ -1385,10 +1661,28 @@ impl Core {
         model: Model,
         code_visibility: CodeVisibility,
     ) -> Result<Self, String> {
-        if model != Model::CortexA7 {
-            return Err("Dynarmic requires a Cortex-A7 processor".into());
-        }
+        let profile = match model {
+            Model::CortexA7 => None,
+            Model::CortexR5F => Some(RProfileConfig::default()),
+            _ => return Err("Dynarmic requires a Cortex-A7 or Cortex-R5F processor".into()),
+        };
+        Self::construct(model, code_visibility, profile)
+    }
+
+    pub fn new_rprofile(
+        config: RProfileConfig,
+        code_visibility: CodeVisibility,
+    ) -> Result<Self, String> {
+        Self::construct(Model::CortexR5F, code_visibility, Some(config))
+    }
+
+    fn construct(
+        model: Model,
+        code_visibility: CodeVisibility,
+        profile: Option<RProfileConfig>,
+    ) -> Result<Self, String> {
         let shared = Box::new(CoreShared {
+            rprofile: profile.map(rprofile::Profile::new).transpose()?,
             exclusive: RefCell::new(None),
             observe_exclusive_stores: Cell::new(false),
             #[cfg(test)]
@@ -1425,6 +1719,7 @@ impl Core {
             native_generation: Cell::new(0),
             direct_pages: Cell::new(std::ptr::null_mut()),
             touched_pages: RefCell::new(Vec::with_capacity(16)),
+            observed_backings: RefCell::new(Vec::new()),
 
             native_pages: Default::default(),
             fault: RefCell::new(None),
@@ -1441,6 +1736,7 @@ impl Core {
                 std::ptr::null_mut()
             },
             batch_instruction,
+            is_counted_loop: loops::is_counted_loop,
             guard_transfer: Self::guard_transfer,
             read_code: Self::read_code,
             read: Self::read,
@@ -1448,7 +1744,7 @@ impl Core {
             write: Self::write,
         };
 
-        let inst = unsafe { ffi::dynarmic_create(&cb) };
+        let inst = unsafe { ffi::dynarmic_create(&cb, model == Model::CortexR5F) };
         if inst.is_null() {
             return Err("failed to create Dynarmic JIT instance".into());
         }
@@ -1457,13 +1753,15 @@ impl Core {
             .direct_pages
             .set(unsafe { ffi::dynarmic_data_pages(inst) });
         unsafe { ffi::dynarmic_set_cpsr(inst, 0xd3) };
+        if profile.is_some_and(|config| config.high_vectors) {
+            unsafe { ffi::dynarmic_set_cp15(inst, 0, 1, 0, 0, 1 << 13) };
+        }
 
         Ok(Self {
             inst,
             identity: Identity::allocate(),
             model,
             shared,
-            memory_regions: RefCell::new(Vec::new()),
             last_progress: Cell::new(0),
             pending_anchor: Cell::new(None),
 
@@ -1487,6 +1785,14 @@ impl Core {
         callbacks: Mmio,
         project: Option<DeviceReadProjection>,
     ) -> Result<(), String> {
+        if self
+            .shared
+            .rprofile
+            .as_ref()
+            .is_some_and(|profile| profile.overlaps_tcm(address, bytes))
+        {
+            return Err("TCM overlay of MMIO is unmodeled".into());
+        }
         self.shared.mapping_changed();
         self.shared.mappings.borrow_mut().insert(
             address,
@@ -1496,11 +1802,6 @@ impl Core {
                 project,
             },
         );
-        self.memory_regions.borrow_mut().push(MemoryRegion {
-            begin: address,
-            end: address + (bytes as u64) - 1,
-            permissions: 3,
-        });
         Ok(())
     }
 
@@ -1633,24 +1934,6 @@ impl Drop for Core {
     }
 }
 
-pub struct SnapshotData {
-    owner: Identity,
-    regs: [u32; 16],
-    cpsr: u32,
-    fpscr: u32,
-    banks: status::Banks,
-    fpexc: u32,
-}
-
-impl Snapshot for SnapshotData {
-    fn owner(&self) -> Identity {
-        self.owner
-    }
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
 struct ResetRunLimit<'a>(&'a Cell<Option<u64>>, &'a Cell<Option<DeviceReadAnchor>>);
 impl Drop for ResetRunLimit<'_> {
     fn drop(&mut self) {
@@ -1668,6 +1951,19 @@ impl Cpu for Core {
         self.model
     }
 
+    fn checkpoint_backings(&self) -> Result<Vec<(NonNull<u8>, usize)>, String> {
+        Ok(self
+            .shared
+            .mappings
+            .borrow()
+            .values()
+            .filter_map(|mapping| match *mapping {
+                Mapping::Backing { ptr, bytes, .. } => Some((ptr, bytes)),
+                Mapping::Mmio { .. } => None,
+            })
+            .collect())
+    }
+
     fn set_armv7a_affinity(&self, mpidr: u32) -> Result<(), String> {
         unsafe { ffi::dynarmic_set_cp15(self.inst, 0, 0, 0, 5, mpidr) };
         Ok(())
@@ -1683,11 +1979,9 @@ impl Cpu for Core {
     }
 
     fn set_armv7a_exclusive_context(&self, monitors: exclusive::Shared, owner: exclusive::Owner) {
-        if cfg!(target_arch = "aarch64") {
-            self.shared
-                .exclusive
-                .replace(Some(BoardExclusive { monitors, owner }));
-        }
+        self.shared
+            .exclusive
+            .replace(Some(BoardExclusive { monitors, owner }));
     }
 
     fn exclusive_domain(&self) -> Option<exclusive::Shared> {
@@ -1698,18 +1992,46 @@ impl Cpu for Core {
             .map(|context| context.monitors.clone())
     }
 
+    fn exclusive_address(&self, mapped: u64, bytes: usize, access: Access) -> Result<u64, String> {
+        let required = if access == Access::Write { 2 } else { 1 };
+        match self.shared.mapping(mapped, bytes) {
+            Some((
+                Mapping::Backing {
+                    physical_base,
+                    permissions,
+                    ..
+                },
+                offset,
+            )) if permissions & required != 0 => Ok(physical_base + offset as u64),
+            _ => Err(format!(
+                "exclusive access requires permitted RAM at {mapped:#x}"
+            )),
+        }
+    }
+
     fn features(&self) -> Features {
         Features {
             architectural_exits: true,
             instruction_limit: true,
             instruction_progress: true,
             tighten_instruction_limit: true,
+            guest_clock: self.shared.rprofile.is_some(),
             ..Default::default()
         }
     }
 
     fn supports_projected_device_reads(&self) -> bool {
         cfg!(target_arch = "aarch64")
+    }
+
+    fn set_guest_clock(&self, clock: Clock) -> Result<(), String> {
+        let profile = self
+            .shared
+            .rprofile
+            .as_ref()
+            .ok_or("Dynarmic has no R-profile clock")?;
+        profile.clock.set(Some(clock));
+        Ok(())
     }
 
     fn set_device_read_anchor(&self, anchor: Option<DeviceReadAnchor>) {
@@ -1780,8 +2102,17 @@ impl Cpu for Core {
     }
 
     fn coprocessor(&self, register: arm::Coprocessor, value: Option<u64>) -> Result<u64, String> {
+        if self.shared.rprofile.is_some()
+            && let Some(register) = rprofile::SystemRegister::decode(register)
+        {
+            let value = value
+                .map(u32::try_from)
+                .transpose()
+                .map_err(|_| "CP15 value exceeds 32 bits")?;
+            return self.rprofile_register(register, value).map(u64::from);
+        }
         if register.cp != 15 || register.wide {
-            return Err("Dynarmic only supports 32-bit CP15 accesses".into());
+            return Err("Dynarmic only supports modeled 32-bit system accesses".into());
         }
         if let Some(val) = value {
             let word = u32::try_from(val).map_err(|_| "CP15 value exceeds 32 bits")?;
@@ -1811,44 +2142,25 @@ impl Cpu for Core {
     }
 
     fn read_memory(&self, address: u64, bytes: &mut [u8]) -> Result<(), String> {
-        let mappings = self.shared.mappings.borrow();
-        if let Some((&base, mapping)) = mappings.range(..=address).next_back() {
-            match mapping {
-                Mapping::Backing {
-                    bytes: m_bytes,
-                    ptr,
-                    ..
-                } => {
-                    let offset = (address - base) as usize;
-                    if offset + bytes.len() <= *m_bytes {
-                        unsafe {
-                            std::ptr::copy_nonoverlapping(
-                                ptr.as_ptr().add(offset),
-                                bytes.as_mut_ptr(),
-                                bytes.len(),
-                            );
-                        }
-                        return Ok(());
-                    }
-                }
-                Mapping::Mmio {
-                    bytes: m_bytes,
-                    callbacks,
-                    ..
-                } => {
-                    let offset = address - base;
-                    if offset + (bytes.len() as u64) <= *m_bytes as u64 {
-                        for (i, b) in bytes.iter_mut().enumerate() {
-                            *b = unsafe {
-                                (callbacks.read)(offset + (i as u64), 1, callbacks.data) as u8
-                            };
-                        }
-                        return Ok(());
-                    }
+        let (mapping, offset) = self
+            .shared
+            .mapping(address, bytes.len())
+            .ok_or_else(|| format!("unmapped read at {address:#x}"))?;
+        match mapping {
+            Mapping::Backing { ptr, .. } => unsafe {
+                std::ptr::copy_nonoverlapping(
+                    ptr.as_ptr().add(offset),
+                    bytes.as_mut_ptr(),
+                    bytes.len(),
+                );
+            },
+            Mapping::Mmio { callbacks, .. } => {
+                for (i, b) in bytes.iter_mut().enumerate() {
+                    *b = unsafe { (callbacks.read)((offset + i) as u64, 1, callbacks.data) as u8 };
                 }
             }
         }
-        Err(format!("unmapped read at {address:#x}"))
+        Ok(())
     }
 
     fn translate(&self, address: u64, access: Access) -> Result<u64, String> {
@@ -1866,9 +2178,16 @@ impl Cpu for Core {
             Access::Fetch => 4,
         };
         while !bytes.is_empty() {
-            let translated = self.translate(address, access)?;
             let room = 4096 - (address as usize & 4095);
             let (chunk, remaining) = bytes.split_at_mut(room.min(bytes.len()));
+            let address32 =
+                u32::try_from(address).map_err(|_| "Dynarmic virtual address exceeds 32 bits")?;
+            let translated =
+                self.shared
+                    .walk(address32, chunk.len(), access)?
+                    .map_err(|status| {
+                        format!("ARMv7 memory fault at {address:#010x} (status {status:#04x})")
+                    })?;
             let Some((
                 Mapping::Backing {
                     ptr, permissions, ..
@@ -1897,57 +2216,61 @@ impl Cpu for Core {
     }
 
     fn write_memory(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
-        let mappings = self.shared.mappings.borrow();
-        if let Some((&base, mapping)) = mappings.range(..=address).next_back() {
-            match mapping {
-                Mapping::Backing {
-                    bytes: m_bytes,
-                    ptr,
-                    ..
-                } => {
-                    let offset = (address - base) as usize;
-                    if offset + bytes.len() <= *m_bytes {
-                        unsafe {
-                            std::ptr::copy_nonoverlapping(
-                                bytes.as_ptr(),
-                                ptr.as_ptr().add(offset),
-                                bytes.len(),
-                            );
-                            ffi::dynarmic_invalidate_cache(self.inst, address as u32, bytes.len());
-                        }
-                        self.shared
-                            .code_visibility
-                            .note_write(unsafe { ptr.as_ptr().add(offset) }, bytes.len());
-                        return Ok(());
-                    }
+        if bytes.is_empty() {
+            return Ok(());
+        }
+        let (mapping, offset) = self
+            .shared
+            .mapping(address, bytes.len())
+            .ok_or_else(|| format!("unmapped write at {address:#x}"))?;
+        match mapping {
+            Mapping::Backing { ptr, .. } => {
+                let pointer = unsafe { ptr.as_ptr().add(offset) };
+                unsafe {
+                    std::ptr::copy_nonoverlapping(bytes.as_ptr(), pointer, bytes.len());
+                    ffi::dynarmic_invalidate_cache(self.inst, address as u32, bytes.len());
                 }
-                Mapping::Mmio {
-                    bytes: m_bytes,
-                    callbacks,
-                    ..
-                } => {
-                    let offset = address - base;
-                    if offset + (bytes.len() as u64) <= *m_bytes as u64 {
-                        for (i, &b) in bytes.iter().enumerate() {
-                            unsafe {
-                                (callbacks.write)(
-                                    offset + (i as u64),
-                                    1,
-                                    u64::from(b),
-                                    callbacks.data,
-                                )
-                            };
-                        }
-                        return Ok(());
-                    }
+                self.shared.code_visibility.note_write(pointer, bytes.len());
+                self.shared.mark_backing_write(pointer, bytes.len());
+            }
+            Mapping::Mmio { callbacks, .. } => {
+                for (i, &b) in bytes.iter().enumerate() {
+                    unsafe {
+                        (callbacks.write)((offset + i) as u64, 1, u64::from(b), callbacks.data)
+                    };
                 }
             }
         }
-        Err(format!("unmapped write at {address:#x}"))
+        Ok(())
     }
 
     fn memory_regions(&self) -> Result<Vec<MemoryRegion>, String> {
-        Ok(self.memory_regions.borrow().clone())
+        Ok(self
+            .shared
+            .mappings
+            .borrow()
+            .iter()
+            .map(|(&begin, &mapping)| MemoryRegion {
+                begin,
+                end: begin + mapping.bytes() as u64 - 1,
+                permissions: mapping.permissions(),
+            })
+            .collect())
+    }
+
+    fn rprofile_identity(&self, value: Option<u32>) -> Result<u32, String> {
+        let profile = self
+            .shared
+            .rprofile
+            .as_ref()
+            .ok_or("Dynarmic has no R-profile")?;
+        if let Some(value) = value {
+            if self.run_limit.get().is_some() {
+                return Err("identity changes require a stopped processor".into());
+            }
+            profile.cp14_identity.set(value);
+        }
+        Ok(profile.cp14_identity.get())
     }
 
     unsafe fn map_backing(
@@ -1957,16 +2280,18 @@ impl Cpu for Core {
         permissions: u32,
         backing: NonNull<u8>,
     ) -> Result<(), String> {
-        let end = address
-            .checked_add(bytes as u64)
-            .ok_or("Dynarmic mapping overflows")?;
-        if bytes == 0
-            || end > 1 << 32
-            || !address.is_multiple_of(4096)
-            || !bytes.is_multiple_of(4096)
-        {
-            return Err("Dynarmic requires a nonempty page-aligned 32-bit mapping".into());
-        }
+        unsafe { self.map_physical(address, address, bytes, permissions, backing) }
+    }
+
+    unsafe fn map_physical(
+        &self,
+        address: u64,
+        physical: u64,
+        bytes: usize,
+        permissions: u32,
+        backing: NonNull<u8>,
+    ) -> Result<(), String> {
+        ram_window_end(address, physical, bytes)?;
         self.shared.mapping_changed();
         self.shared.mappings.borrow_mut().insert(
             address,
@@ -1974,15 +2299,87 @@ impl Cpu for Core {
                 bytes,
                 permissions,
                 ptr: backing,
+                physical_base: physical,
             },
         );
 
-        self.memory_regions.borrow_mut().push(MemoryRegion {
-            begin: address,
-            end: address + (bytes as u64) - 1,
-            permissions,
-        });
+        Ok(())
+    }
 
+    unsafe fn replace_physical(
+        &self,
+        address: u64,
+        physical: u64,
+        bytes: usize,
+        permissions: u32,
+        backing: NonNull<u8>,
+    ) -> Result<(), String> {
+        if self.run_limit.get().is_some() {
+            return Err("physical replacement requires a stopped Dynarmic processor".into());
+        }
+        let end = ram_window_end(address, physical, bytes)?;
+        let mut maps = self.shared.mappings.borrow_mut();
+        let mut previous = Vec::new();
+        let mut pieces = Vec::new();
+        let mut cursor = address;
+        while cursor < end {
+            let Some((
+                &base,
+                &Mapping::Backing {
+                    bytes,
+                    permissions,
+                    ptr,
+                    physical_base,
+                },
+            )) = maps.range(..=cursor).next_back()
+            else {
+                return Err("physical replacement has no complete external RAM underlay".into());
+            };
+            let limit = base + bytes as u64;
+            if limit <= cursor {
+                return Err("physical replacement has no complete external RAM underlay".into());
+            }
+            previous.push(base);
+            if base < address {
+                pieces.push((
+                    base,
+                    Mapping::Backing {
+                        bytes: (address - base) as usize,
+                        permissions,
+                        ptr,
+                        physical_base,
+                    },
+                ));
+            }
+            if end < limit {
+                let offset = (end - base) as usize;
+                pieces.push((
+                    end,
+                    Mapping::Backing {
+                        bytes: (limit - end) as usize,
+                        permissions,
+                        ptr: unsafe { ptr.add(offset) },
+                        physical_base: physical_base + offset as u64,
+                    },
+                ));
+            }
+            cursor = limit;
+        }
+        for base in previous {
+            maps.remove(&base);
+        }
+        maps.extend(pieces);
+        maps.insert(
+            address,
+            Mapping::Backing {
+                bytes,
+                permissions,
+                ptr: backing,
+                physical_base: physical,
+            },
+        );
+        drop(maps);
+        self.shared.mapping_changed();
         Ok(())
     }
 
@@ -2010,22 +2407,19 @@ impl Cpu for Core {
     }
 
     fn unmap(&self, address: u64, bytes: usize) -> Result<(), String> {
-        if !self.memory_regions.borrow().iter().any(|r| {
-            r.begin == address
-                && r.end
-                    .checked_sub(address)
-                    .and_then(|delta| delta.checked_add(1))
-                    == Some(bytes as u64)
-        }) {
+        if !self
+            .shared
+            .mappings
+            .borrow()
+            .get(&address)
+            .is_some_and(|mapping| mapping.bytes() == bytes)
+        {
             return Err("Dynarmic can only unmap an entire mapped range".into());
         }
         self.shared.mapping_changed();
         self.shared.mappings.borrow_mut().remove(&address);
         self.owned.borrow_mut().remove(&address);
         self.invalidate_code(Some((address, address + bytes as u64)))?;
-        self.memory_regions
-            .borrow_mut()
-            .retain(|r| r.begin != address);
         Ok(())
     }
 
@@ -2035,14 +2429,15 @@ impl Cpu for Core {
 
     unsafe fn backing_written(
         &self,
-        physical: u64,
+        _physical: u64,
         backing: NonNull<u8>,
         bytes: usize,
     ) -> Result<(), String> {
+        // The next native entry consumes changed instructions and descriptors
+        // through their watched backing, including every translated alias.
         self.shared
             .code_visibility
             .note_write(backing.as_ptr(), bytes);
-        unsafe { ffi::dynarmic_invalidate_cache(self.inst, physical as u32, bytes) };
         Ok(())
     }
 
@@ -2101,8 +2496,9 @@ impl Cpu for Core {
                 break ffi::DynarmicExitReason::Timeout;
             }
             self.shared
-                .flush_changed_code(std::mem::take(&mut check_context));
+                .flush_changed_code(std::mem::take(&mut check_context), self.fpexc.get());
             if std::mem::take(&mut check_irq) && self.irq.get() && armv7a::enter_irq(self)? {
+                self.shared.clear_reservation()?;
                 let mut entries = self.exception_entries.get();
                 entries.irq += 1;
                 self.exception_entries.set(entries);
@@ -2178,6 +2574,7 @@ impl Cpu for Core {
                 Ok(word) => word,
                 Err(status) => {
                     armv7a::abort::enter_reported(self, pc, status, Access::Fetch)?;
+                    self.shared.clear_reservation()?;
                     return Ok(Exit::Stopped);
                 }
             };
@@ -2193,8 +2590,7 @@ impl Cpu for Core {
             {
                 continue;
             }
-            if allow_batch
-                && remaining() > 1
+            if (self.shared.rprofile.is_some() || (allow_batch && remaining() > 1))
                 && self.board_owns_instructions.get()
                 && armv7a::exclusive_instruction(word)
                 && let Some(context) = self.shared.exclusive.borrow().clone()
@@ -2212,6 +2608,7 @@ impl Cpu for Core {
                 continue;
             }
             if self.board_owns_instructions.get()
+                && self.shared.rprofile.is_none()
                 && ((armv7a::framework_instruction(word) && !armv7a::mpidr_read(word))
                     || armv7a::exclusive_instruction(word))
             {
@@ -2231,6 +2628,14 @@ impl Cpu for Core {
                 && (word >> 28 == 15 || arm::condition_passes(word >> 28, cpsr))
                 && !self.vfp_accessible()
             {
+                if self.shared.rprofile.is_some() && armv7a::enter_disabled_vfp(self)? {
+                    self.shared.clear_reservation()?;
+                    let mut entries = self.exception_entries.get();
+                    entries.undefined += 1;
+                    self.exception_entries.set(entries);
+                    self.last_progress.set(self.last_progress.get() + 1);
+                    return Ok(Exit::Stopped);
+                }
                 return Err(ExecutionError::InvalidInstruction(format!(
                     "VFP or Advanced SIMD disabled at {pc:#010x}"
                 )));
@@ -2261,6 +2666,7 @@ impl Cpu for Core {
             if let Some((address, status, access)) = self.shared.abort.take() {
                 armv7a::abort::enter_reported(self, address, status, access)
                     .map_err(|error| format!("ARMv7 abort at {pc:#010x}, {access:?} {address:#010x}, FSR {status:#04x}: {error}"))?;
+                self.shared.clear_reservation()?;
                 return Ok(Exit::Stopped);
             }
             if let Some(error) = self.shared.fault.take() {
@@ -2330,38 +2736,19 @@ impl Cpu for Core {
         Ok(())
     }
 
-    fn snapshot(&self, _previous: Option<&dyn Snapshot>) -> Result<Box<dyn Snapshot>, String> {
-        let regs = std::array::from_fn(|i| unsafe { ffi::dynarmic_get_reg(self.inst, i as u32) });
-        let cpsr = unsafe { ffi::dynarmic_get_cpsr(self.inst) };
-        let fpscr = unsafe { ffi::dynarmic_get_fpscr(self.inst) };
-        Ok(Box::new(SnapshotData {
-            owner: self.identity,
-            regs,
-            cpsr,
-            fpscr,
-            banks: self.banks.borrow().clone(),
-            fpexc: self.fpexc.get(),
-        }))
+    fn snapshot(&self, previous: Option<&dyn Snapshot>) -> Result<Box<dyn Snapshot>, String> {
+        if previous.is_some_and(|saved| saved.owner() != self.identity) {
+            return Err("Dynarmic CPU snapshot belongs to another processor".into());
+        }
+        snapshot::Saved::capture(self)
     }
 
     fn restore(&self, snapshot: &dyn Snapshot) -> Result<(), String> {
-        if snapshot.owner() != self.identity {
-            return Err("Dynarmic CPU snapshot belongs to another processor".into());
-        }
-        let state = snapshot
-            .as_any()
-            .downcast_ref::<SnapshotData>()
-            .ok_or("invalid snapshot type")?;
-        *self.banks.borrow_mut() = state.banks.clone();
-        self.fpexc.set(state.fpexc);
-        for (i, &val) in state.regs.iter().enumerate() {
-            unsafe { ffi::dynarmic_set_reg(self.inst, i as u32, val) };
-        }
-        unsafe {
-            ffi::dynarmic_set_cpsr(self.inst, state.cpsr);
-            ffi::dynarmic_set_fpscr(self.inst, state.fpscr);
-        }
-        Ok(())
+        snapshot::Saved::restore(self, snapshot)
+    }
+
+    fn import_snapshot(&self, bytes: &[u8]) -> Result<Box<dyn Snapshot>, String> {
+        snapshot::Saved::import(self, bytes)
     }
 
     unsafe fn install_scheduler_hook(
@@ -2430,7 +2817,18 @@ impl Cpu for Core {
         None
     }
 
-    unsafe fn observe_backings(&self, _ranges: &[BackingObserver]) -> Result<(), String> {
+    unsafe fn observe_backings(&self, ranges: &[BackingObserver]) -> Result<(), String> {
+        if ranges.iter().any(|range| {
+            range.page_shift != 12
+                || range.backing.as_ptr().addr() & 4095 != 0
+                || range.bytes & 4095 != 0
+        }) {
+            return Err("Dynarmic backing observers require aligned 4 KiB pages".into());
+        }
+        let mut observers = self.shared.observed_backings.borrow_mut();
+        observers.clear();
+        observers.extend_from_slice(ranges);
+        self.shared.clear_inline_pages();
         Ok(())
     }
 
@@ -2457,6 +2855,98 @@ impl Cpu for Core {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rearmed_backing_tracks_the_first_store_even_after_an_inline_read() {
+        let backing = Backing::aligned_zeros(8192, 4096).unwrap();
+        let tracker = memory::pages::Tracker::new(backing.len());
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        let pointer = NonNull::new(backing.as_ptr()).unwrap();
+        unsafe { cpu.map_backing(0x1000, backing.len(), 7, pointer) }.unwrap();
+        assert_eq!(cpu.checkpoint_backings().unwrap(), [(pointer, 8192)]);
+        for (offset, word) in [
+            0xe591_2000u32, // ldr r2, [r1]
+            0xe581_0000,    // str r0, [r1]
+            0xe581_0004,    // str r0, [r1, #4]
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            cpu.write_memory(0x1000 + offset as u64 * 4, &word.to_le_bytes())
+                .unwrap();
+        }
+        let observer = tracker.observer(pointer).unwrap();
+        let mut previous = 0u32;
+        for value in [17u32, 42] {
+            let before = unsafe { tracker.capture(backing.as_ptr()) };
+            unsafe { cpu.observe_backings(&[observer]) }.unwrap();
+            cpu.write_register(arm::CORE[0], &value.to_le_bytes())
+                .unwrap();
+            cpu.write_register(arm::CORE[1], &0x2000u32.to_le_bytes())
+                .unwrap();
+            cpu.set_loop_window(true).unwrap();
+            cpu.run(Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(3),
+            })
+            .unwrap();
+            let after = unsafe { tracker.capture(backing.as_ptr()) };
+            assert_eq!(before.page(1).unwrap()[..4], previous.to_le_bytes());
+            assert_eq!(after.page(1).unwrap()[..4], value.to_le_bytes());
+            assert_eq!(after.page(1).unwrap()[4..8], value.to_le_bytes());
+            assert_eq!(before.shared_pages(&after), 1);
+            previous = value;
+        }
+    }
+
+    #[test]
+    fn batched_word_transfers_use_the_current_checked_page() {
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
+        let code: [u32; 4] = [
+            0xe898_00e0, // ldmia r8, {r5, r6, r7}
+            0xe8a8_001c, // stmia r8!, {r2, r3, r4}
+            0xe938_00e0, // ldmdb r8!, {r5, r6, r7}
+            0xe289_9001, // add r9, r9, #1
+        ];
+        cpu.write_memory(0x1000, &code.map(u32::to_le_bytes).concat())
+            .unwrap();
+        for (round, base) in [0x2100u32, 0x2100, 0x2ff8, 0x4100, 0x4100, 0x1100, 0x1100]
+            .into_iter()
+            .enumerate()
+        {
+            let values = [0x11u32, 0x22, 0x33].map(|v| v + round as u32);
+            for (register, value) in (2..5).zip(values) {
+                cpu.write_register(arm::CORE[register], &value.to_le_bytes())
+                    .unwrap();
+            }
+            cpu.write_register(arm::CORE[8], &base.to_le_bytes())
+                .unwrap();
+            cpu.set_loop_window(true).unwrap();
+            cpu.run(Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(code.len()),
+            })
+            .unwrap();
+
+            let register = |index| {
+                let mut value = [0; 4];
+                cpu.read_register(arm::CORE[index], &mut value).unwrap();
+                u32::from_le_bytes(value)
+            };
+            assert_eq!([register(5), register(6), register(7)], values);
+            assert_eq!(register(8), base);
+            assert_eq!(register(9), round as u32 + 1);
+            assert_eq!(cpu.instruction_progress(), Some(code.len() as u64));
+            let mut stored = [0; 12];
+            cpu.read_memory(u64::from(base), &mut stored).unwrap();
+            assert_eq!(stored.as_slice(), values.map(u32::to_le_bytes).concat());
+        }
+    }
 
     #[test]
     fn test_dynarmic_execution() {
@@ -2577,6 +3067,39 @@ mod tests {
         assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 0) }, 0x7856_3412);
     }
     #[test]
+    fn new_peer_code_watch_keeps_unrelated_inline_pages() {
+        let backing = Backing::aligned_zeros(8192, 4096).unwrap();
+        let first = backing.as_ptr();
+        let second = unsafe { first.add(4096) };
+        let visibility = CodeVisibility::default();
+        let reader = Core::new_with_code_visibility(Model::CortexA7, visibility.clone()).unwrap();
+        let writer = Core::new_with_code_visibility(Model::CortexA7, visibility).unwrap();
+        unsafe {
+            writer
+                .map_backing(0x3000, 8192, 7, NonNull::new(first).unwrap())
+                .unwrap();
+        }
+        writer
+            .shared
+            .install_inline_page(0x3000, first, Access::Write);
+        writer
+            .shared
+            .install_inline_page(0x4000, second, Access::Write);
+        assert_eq!(writer.shared.inline_page(0x3000), first);
+        assert_eq!(writer.shared.inline_page(0x4000), second);
+
+        reader.shared.watch_code_backing(first);
+        writer.shared.before_run(true);
+        assert_eq!(writer.shared.inline_page(0x4000), second);
+        let watched = writer.shared.inline_page(0x3000);
+        if cfg!(target_arch = "aarch64") {
+            assert_eq!(watched, first.map_addr(|addr| addr | 1));
+        } else {
+            assert!(watched.is_null());
+        }
+    }
+
+    #[test]
     fn peer_alias_write_is_visible_after_translation() {
         for allow_native in [false, true] {
             let backing = Backing::aligned_zeros(4096, 4096).unwrap();
@@ -2587,6 +3110,7 @@ mod tests {
             let writer = Core::new_with_code_visibility(Model::CortexA7, visibility).unwrap();
             unsafe {
                 reader.map_backing(0x1000, 4096, 7, ptr).unwrap();
+                reader.map_backing(0x2000, 4096, 7, ptr).unwrap();
                 writer.map_backing(0x3000, 4096, 7, ptr).unwrap();
             }
             reader
@@ -2607,8 +3131,10 @@ mod tests {
                 .unwrap();
             for (cpu, begin, count, window) in [
                 (&reader, 0x1000, 40, allow_native),
+                (&reader, 0x2000, 40, allow_native),
                 (&writer, 0x8000, 1, false),
                 (&reader, 0x1000, 40, allow_native),
+                (&reader, 0x2000, 40, allow_native),
             ] {
                 cpu.set_loop_window(window).unwrap();
                 cpu.run(Run {
@@ -2621,7 +3147,29 @@ mod tests {
             }
             let mut bytes = [0; 4];
             reader.read_register(arm::CORE[0], &mut bytes).unwrap();
-            assert_eq!(u32::from_le_bytes(bytes), 60, "native={allow_native}");
+            assert_eq!(u32::from_le_bytes(bytes), 120, "native={allow_native}");
+
+            // A device writes the backing directly and reports its physical
+            // address, while both cached translations used other addresses.
+            unsafe {
+                ptr.cast::<[u8; 4]>()
+                    .as_ptr()
+                    .write(0xe280_0003u32.to_le_bytes());
+                reader.backing_written(0x3000, ptr, 4).unwrap();
+            }
+            for begin in [0x1000, 0x2000] {
+                reader.set_loop_window(allow_native).unwrap();
+                reader
+                    .run(Run {
+                        begin,
+                        until: None,
+                        watchdog_us: 0,
+                        instructions: Some(40),
+                    })
+                    .unwrap();
+            }
+            reader.read_register(arm::CORE[0], &mut bytes).unwrap();
+            assert_eq!(u32::from_le_bytes(bytes), 240, "native={allow_native}");
         }
     }
     #[test]
@@ -2952,13 +3500,17 @@ mod tests {
                 window: None,
             })
         }
-        for mapped in [true, false] {
+        for (mapped, post_indexed) in [(true, false), (false, false), (true, true), (false, true)] {
             let cpu = Core::new(Model::CortexA7).unwrap();
             cpu.map_zeroed(0x1000, 4096, 7).unwrap();
             let instructions = [
                 0xe3a0_0005u32,
                 0xe280_0007,
-                0xe591_0000,
+                if post_indexed {
+                    0xe491_0004
+                } else {
+                    0xe591_0000
+                },
                 0xe280_0001,
                 0xe592_0000,
                 0xeaff_fffe,
@@ -3004,11 +3556,13 @@ mod tests {
                 instructions: Some(8),
             });
             let loaded = unsafe { ffi::dynarmic_get_reg(cpu.inst, 0) };
+            let base = unsafe { ffi::dynarmic_get_reg(cpu.inst, 1) };
             if mapped {
                 result.unwrap();
                 assert_eq!(*observed.borrow(), [102, 104]);
                 assert_eq!(cpu.instruction_progress(), Some(8));
                 assert_eq!(loaded, 42);
+                assert_eq!(base, if post_indexed { 0x8004 } else { 0x8000 });
             } else {
                 assert!(matches!(
                     result,
@@ -3071,6 +3625,76 @@ mod tests {
         }
     }
 
+    #[cfg(target_arch = "aarch64")]
+    #[test]
+    fn native_link_stops_before_zero_cycle_replay_when_budget_is_exhausted() {
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+        for (address, word) in [
+            (0x1000, 0xe280_0001u32), // add r0, r0, #1
+            (0x1004, 0xea00_003d),    // b 0x1100
+            (0x1100, 0xe320_f003),    // wfi, an exact replay entry
+        ] {
+            cpu.write_memory(address, &word.to_le_bytes()).unwrap();
+        }
+        cpu.set_loop_window(true).unwrap();
+        let warm = cpu
+            .run(Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(3),
+            })
+            .unwrap();
+        assert!(matches!(warm, Exit::Hint(Hint::WaitForInterrupt)));
+
+        let mut executed = 0;
+        let exit = unsafe {
+            ffi::dynarmic_set_reg(cpu.inst, 15, 0x1000);
+            ffi::dynarmic_run(cpu.inst, 2, &mut executed)
+        };
+        assert!(matches!(exit, ffi::DynarmicExitReason::Timeout));
+        assert_eq!(executed, 2);
+        assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 15) }, 0x1100);
+    }
+
+    #[test]
+    fn native_run_and_step_discard_cached_code_after_a_host_write() {
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+        let set_increment = |increment: u32| {
+            let add = 0xe280_0000u32 | increment;
+            cpu.write_memory(0x1000, &add.to_le_bytes()).unwrap();
+        };
+        // add r0, r0, #2
+        cpu.write_memory(0x1004, &0xe280_0002u32.to_le_bytes())
+            .unwrap();
+        // b .
+        cpu.write_memory(0x1008, &0xeaff_fffeu32.to_le_bytes())
+            .unwrap();
+        let run = |count, expected| {
+            cpu.set_loop_window(true).unwrap();
+            cpu.run(Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(count),
+            })
+            .unwrap();
+            assert_eq!(cpu.instruction_progress(), Some(count as u64));
+            assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 0) }, expected);
+        };
+
+        set_increment(1);
+        run(2, 3);
+        run(1, 4);
+        run(2, 7);
+        run(1, 8);
+        set_increment(4);
+        run(1, 12);
+        run(2, 18);
+    }
+
     #[test]
     fn native_conditional_block_stops_at_the_instruction_budget() {
         for (cpsr, expected) in [(0x4000_00d3u32, 2), (0x0000_00d3, 0)] {
@@ -3097,6 +3721,184 @@ mod tests {
             assert_eq!(unsafe { ffi::dynarmic_get_reg(core.inst, 0) }, expected);
             assert_eq!(unsafe { ffi::dynarmic_get_reg(core.inst, 15) }, 0x1008);
         }
+    }
+
+    #[test]
+    fn predicated_alu_keeps_live_flags_and_respects_short_budgets() {
+        let run = |batch, count| {
+            let cpu = Core::new(Model::CortexA7).unwrap();
+            cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+            for (index, word) in [
+                0xe150_0121u32, // cmp r0, r1, lsr #2
+                0x2040_0121,    // subcs r0, r0, r1, lsr #2
+                0x2182_2003,    // orrcs r2, r2, r3
+                0x33a0_4048,    // movcc r4, #72
+                0xe150_0121,    // cmp r0, r1, lsr #2
+                0x2040_0121,    // subcs r0, r0, r1, lsr #2
+                0x2182_20a3,    // orrcs r2, r2, r3, lsr #1
+                0x31a0_4001,    // movcc r4, r1
+                0x23a0_4050,    // movcs r4, #80
+                0x4284_4005,    // addmi r4, r4, #5
+                0x4084_4083,    // addmi r4, r4, r3, lsl #1
+                0x4264_4064,    // rsbmi r4, r4, #100
+                0x4060_0083,    // rsbmi r0, r0, r3, lsl #1
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                cpu.write_memory(0x1000 + index as u64 * 4, &word.to_le_bytes())
+                    .unwrap();
+            }
+            for (reg, value) in [17u32, 44, 1, 8, 7].into_iter().enumerate() {
+                cpu.write_register(arm::CORE[reg], &value.to_le_bytes())
+                    .unwrap();
+            }
+            cpu.set_loop_window(batch).unwrap();
+            cpu.run(Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(count),
+            })
+            .unwrap();
+            assert_eq!(cpu.instruction_progress(), Some(count as u64));
+            let regs = [0, 2, 4, 15].map(|reg| unsafe { ffi::dynarmic_get_reg(cpu.inst, reg) });
+            let flags = unsafe { ffi::dynarmic_get_cpsr(cpu.inst) } >> 28;
+            (regs, flags)
+        };
+        for count in 1..=13 {
+            assert_eq!(run(true, count), run(false, count), "budget {count}");
+        }
+        assert_eq!(run(true, 13), ([10, 9, 35, 0x1034], 8));
+    }
+
+    #[test]
+    fn flags_before_a_memory_fault_remain_visible_after_a_predicated_select() {
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+        for (index, word) in [
+            0xe150_0000u32, // cmp r0, r0
+            0x03a0_0005,    // moveq r0, #5
+            0xe591_2000,    // ldr r2, [r1]
+            0xe350_0000,    // cmp r0, #0
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            cpu.write_memory(0x1000 + index as u64 * 4, &word.to_le_bytes())
+                .unwrap();
+        }
+        cpu.write_register(arm::CORE[1], &0x2000u32.to_le_bytes())
+            .unwrap();
+        cpu.set_loop_window(true).unwrap();
+        let result = cpu.run(Run {
+            begin: 0x1000,
+            until: None,
+            watchdog_us: 0,
+            instructions: Some(4),
+        });
+        assert!(matches!(
+            result,
+            Err(ExecutionError::Memory {
+                fault: Fault::ReadUnmapped,
+                ..
+            })
+        ));
+        assert_eq!(cpu.instruction_progress(), Some(2));
+        assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 0) }, 5);
+        assert_eq!(unsafe { ffi::dynarmic_get_cpsr(cpu.inst) } >> 28, 6);
+    }
+
+    #[test]
+    fn native_shift_counting_matches_single_step_at_each_boundary() {
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+        for (index, word) in [
+            0xe1a0_2122u32, // mov r2, r2, lsr #2
+            0xe284_4003,    // add r4, r4, #3
+            0xe352_0003,    // cmp r2, #3
+            0x8aff_fffb,    // bhi 0x1000
+            0xe3a0_500c,    // mov r5, #12
+            0xeaff_fffe,    // b .
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            cpu.write_memory(0x1000 + index as u64 * 4, &word.to_le_bytes())
+                .unwrap();
+        }
+        let run = |batch, value: u32, budget| {
+            for (reg, value) in [(2, value), (4, u32::MAX - 1), (5, 0)] {
+                cpu.write_register(arm::CORE[reg], &value.to_le_bytes())
+                    .unwrap();
+            }
+            cpu.set_cpsr(0x0800_00d3).unwrap();
+            cpu.set_loop_window(batch).unwrap();
+            cpu.run(Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(budget),
+            })
+            .unwrap();
+            assert_eq!(cpu.instruction_progress(), Some(budget as u64));
+            let regs = [2, 4, 5, 15].map(|reg| unsafe { ffi::dynarmic_get_reg(cpu.inst, reg) });
+            (regs, unsafe { ffi::dynarmic_get_cpsr(cpu.inst) })
+        };
+        let mut skipped_inside_loop = false;
+        for value in [0, 16, 0x7fff_ffff, u32::MAX] {
+            for budget in 1..=65 {
+                let skipped = cpu.loops.skipped.get();
+                assert_eq!(run(true, value, budget), run(false, value, budget));
+                if value == u32::MAX && budget < 60 {
+                    skipped_inside_loop |= cpu.loops.skipped.get() > skipped;
+                }
+            }
+        }
+        assert!(skipped_inside_loop);
+    }
+
+    #[test]
+    fn native_word_fill_matches_single_step_across_ram_pages() {
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        cpu.map_zeroed(0x1000, 0x3000, 7).unwrap();
+        for (index, word) in [
+            0xe480_1004u32, // str r1, [r0], #4
+            0xe252_2001,    // subs r2, r2, #1
+            0x1aff_fffc,    // bne 0x1000
+            0xe280_1001,    // add r1, r0, #1
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            cpu.write_memory(0x1000 + index as u64 * 4, &word.to_le_bytes())
+                .unwrap();
+        }
+        let run = |batch, budget| {
+            cpu.write_memory(0x2ff0, &[0x7d; 48]).unwrap();
+            for (reg, value) in [0x2ff0u32, 0x89ab_cdef, 9].into_iter().enumerate() {
+                cpu.write_register(arm::CORE[reg], &value.to_le_bytes())
+                    .unwrap();
+            }
+            cpu.set_cpsr(0xd3).unwrap();
+            cpu.set_loop_window(batch).unwrap();
+            cpu.run(Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(budget),
+            })
+            .unwrap();
+            assert_eq!(cpu.instruction_progress(), Some(budget as u64));
+            let mut memory = [0; 48];
+            cpu.read_memory(0x2ff0, &mut memory).unwrap();
+            let regs = [0, 1, 2, 15].map(|reg| unsafe { ffi::dynarmic_get_reg(cpu.inst, reg) });
+            (memory, regs, unsafe { ffi::dynarmic_get_cpsr(cpu.inst) })
+        };
+        for budget in 1..=28 {
+            assert_eq!(run(true, budget), run(false, budget), "budget {budget}");
+        }
+        assert!(cpu.loops.skipped.get() > 0);
     }
 
     #[test]
@@ -3132,6 +3934,279 @@ mod tests {
                 expected_value
             );
             assert_eq!(unsafe { ffi::dynarmic_get_reg(core.inst, 15) }, expected_pc);
+        }
+    }
+
+    #[test]
+    fn native_conditional_branch_observes_flags_set_by_its_prefix() {
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+        for (offset, word) in [
+            (0, 0xe350_0000u32), // cmp r0, #0
+            (4, 0x0a00_0000),    // beq 0x100c
+            (8, 0xe3a0_1001),    // mov r1, #1
+            (12, 0xe3a0_1002),   // mov r1, #2
+        ] {
+            cpu.write_memory(0x1000 + offset, &word.to_le_bytes())
+                .unwrap();
+        }
+        for (r0, initial_flags, branch_target) in [(0u32, 0, 0x100c), (1, 1 << 30, 0x1008)] {
+            for (count, pc) in [(1, 0x1004), (2, branch_target), (3, branch_target + 4)] {
+                cpu.set_cpsr(initial_flags | 0xd3).unwrap();
+                cpu.write_register(arm::CORE[0], &r0.to_le_bytes()).unwrap();
+                cpu.set_loop_window(true).unwrap();
+                cpu.run(Run {
+                    begin: 0x1000,
+                    until: None,
+                    watchdog_us: 0,
+                    instructions: Some(count),
+                })
+                .unwrap();
+                assert_eq!(cpu.instruction_progress(), Some(count as u64));
+                assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 15) }, pc);
+            }
+        }
+    }
+
+    #[test]
+    fn native_branches_test_each_saved_flag_and_its_inverse() {
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+        cpu.write_memory(0x1000, &0xe1a0_0000u32.to_le_bytes())
+            .unwrap(); // mov r0, r0
+        for condition in 0..=7 {
+            let word = (condition << 28) | 0x0a00_0000u32;
+            cpu.write_memory(0x1004, &word.to_le_bytes()).unwrap();
+            for flags in [0, 1 << 28, 1 << 29, 1 << 30, 1 << 31] {
+                let cpsr = flags | 0xd3;
+                cpu.set_cpsr(cpsr).unwrap();
+                cpu.set_loop_window(true).unwrap();
+                cpu.run(Run {
+                    begin: 0x1000,
+                    until: None,
+                    watchdog_us: 0,
+                    instructions: Some(2),
+                })
+                .unwrap();
+                let target = if arm::condition_passes(condition, cpsr) {
+                    0x100c
+                } else {
+                    0x1008
+                };
+                assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 15) }, target);
+                assert_eq!(unsafe { ffi::dynarmic_get_cpsr(cpu.inst) }, cpsr);
+            }
+        }
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    #[test]
+    fn restoring_division_matches_steps_and_watches_its_back_edge() {
+        let code = 0x1000;
+        let remainder = 7;
+        let divisor = 4;
+        let place = 6;
+        let quotient = 3;
+        let mut words = [0xe1a0_0000u32; 64];
+        for shift in 0..4 {
+            let operand_shift = if shift == 0 { 0 } else { (shift << 7) | 32 };
+            words[shift as usize * 3] = 0xe150_0000 | remainder << 16 | divisor | operand_shift;
+            words[shift as usize * 3 + 1] =
+                0x2040_0000 | remainder << 16 | remainder << 12 | divisor | operand_shift;
+            words[shift as usize * 3 + 2] =
+                0x2180_0000 | quotient << 16 | quotient << 12 | place | operand_shift;
+        }
+        words[12] = 0xe350_0000 | remainder << 16;
+        words[13] = 0x11b0_0220 | place << 12 | place;
+        words[14] = 0x11a0_0220 | divisor << 12 | divisor;
+        words[15] = 0x1aff_ffef;
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        cpu.map_zeroed(code, 4096, 7).unwrap();
+        let raw: Vec<u8> = words.iter().flat_map(|word| word.to_le_bytes()).collect();
+        cpu.write_memory(code, &raw).unwrap();
+        let run = |batched, budget, operands: [u32; 4]| {
+            for (register, value) in [remainder, divisor, place, quotient]
+                .into_iter()
+                .zip(operands)
+            {
+                unsafe { ffi::dynarmic_set_reg(cpu.inst, register, value) };
+            }
+            cpu.set_cpsr(0xb000_00d3).unwrap();
+            cpu.set_loop_window(batched).unwrap();
+            cpu.run(Run {
+                begin: code,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(budget),
+            })
+            .unwrap();
+            assert_eq!(cpu.instruction_progress(), Some(budget as u64));
+            let registers = [remainder, divisor, place, quotient, 15]
+                .map(|reg| unsafe { ffi::dynarmic_get_reg(cpu.inst, reg) });
+            (registers, unsafe { ffi::dynarmic_get_cpsr(cpu.inst) })
+        };
+        for operands in [
+            [5678, 17 << 8, 1 << 8, 0x8000_0000], // Remainder after a partial final group.
+            [255 * 17, 17 << 8, 1 << 8, 0],       // Exact division.
+            [256 * 17, 17 << 8, 1 << 8, 0],       // Early exit after the first group.
+            [5678, 17 << 8, 3 << 8, 0],           // Multiple bits in the place.
+            [9000, 17 << 8 | 3, 1 << 8, 0],       // Unaligned divisor.
+            [u32::MAX, 17 << 8, 1 << 8, 0],       // Quotient exceeds the place range.
+        ] {
+            for budget in [9, 15, 16, 17, 32, 48, 49] {
+                assert_eq!(run(true, budget, operands), run(false, budget, operands));
+            }
+        }
+        // Change a word beyond the initial translated prefix and verify that
+        // the warmed fast entry observes the new fall-through behavior.
+        cpu.write_memory(code + 60, &0xe1a0_0000u32.to_le_bytes())
+            .unwrap();
+        let operands = [5678, 17 << 8, 1 << 8, 0];
+        assert_eq!(run(true, 48, operands), run(false, 48, operands));
+    }
+
+    #[test]
+    fn predicated_halfword_transfers_run_natively_and_suppress_false_accesses() {
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        let address = 0x1000;
+        let ram = 0x2000;
+        cpu.map_zeroed(address, 4096, 7).unwrap();
+        cpu.map_zeroed(ram, 4096, 3).unwrap();
+        for (offset, word) in [
+            (0, 0xe350_0000u32), // cmp r0, #0
+            (4, 0xc1c1_20b0),    // strhgt r2, [r1]
+            (8, 0xc1d1_30f0),    // ldrshgt r3, [r1]
+            (12, 0xe280_0001),   // add r0, r0, #1
+        ] {
+            cpu.write_memory(address + offset, &word.to_le_bytes())
+                .unwrap();
+        }
+        cpu.set_cpsr(0xd3).unwrap();
+        for (condition, base, expected) in [(1, ram as u32, 0xffff_8001), (0, 0x4000, 0x55)] {
+            let mut executed = 0;
+            cpu.shared.batching.set(true);
+            let reason = unsafe {
+                ffi::dynarmic_set_reg(cpu.inst, 0, condition);
+                ffi::dynarmic_set_reg(cpu.inst, 1, base);
+                ffi::dynarmic_set_reg(cpu.inst, 2, 0x8001);
+                ffi::dynarmic_set_reg(cpu.inst, 3, 0x55);
+                ffi::dynarmic_set_reg(cpu.inst, 15, address as u32);
+                ffi::dynarmic_run(cpu.inst, 4, &mut executed)
+            };
+            cpu.shared.batching.set(false);
+            assert_eq!(reason, ffi::DynarmicExitReason::Timeout);
+            assert_eq!(executed, 4);
+            assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 0) }, condition + 1);
+            assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 3) }, expected);
+            assert!(cpu.shared.replay_memory.get().is_none());
+        }
+        let mut output = [0; 2];
+        cpu.read_memory(ram, &mut output).unwrap();
+        assert_eq!(u16::from_le_bytes(output), 0x8001);
+    }
+
+    #[test]
+    fn translated_vfp_arithmetic_tracks_enable_and_privilege() {
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+        // Supervisor-only access to CP10 and CP11.
+        let cpacr = arm::Coprocessor {
+            cp: 15,
+            crn: 1,
+            crm: 0,
+            opc1: 0,
+            opc2: 2,
+            secure: 0,
+            wide: false,
+        };
+        cpu.coprocessor(cpacr, Some(0x0050_0000)).unwrap();
+        cpu.set_cpsr(0xd3).unwrap();
+        cpu.set_fpexc(1 << 30).unwrap();
+        for (index, word) in [
+            0xee00_0a10u32, // vmov s0, r0
+            0xee00_1a90,    // vmov s1, r1
+            0xee30_0a20,    // vadd.f32 s0, s0, s1
+            0xee30_0a20,    // vadd.f32 s0, s0, s1
+            0xee10_2a10,    // vmov r2, s0
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            cpu.write_memory(0x1000 + index as u64 * 4, &word.to_le_bytes())
+                .unwrap();
+        }
+        cpu.write_register(arm::CORE[0], &1.0f32.to_bits().to_le_bytes())
+            .unwrap();
+        cpu.write_register(arm::CORE[1], &2.0f32.to_bits().to_le_bytes())
+            .unwrap();
+        let run = |begin, count| {
+            cpu.set_loop_window(true).unwrap();
+            cpu.run(Run {
+                begin,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(count),
+            })
+        };
+        run(0x1000, 5).unwrap();
+        assert_eq!(
+            unsafe { ffi::dynarmic_get_reg(cpu.inst, 2) },
+            5.0f32.to_bits()
+        );
+        // Warm the entry point that the following requests will try to reuse.
+        run(0x1008, 3).unwrap();
+        assert_eq!(
+            unsafe { ffi::dynarmic_get_reg(cpu.inst, 2) },
+            9.0f32.to_bits()
+        );
+        cpu.set_cpsr(0xd0).unwrap();
+        assert!(matches!(
+            run(0x1008, 3),
+            Err(ExecutionError::InvalidInstruction(_))
+        ));
+        cpu.set_cpsr(0xd3).unwrap();
+        cpu.set_fpexc(0).unwrap();
+        assert!(matches!(
+            run(0x1008, 3),
+            Err(ExecutionError::InvalidInstruction(_))
+        ));
+        cpu.set_fpexc(1 << 30).unwrap();
+        run(0x1008, 3).unwrap();
+        assert_eq!(
+            unsafe { ffi::dynarmic_get_reg(cpu.inst, 2) },
+            13.0f32.to_bits()
+        );
+
+        #[cfg(target_arch = "aarch64")]
+        {
+            let read_fpcr = || {
+                let value: u64;
+                unsafe { std::arch::asm!("mrs {value}, fpcr", value = out(reg) value) };
+                value
+            };
+            let saved = read_fpcr();
+            let round_up = 1 << 22;
+            let host = saved & !(3 << 22) | round_up;
+            cpu.write_register(arm::CORE[0], &1.0f32.to_bits().to_le_bytes())
+                .unwrap();
+            cpu.write_register(arm::CORE[1], &0x3380_0000u32.to_le_bytes())
+                .unwrap(); // Half an ULP at 1.0.
+            unsafe { ffi::dynarmic_set_fpscr(cpu.inst, 0) };
+            unsafe { std::arch::asm!("msr fpcr, {value}", value = in(reg) host) };
+            let different_modes = run(0x1000, 5);
+            let different_host = read_fpcr();
+            let nearest = unsafe { ffi::dynarmic_get_reg(cpu.inst, 2) };
+            unsafe { ffi::dynarmic_set_fpscr(cpu.inst, round_up as u32) };
+            let equal_modes = run(0x1000, 5);
+            let equal_host = read_fpcr();
+            let upward = unsafe { ffi::dynarmic_get_reg(cpu.inst, 2) };
+            unsafe { std::arch::asm!("msr fpcr, {value}", value = in(reg) saved) };
+            different_modes.unwrap();
+            equal_modes.unwrap();
+            assert_eq!(different_host, host);
+            assert_eq!(equal_host, host);
+            assert_eq!(nearest, 1.0f32.to_bits());
+            assert_eq!(upward, 1.0f32.to_bits() + 2);
         }
     }
 
@@ -3223,5 +4298,82 @@ mod tests {
             assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 1) }, value);
             assert!(cpu.loops.skipped.get() > skipped);
         }
+    }
+
+    #[test]
+    fn a_self_branch_can_only_use_the_current_instruction_budget() {
+        use fujimod_emulator_cpu::loops::LoopMode;
+
+        for (word, condition) in [(0xeaff_fffeu32, true), (0x0aff_fffe, false)] {
+            let run = |mode| {
+                let cpu = Core::new(Model::CortexA7).unwrap();
+                cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+                cpu.write_memory(0x1000, &word.to_le_bytes()).unwrap();
+                for address in (0x1004..0x1200).step_by(4) {
+                    cpu.write_memory(address, &0xe280_0001u32.to_le_bytes())
+                        .unwrap(); // add r0, r0, #1
+                }
+                cpu.set_armv7a_owner_exclusives(true).unwrap();
+                cpu.set_loop_mode(mode).unwrap();
+                cpu.set_loop_window(true).unwrap();
+                cpu.run(Run {
+                    begin: 0x1000,
+                    until: None,
+                    watchdog_us: 0,
+                    instructions: Some(97),
+                })
+                .unwrap();
+                assert_eq!(cpu.instruction_progress(), Some(97));
+                (
+                    cpu.snapshot(None).unwrap().export().unwrap(),
+                    cpu.loops.skipped.get(),
+                )
+            };
+            let (stepped, no_skips) = run(LoopMode::Disabled);
+            let (accelerated, skips) = run(LoopMode::Accelerate);
+            assert_eq!(accelerated, stepped);
+            assert_eq!(no_skips, 0);
+            assert_eq!(skips, if condition { 97 } else { 0 });
+        }
+    }
+
+    #[test]
+    fn a_two_instruction_countdown_exits_at_the_same_instruction() {
+        use fujimod_emulator_cpu::loops::LoopMode;
+
+        let run = |mode| {
+            let cpu = Core::new(Model::CortexA7).unwrap();
+            cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+            for (address, word) in [
+                (0x1000, 0xe250_0001u32), // subs r0, r0, #1
+                (0x1004, 0x1aff_fffd),    // bne 0x1000
+                (0x1008, 0xe3a0_1005),    // mov r1, #5
+            ] {
+                cpu.write_memory(address, &word.to_le_bytes()).unwrap();
+            }
+            cpu.write_register(arm::CORE[0], &100u32.to_le_bytes())
+                .unwrap();
+            cpu.set_armv7a_owner_exclusives(true).unwrap();
+            cpu.set_loop_mode(mode).unwrap();
+            cpu.set_loop_window(true).unwrap();
+            cpu.run(Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(201),
+            })
+            .unwrap();
+            assert_eq!(cpu.instruction_progress(), Some(201));
+            assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 0) }, 0);
+            assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 1) }, 5);
+            (
+                cpu.snapshot(None).unwrap().export().unwrap(),
+                cpu.loops.skipped.get(),
+            )
+        };
+        let (plain, _) = run(LoopMode::Disabled);
+        let (fast, skipped) = run(LoopMode::Accelerate);
+        assert_eq!(plain, fast);
+        assert!(skipped > 100);
     }
 }

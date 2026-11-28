@@ -64,12 +64,12 @@ pub(super) fn board_mode(mode: bus::Mode) -> Board {
             mprofile: None,
             rprofile: Some(fujimod_emulator_cpu_unicorn::rprofile::core::Options {
                 cp14_identity: 0x55aa,
-                tcm: fujimod_emulator_cpu_unicorn::rprofile::tcm::Options {
-                    btcm: fujimod_emulator_cpu_unicorn::rprofile::tcm::BankOptions {
+                tcm: fujimod_emulator_cpu::armv7r::tcm::Options {
+                    btcm: fujimod_emulator_cpu::armv7r::tcm::BankOptions {
                         bytes: 4096,
                         reset: 0x70000001,
                     },
-                    atcm: fujimod_emulator_cpu_unicorn::rprofile::tcm::BankOptions {
+                    atcm: fujimod_emulator_cpu::armv7r::tcm::BankOptions {
                         bytes: 8192,
                         reset: 0xffff8001,
                     },

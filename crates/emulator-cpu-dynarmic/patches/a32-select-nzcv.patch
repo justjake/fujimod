@@ -1,0 +1,137 @@
+diff --git a/src/dynarmic/backend/arm64/emit_arm64_a32.cpp b/src/dynarmic/backend/arm64/emit_arm64_a32.cpp
+index 714308c4..d24bf044 100644
+--- a/src/dynarmic/backend/arm64/emit_arm64_a32.cpp
++++ b/src/dynarmic/backend/arm64/emit_arm64_a32.cpp
+@@ -413,6 +413,12 @@ void EmitIR<IR::Opcode::A32SetCpsr>(oaknut::CodeGenerator& code, EmitContext& ct
+ template<>
+ void EmitIR<IR::Opcode::A32SetCpsrNZCV>(oaknut::CodeGenerator& code, EmitContext& ctx, IR::Inst* inst) {
+     auto args = ctx.reg_alloc.GetArgumentInfo(inst);
++    if (!args[0].IsImmediate() && args[0].CurrentLocationKind() == HostLoc::Kind::Flags) {
++        // Keep the same value resident for subsequent selects.
++        code.MRS(Xscratch0, oaknut::SystemReg::NZCV);
++        code.STR(Wscratch0, Xstate, offsetof(A32JitState, cpsr_nzcv));
++        return;
++    }
+     auto Wnzcv = ctx.reg_alloc.ReadW(args[0]);
+     RegAlloc::Realize(Wnzcv);
+
+diff --git a/src/dynarmic/backend/arm64/emit_arm64_data_processing.cpp b/src/dynarmic/backend/arm64/emit_arm64_data_processing.cpp
+index 04395148..725daf2c 100644
+--- a/src/dynarmic/backend/arm64/emit_arm64_data_processing.cpp
++++ b/src/dynarmic/backend/arm64/emit_arm64_data_processing.cpp
+@@ -216,6 +216,23 @@ void EmitIR<IR::Opcode::ConditionalSelect32>(oaknut::CodeGenerator& code, EmitCo
+     code.CSEL(Wresult, Wthen, Welse, static_cast<oaknut::Cond>(cond));
+ }
+
++template<>
++void EmitIR<IR::Opcode::ConditionalSelect32WithNZCV>(oaknut::CodeGenerator& code, EmitContext& ctx, IR::Inst* inst) {
++    auto args = ctx.reg_alloc.GetArgumentInfo(inst);
++    const auto cond = static_cast<oaknut::Cond>(args[0].GetImmediateCond());
++    auto Wresult = ctx.reg_alloc.WriteW(inst);
++    auto Wthen = ctx.reg_alloc.ReadW(args[1]);
++    auto Welse = ctx.reg_alloc.ReadW(args[2]);
++    RegAlloc::Realize(Wresult, Wthen, Welse);
++    if (args[3].IsImmediate() || args[3].CurrentLocationKind() != HostLoc::Kind::Flags) {
++        ctx.reg_alloc.SpillFlags();
++        auto Wnzcv = ctx.reg_alloc.ReadW(args[3]);
++        RegAlloc::Realize(Wnzcv);
++        code.MSR(oaknut::SystemReg::NZCV, Wnzcv->toX());
++    }
++    code.CSEL(Wresult, Wthen, Welse, cond);
++}
++
+ template<>
+ void EmitIR<IR::Opcode::ConditionalSelect64>(oaknut::CodeGenerator& code, EmitContext& ctx, IR::Inst* inst) {
+     auto args = ctx.reg_alloc.GetArgumentInfo(inst);
+diff --git a/src/dynarmic/backend/x64/emit_x64_data_processing.cpp b/src/dynarmic/backend/x64/emit_x64_data_processing.cpp
+index 98197c2d..6e2c7deb 100644
+--- a/src/dynarmic/backend/x64/emit_x64_data_processing.cpp
++++ b/src/dynarmic/backend/x64/emit_x64_data_processing.cpp
+@@ -134,13 +134,17 @@ void EmitX64::EmitTestBit(EmitContext& ctx, IR::Inst* inst) {
+     ctx.reg_alloc.DefineValue(inst, result);
+ }
+
+-static void EmitConditionalSelect(BlockOfCode& code, EmitContext& ctx, IR::Inst* inst, int bitsize) {
++static void EmitConditionalSelect(BlockOfCode& code, EmitContext& ctx, IR::Inst* inst, int bitsize, bool explicit_flags = false) {
+     auto args = ctx.reg_alloc.GetArgumentInfo(inst);
+     const Xbyak::Reg32 nzcv = ctx.reg_alloc.ScratchGpr(HostLoc::RAX).cvt32();
+     const Xbyak::Reg then_ = ctx.reg_alloc.UseGpr(args[1]).changeBit(bitsize);
+     const Xbyak::Reg else_ = ctx.reg_alloc.UseScratchGpr(args[2]).changeBit(bitsize);
+
+-    code.mov(nzcv, dword[r15 + code.GetJitStateInfo().offsetof_cpsr_nzcv]);
++    if (explicit_flags) {
++        code.mov(nzcv, ctx.reg_alloc.UseGpr(args[3]).cvt32());
++    } else {
++        code.mov(nzcv, dword[r15 + code.GetJitStateInfo().offsetof_cpsr_nzcv]);
++    }
+
+     code.LoadRequiredFlagsForCondFromRax(args[0].GetImmediateCond());
+
+@@ -202,6 +206,10 @@ void EmitX64::EmitConditionalSelect32(EmitContext& ctx, IR::Inst* inst) {
+     EmitConditionalSelect(code, ctx, inst, 32);
+ }
+
++void EmitX64::EmitConditionalSelect32WithNZCV(EmitContext& ctx, IR::Inst* inst) {
++    EmitConditionalSelect(code, ctx, inst, 32, true);
++}
++
+ void EmitX64::EmitConditionalSelect64(EmitContext& ctx, IR::Inst* inst) {
+     EmitConditionalSelect(code, ctx, inst, 64);
+ }
+diff --git a/src/dynarmic/ir/opcodes.inc b/src/dynarmic/ir/opcodes.inc
+index dd060e0a..5ee216b5 100644
+--- a/src/dynarmic/ir/opcodes.inc
++++ b/src/dynarmic/ir/opcodes.inc
+@@ -106,6 +106,7 @@ OPCODE(IsZero32,                                            U1,             U32
+ OPCODE(IsZero64,                                            U1,             U64                                                             )
+ OPCODE(TestBit,                                             U1,             U64,            U8                                              )
+ OPCODE(ConditionalSelect32,                                 U32,            Cond,           U32,            U32                             )
++OPCODE(ConditionalSelect32WithNZCV,                         U32,            Cond,           U32,            U32,            NZCV            )
+ OPCODE(ConditionalSelect64,                                 U64,            Cond,           U64,            U64                             )
+ OPCODE(ConditionalSelectNZCV,                               NZCV,           Cond,           NZCV,           NZCV                            )
+ OPCODE(LogicalShiftLeft32,                                  U32,            U32,            U8,             U1                              )
+diff --git a/src/dynarmic/ir/opt/a32_get_set_elimination_pass.cpp b/src/dynarmic/ir/opt/a32_get_set_elimination_pass.cpp
+index bb574197..a4e1db9f 100644
+--- a/src/dynarmic/ir/opt/a32_get_set_elimination_pass.cpp
++++ b/src/dynarmic/ir/opt/a32_get_set_elimination_pass.cpp
+@@ -21,6 +21,32 @@ namespace Dynarmic::Optimization {
+
+ namespace {
+
++void ForwardSelectFlags(IR::Block& block) {
++    IR::Value flags;
++    for (auto inst = block.begin(); inst != block.end(); ++inst) {
++        switch (inst->GetOpcode()) {
++        case IR::Opcode::A32SetCpsrNZCV:
++            flags = inst->GetArg(0);
++            break;
++        case IR::Opcode::ConditionalSelect32:
++            if (!flags.IsEmpty()) {
++                // The select can consume the IR producer directly. FlagsPass
++                // can then eliminate flag writes overwritten in this block.
++                auto select = block.PrependNewInst(inst, IR::Opcode::ConditionalSelect32WithNZCV,
++                    {inst->GetArg(0), inst->GetArg(1), inst->GetArg(2), flags});
++                inst->ReplaceUsesWith(IR::Value{&*select});
++            }
++            break;
++        default:
++            if (inst->WritesToCPSR() || inst->IsMemoryReadOrWrite()
++                || inst->IsCoprocessorInstruction() || inst->GetOpcode() == IR::Opcode::CallHostFunction) {
++                flags = {};
++            }
++            break;
++        }
++    }
++}
++
+ void FlagsPass(IR::Block& block, bool precise_memory) {
+     using Iterator = std::reverse_iterator<IR::Block::iterator>;
+
+@@ -374,6 +400,7 @@ void RegisterPass(IR::Block& block, bool precise_memory) {
+ }  // namespace
+
+ void A32GetSetElimination(IR::Block& block, A32GetSetEliminationOptions options) {
++    ForwardSelectFlags(block);
+     FlagsPass(block, options.preserve_memory_access_state);
+     RegisterPass(block, options.preserve_memory_access_state);
+ }

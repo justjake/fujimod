@@ -230,7 +230,11 @@ impl State {
             }
         }
         self.aprofile.clone_from(&saved.aprofile);
-        self.armv7a.clone_from(&saved.armv7a);
+        for (profile, saved) in self.armv7a.iter_mut().zip(&saved.armv7a) {
+            if let (Some(profile), Some(saved)) = (profile, saved) {
+                profile.restore_checkpoint(saved);
+            }
+        }
         self.implementation_cluster
             .clone_from(&saved.implementation_cluster);
         self.unmodeled_system.clone_from(&saved.unmodeled_system);

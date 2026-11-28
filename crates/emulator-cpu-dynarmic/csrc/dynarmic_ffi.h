@@ -25,6 +25,7 @@ typedef struct DynarmicCallbacks {
     void* user_data;
     void* inline_read32;
     uint32_t (*batch_instruction)(uint32_t);
+    bool (*is_counted_loop)(uint32_t, uint32_t, uint32_t, uint32_t);
     void (*guard_transfer)(void*, uint32_t, uint32_t);
     bool (*read_code)(void*, uint32_t, uint32_t*);
     uint64_t (*read)(void*, uint32_t, uint32_t);
@@ -40,16 +41,20 @@ typedef struct DynarmicMemoryControl {
     uint32_t dacr;
     uint32_t fcseidr;
     uint32_t cpsr;
+    uint32_t cpacr;
 } DynarmicMemoryControl;
 
 typedef struct DynarmicInstance DynarmicInstance;
 
-DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks);
+DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks, bool rprofile);
 void dynarmic_destroy(DynarmicInstance* inst);
 
-void dynarmic_set_translation_context(DynarmicInstance* inst, uint32_t value);
+void dynarmic_set_translation_context(DynarmicInstance* inst, uint32_t value, bool vfp_enabled);
 void dynarmic_observe_stores(DynarmicInstance* inst, bool enabled);
 void dynarmic_read_gprs(DynarmicInstance* inst, uint32_t* values);
+void dynarmic_write_loop_state(DynarmicInstance* inst, const uint32_t* values, uint32_t cpsr, bool flags_changed);
+void dynarmic_read_snapshot(DynarmicInstance* inst, uint32_t* ext_regs, uint32_t* cp15, uint32_t* cache_ids);
+void dynarmic_write_snapshot(DynarmicInstance* inst, const uint32_t* ext_regs, const uint32_t* cp15, const uint32_t* cache_ids);
 uint8_t** dynarmic_data_pages(DynarmicInstance* inst);
 DynarmicExitReason dynarmic_run(DynarmicInstance* inst, uint64_t budget, uint64_t* executed);
 DynarmicExitReason dynarmic_step(DynarmicInstance* inst, uint64_t* executed);

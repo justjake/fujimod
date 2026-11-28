@@ -24,7 +24,7 @@ pub struct RunFactoryOptions {
     /// Explicit H.264 backend; absence selects the local platform default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub video_encoder_backend: Option<fujimod_catalog_construction::VideoEncoderBackend>,
-    /// CPU backend for Cortex-A7 processors. Absence selects Unicorn.
+    /// CPU backend override for Cortex-A7 and Cortex-R5F processors.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cpu_backend: Option<RunCpuBackend>,
     /// Selected auxiliary control profile. Absence preserves the base selection.
@@ -199,7 +199,7 @@ pub struct RunFactoryOptions {
     pub hdmi_sink: Option<RunHdmiSink>,
 }
 
-/// Execution backend for Cortex-A7 processors.
+/// Execution backend for Cortex-A7 and Cortex-R5F processors.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(
@@ -212,6 +212,18 @@ pub enum RunCpuBackend {
     #[default]
     Unicorn,
     Dynarmic,
+}
+
+impl std::str::FromStr for RunCpuBackend {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "unicorn" => Ok(Self::Unicorn),
+            "dynarmic" => Ok(Self::Dynarmic),
+            _ => Err("CPU backend must be unicorn or dynarmic".into()),
+        }
+    }
 }
 
 /// Synthetic FAT card formatting parameters.

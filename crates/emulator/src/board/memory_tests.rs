@@ -202,8 +202,8 @@ fn board(released: Vec<bool>) -> (Board, Readings) {
                 mprofile: None,
                 rprofile: Some(rprofile::core::Options {
                     cp14_identity: 0,
-                    tcm: rprofile::tcm::Options {
-                        atcm: rprofile::tcm::BankOptions {
+                    tcm: fujimod_emulator_cpu::armv7r::tcm::Options {
+                        atcm: fujimod_emulator_cpu::armv7r::tcm::BankOptions {
                             bytes: 0x1000,
                             reset: 0x10001,
                         },

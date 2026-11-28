@@ -1,8 +1,6 @@
 use super::*;
-use crate::rprofile::{
-    core::tests::{get, processor_with_options, resume, run, set, words},
-    tcm,
-};
+use crate::rprofile::core::tests::{get, processor_with_options, resume, run, set, words};
+use fujimod_emulator_cpu::armv7r::tcm;
 
 fn options() -> Options {
     Options {

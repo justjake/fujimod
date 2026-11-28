@@ -30,7 +30,7 @@ pub use firmware_file::FirmwareFile;
 use fujimod_catalog::reference::PartModel;
 use fujimod_catalog_assets::Content;
 use fujimod_catalog_configuration::{
-    Exr2RunInputs, RunExecution, RunInputs, RunPurpose, RunScene, RunStart,
+    Exr2RunInputs, RunCpuBackend, RunExecution, RunInputs, RunPurpose, RunScene, RunStart,
 };
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator::board::{
@@ -49,6 +49,22 @@ use std::{
     io::Read,
     path::{Path, PathBuf},
 };
+
+/// Select the exact native JIT for strict EXR II, XP4, and X-Processor Pro startup.
+/// The caller applies this preference only when the run can use exact scheduling.
+pub fn prefer_dynarmic(resolved: &mut ResolvedConfiguration) -> Result<(), String> {
+    if factory::dynarmic_available()
+        && matches!(resolved.reference.soc.id.as_str(), "exr2" | "xp4" | "xpp")
+        && resolved
+            .configuration
+            .preset
+            .as_ref()
+            .is_some_and(|preset| preset.factory_options.cpu_backend.is_none())
+    {
+        resolved.override_cpu_backend(RunCpuBackend::Dynarmic)?;
+    }
+    Ok(())
+}
 
 /// Every binary input location is supplied by the embedding program.
 #[derive(Clone, Debug)]
@@ -983,7 +999,7 @@ pub fn open_request(resolved: ResolvedConfiguration, request: Request) -> Result
                 camera_settings: Default::default(),
                 flash_seeds: Vec::new(),
             }),
-            _ if resolved.reference.soc.id == "xpp" => {
+            _ if matches!(resolved.reference.soc.id.as_str(), "xp4" | "xpp") => {
                 StartupInputs::Application(application::Startup {
                     update: request.update,
                     plan: request
@@ -1068,7 +1084,7 @@ pub fn open(resolved: ResolvedConfiguration, inputs: StartupInputs) -> Result<Ca
 
 /// Whether a configuration runs on EXR II, either from declared startup inputs
 /// or from a body construction that carries its reset values.
-fn is_exr2_run(resolved: &ResolvedConfiguration) -> bool {
+pub fn is_exr2_run(resolved: &ResolvedConfiguration) -> bool {
     matches!(
         resolved.configuration.inputs.as_ref(),
         Some(RunInputs::Exr2(_))
@@ -1104,12 +1120,46 @@ impl TraceOutput {
 
 /// Restore a portable snapshot into a session built from the same inputs.
 pub fn load_snapshot(session: &mut Session, path: &Path) -> Result<(), String> {
-    let mut restore = || -> Result<(), String> {
-        let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
-        let point = session.import_snapshot(&bytes)?;
-        session.restore(&point)
-    };
-    restore().map_err(|error| format!("{}: {error}", path.display()))
+    SnapshotFile::read(path)?.restore(session)
+}
+
+/// A portable snapshot opened once so a caller can choose the CPU backend
+/// before constructing the session that will restore it.
+pub struct SnapshotFile {
+    path: PathBuf,
+    state: fujimod_emulator_devices::checkpoint::Checkpoint,
+}
+
+impl SnapshotFile {
+    pub fn read(path: &Path) -> Result<Self, String> {
+        let bytes = std::fs::read(path).map_err(|error| format!("{}: {error}", path.display()))?;
+        let state = fujimod_emulator_devices::checkpoint::Checkpoint::from_bytes(&bytes)
+            .map_err(|error| format!("{}: {error}", path.display()))?;
+        Ok(Self {
+            path: path.into(),
+            state,
+        })
+    }
+
+    pub fn uses_dynarmic(&self) -> Result<bool, String> {
+        let definition = fujimod_emulator_session::checkpoint::Snapshot::definition(&self.state)
+            .map_err(|error| format!("{}: {error}", self.path.display()))?;
+        Ok(definition
+            .pointer("/execution/processors")
+            .and_then(Value::as_array)
+            .is_some_and(|processors| {
+                processors
+                    .iter()
+                    .any(|processor| processor["cpu_backend"] == "dynarmic")
+            }))
+    }
+
+    pub fn restore(self, session: &mut Session) -> Result<(), String> {
+        session
+            .import_checkpoint(&self.state)
+            .and_then(|point| session.restore(&point))
+            .map_err(|error| format!("{}: {error}", self.path.display()))
+    }
 }
 
 /// Write a portable snapshot of the current session boundary.

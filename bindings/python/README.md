@@ -19,6 +19,18 @@ It compiles `fujimod._native` with Cargo's release profile, checks that it
 loads, replaces `python/fujimod/_native.abi3.so` and puts `python/` on the
 environment's path. Rerun it after Rust changes.
 
+On ARM64 and x86-64 macOS and Linux, the native build includes Dynarmic.
+Initialize the recursive submodules and install CMake, Ninja, and Boost headers
+before building. `Board.from_inputs` uses Dynarmic for strict EXR II, XP4, and
+X-Processor Pro runs. Pass `cpu_backend="unicorn"` to select Unicorn, or
+`cpu_backend="dynarmic"` to explicitly select the JIT for Cortex-A7 and
+Cortex-R5F. Use `python_extension.py --no-dynarmic` to build with Unicorn only.
+
+Strict XP4 and X-Processor Pro sessions built from `Xp4Definition` also choose
+Dynarmic when available. Discovery and definitions that declare Unicorn
+coherence ranges choose Unicorn. Set `cpu_backend` in the definition options
+to select a backend explicitly.
+
 ## Native execution
 
 The native extension also exposes `fujimod.emulator`. For a resolved graph, build a
