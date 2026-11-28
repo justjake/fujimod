@@ -41,6 +41,11 @@ pub(super) struct Profile {
     /// Host-only: the last entry found an exception ready (pending and
     /// enabled, whatever the masks).
     ready: bool,
+    /// Host-only: the exclusive-monitor answer and the reservations generation
+    /// it was computed from. Reservations change only on an exclusive
+    /// load/store or a conflicting write, so the walk over every peer slot is
+    /// repeated only when that generation moved.
+    every_store: std::cell::Cell<Option<(u64, bool)>>,
 }
 pub(super) enum Entry {
     Execute,
@@ -117,6 +122,7 @@ impl Profile {
             alias_write,
             stopped: _,
             ready: _,
+            every_store: _,
         } = self;
         Checkpoint {
             config: *config,
@@ -194,6 +200,7 @@ impl Profile {
             alias_write: false,
             stopped: false,
             ready: false,
+            every_store: std::cell::Cell::new(None),
         })
     }
     fn ns(&self, now: u64) -> Result<u64, String> {
@@ -274,8 +281,17 @@ impl Profile {
             .domain
             .lock()
             .map_err(|_| "exclusive monitors poisoned")?;
-        Ok(monitors.reservation(self.owner).is_some()
-            || monitors.active_except_overlapping(self.owner, &self.physical_spans))
+        let generation = monitors.reservations();
+        if let Some((cached_generation, answer)) = self.every_store.get()
+            && cached_generation == generation
+        {
+            return Ok(answer);
+        }
+        let answer = monitors.reservation(self.owner).is_some()
+            || monitors.active_except_overlapping(self.owner, &self.physical_spans);
+        drop(monitors);
+        self.every_store.set(Some((generation, answer)));
+        Ok(answer)
     }
     /// Whether the last entry found an exception ready.
     pub(super) fn ready(&self) -> bool {
