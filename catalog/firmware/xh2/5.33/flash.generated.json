@@ -1,0 +1,74 @@
+{
+  "$schema": "https://fujimod.com/schemas/flash.generated.schema.json",
+  "schema": 1,
+  "id": "xh2-533-flash",
+  "firmware_id": "xh2-533",
+  "device": {
+    "kind": "serial-nor",
+    "jedec_id": "2c5b1b",
+    "part": "Micron MT35XU01GBBA"
+  },
+  "window": {
+    "address": 4026531840,
+    "size": 134217728
+  },
+  "update_image": {
+    "dat_offset": 628,
+    "xor": 255
+  },
+  "reader": {
+    "symbol": "flash_read",
+    "alignment": 64
+  },
+  "transport": "xp5-cmd-callback",
+  "code_ranges": [
+    {
+      "name": "flash_read",
+      "address": 20475760,
+      "size": 48
+    },
+    {
+      "name": "flash read request",
+      "address": 20475076,
+      "size": 684
+    },
+    {
+      "name": "flash read dispatcher",
+      "address": 20473308,
+      "size": 312
+    },
+    {
+      "name": "flash queued DMA read (not live-verified)",
+      "address": 20470876,
+      "size": 448
+    },
+    {
+      "name": "destination cache maintenance",
+      "address": 21793552,
+      "size": 64
+    },
+    {
+      "name": "flash bank selection",
+      "address": 20477900,
+      "size": 60
+    },
+    {
+      "name": "flash CPU tail copy",
+      "address": 20471452,
+      "size": 168
+    }
+  ],
+  "state_checks": [
+    {
+      "name": "flash driver initialized",
+      "address": 33904536,
+      "size": 4,
+      "value": 2003199317
+    }
+  ],
+  "control": {
+    "offset": 393216,
+    "size": 32768,
+    "sha256": "ce1e0a22a6133aea3adc3d0ceca47bc7736a10e5f3e4e2795e85d51de3517351"
+  }
+}
