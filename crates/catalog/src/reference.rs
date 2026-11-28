@@ -470,6 +470,22 @@ impl Soc {
                             ));
                         }
                     }
+                    crate::soc::BlockDevice::HdmiTransmitter {
+                        hot_plug_block_id, ..
+                    } => {
+                        if !self.blocks.iter().any(|other| {
+                            &other.id == hot_plug_block_id
+                                && matches!(
+                                    other.device,
+                                    Some(crate::soc::BlockDevice::CableStatus { .. })
+                                )
+                        }) {
+                            return Err(format!(
+                                "SoC {} HDMI transmitter {} names no cable-status block {}",
+                                self.id, block.id, hot_plug_block_id
+                            ));
+                        }
+                    }
                     crate::soc::BlockDevice::JpegCodec {
                         memory_type_block_id: Some(memory_type_block_id),
                         ..

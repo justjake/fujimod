@@ -365,6 +365,10 @@ pub enum PeripheralPart {
     },
     /// Display panel programmed over a chip-selected serial port.
     DisplayPanelSerial,
+    /// HDMI output connector of the body, driven by the processor's HDMI transmitter. A sink
+    /// plugged into it (a run input) drives hot plug and answers EDID and SCDC reads over DDC;
+    /// a body without this part has no sink to present.
+    HdmiConnector,
     /// Interchangeable X-mount lens on a body's lens mount.
     XMountLens {
         /// Emulated lens preset.

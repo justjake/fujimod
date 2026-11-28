@@ -4,8 +4,9 @@ use fujimod_emulator_devices::graph::{DeviceGraph, DeviceWindow};
 use fujimod_emulator_xp5_display::{display, panel_clock, panel_serial};
 use fujimod_emulator_xp5_imaging::serial_sink;
 use fujimod_emulator_xp5_io::{
-    adc, connection_status, discarded_read, gates, gpio, mailbox, memory_configuration,
-    register_input, reset_handshake, sd_controller_wrapper, timer, write_only_registers,
+    adc, connection_status, discarded_read, gates, gpio, hdmi_transmitter, mailbox,
+    memory_configuration, register_input, reset_handshake, sd_controller_wrapper, timer,
+    write_only_registers,
 };
 use fujimod_emulator_xp5_storage::{
     flash_storage, flash_storage_controller, flash_storage_dma, nand_controller,
@@ -221,6 +222,67 @@ fn register_with_resources(
         "usb-phy" => {
             bus.register(window.base, window.size, Box::new(usb::phy(window)?))?;
         }
+        "hdmi-transmitter" => {
+            let number = |key: &str| {
+                window
+                    .options
+                    .get(key)
+                    .and_then(toml::Value::as_integer)
+                    .and_then(|value| u64::try_from(value).ok())
+                    .ok_or_else(|| format!("HDMI transmitter requires {key}"))
+            };
+            if window.options.keys().any(|key| {
+                !matches!(
+                    key.as_str(),
+                    "interrupt"
+                        | "hot_plug_base"
+                        | "hot_plug_size"
+                        | "connected_level"
+                        | "sink_connected"
+                )
+            }) {
+                return Err("unknown HDMI transmitter option".into());
+            }
+            let interrupt = u32::try_from(number("interrupt")?)
+                .ok()
+                .filter(|line| (32..1020).contains(line))
+                .ok_or("HDMI transmitter requires a shared interrupt")?;
+            let hot_plug = hdmi_transmitter::HotPlug {
+                base: number("hot_plug_base")?,
+                connected_level: match number("connected_level")? {
+                    0 => false,
+                    1 => true,
+                    _ => return Err("HDMI hot plug requires connected_level 0 or 1".into()),
+                },
+            };
+            if number("hot_plug_size")? != 4 {
+                return Err("HDMI hot-plug status is one word".into());
+            }
+            let plugged = window
+                .options
+                .get("sink_connected")
+                .map(|value| value.as_bool().ok_or("sink_connected must be a boolean"))
+                .transpose()?;
+            bus.register_windows(
+                vec![
+                    fujimod_emulator_devices::graph::Mapping {
+                        base: window.base,
+                        size: window.size,
+                    },
+                    fujimod_emulator_devices::graph::Mapping {
+                        base: hot_plug.base,
+                        size: 4,
+                    },
+                ],
+                Box::new(hdmi_transmitter::HdmiTransmitter::new(
+                    window.base,
+                    window.size,
+                    interrupt,
+                    hot_plug,
+                    plugged,
+                )?),
+            )?;
+        }
         "hdmi-hot-plug-status" => {
             if window.options.keys().any(|key| key != "connected_level") {
                 return Err("unknown HDMI hot-plug status option".into());
@@ -391,8 +453,8 @@ fn register_with_resources(
             )?;
         }
         "imaging-tnr" => {
-            // TNR 0xffd24000: the completion stub that, with XT5_MOVIE_PATH=real, also copies
-            // the current picture to the encoder input (emulator-xp5-imaging imaging_movie.rs).
+            // TNR 0xffd24000: the completion stub that also writes the engine's output, the
+            // current picture, at each start (emulator-xp5-imaging imaging_movie.rs).
             // Registered here, in manifest order, so the device graph matches snapshots taken
             // when the window was a plain completion stub.
             if window.base != 0xffd24000 || window.size != 0x1000 {
@@ -408,15 +470,10 @@ fn register_with_resources(
                 options,
                 1000,
             )?;
-            let tnr = fujimod_emulator_xp5_imaging::imaging::movie::Tnr::new(stub);
             bus.register(
                 window.base,
                 window.size,
-                Box::new(if fujimod_emulator_imaging::frame::movie_path_real() {
-                    tnr.with_movie_path()
-                } else {
-                    tnr
-                }),
+                Box::new(fujimod_emulator_xp5_imaging::imaging::movie::Tnr::new(stub)),
             )?;
         }
         "write-only-registers" => {

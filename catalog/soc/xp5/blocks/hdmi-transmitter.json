@@ -1,0 +1,27 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "hdmi-transmitter",
+  "base": 4288413696,
+  "size": 32768,
+  "kind": "display-controller",
+  "interrupts": [
+    {
+      "output": "irq",
+      "line": 287
+    }
+  ],
+  "device": {
+    "model": "hdmi_transmitter",
+    "hot_plug_block_id": "display-hot-plug",
+    "basis": "On-chip HDMI transmitter. After the hot-plug status word reports a sink, the stock HDMI task opens this instance: event and status words at +0x7090/+0x7094 with enables at +0x7098/+0x709c, sink sense at +0x7008, the DDC request at +0x7a80 with its status at +0x7a84 and a 64-word FIFO at +0x7c00 for EDID and SCDC transfers. Its interrupt is INTID 287."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xh2s-730"
+      ]
+    }
+  ]
+}

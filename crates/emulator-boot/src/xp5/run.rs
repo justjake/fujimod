@@ -129,6 +129,8 @@ pub struct Run {
     /// Scripted key presses: `t=SECONDS:KEY;...` (a leading `-` on KEY releases it).
     pub keys: Option<String>,
     pub gpio: Option<String>,
+    /// Plug an HDMI sink into the body's HDMI connector this many guest milliseconds after start.
+    pub hdmi_connect_at_ms: Option<u64>,
     pub pokes: Vec<String>,
     pub press: Option<String>,
     /// Timed dial and switch positions: `CONTROL=POSITION[@MS][,...]`.
@@ -186,6 +188,7 @@ impl Run {
             second_card_files: Vec::new(),
             keys: None,
             gpio: None,
+            hdmi_connect_at_ms: None,
             pokes: Vec::new(),
             press: None,
             settings: None,
@@ -240,6 +243,7 @@ pub struct RunHost {
     hashes: Vec<(u64, u64)>,
     card_write_back: Vec<super::loader_card::WriteBack>,
     timed_gpio: VecDeque<(u64, u64, (u8, u8, bool))>,
+    hdmi_connect_at: Option<u64>,
     timed_pokes: VecDeque<(u64, u64, (u64, u32))>,
     watch_pcs: Vec<u64>,
     watch_writes: Vec<(u64, u64)>,
@@ -272,6 +276,7 @@ impl RunHost {
             second_card_files,
             keys: key_script,
             gpio: gpio_spec,
+            hdmi_connect_at_ms,
             pokes,
             press,
             settings,
@@ -492,6 +497,10 @@ impl RunHost {
             .into_iter()
             .map(|(at_ms, write)| (millisecond_tick(at_ms), at_ms, write))
             .collect();
+        if hdmi_connect_at_ms.is_some() && !inputs.has_hdmi_transmitter() {
+            return Err("--hdmi-connect-at requires a board with an HDMI transmitter".into());
+        }
+        let hdmi_connect_at = hdmi_connect_at_ms.map(millisecond_tick);
         let watch_after = watch_after_ms.map(|ms| (millisecond_tick(ms), ms));
         let interrupted = Arc::new(AtomicBool::new(false));
         let signal = interrupted.clone();
@@ -534,6 +543,7 @@ impl RunHost {
             hashes,
             card_write_back,
             timed_gpio,
+            hdmi_connect_at,
             timed_pokes,
             watch_pcs,
             watch_writes,
@@ -566,6 +576,7 @@ impl RunHost {
             frames,
             latest_frame,
             timed_gpio,
+            hdmi_connect_at,
             timed_pokes,
             watch_pcs,
             watch_writes,
@@ -578,6 +589,10 @@ impl RunHost {
             return Ok(false);
         }
         let now = session.board.now();
+        if hdmi_connect_at.is_some_and(|at| now >= at) {
+            inputs.hdmi_cable(session, true)?;
+            *hdmi_connect_at = None;
+        }
         let next_patch = patches.advance(&session.board, now, *start, *ticks_per_second)?;
         if let Some(loaded) = fujimod.as_mut() {
             loaded.attach_if_ready(&mod_loader::BoardMachine(&session.board), now)?;
@@ -612,6 +627,7 @@ impl RunHost {
         // Stop the slice at the next scheduled host action, so it applies at its guest time.
         let until = [
             next_patch,
+            *hdmi_connect_at,
             timed_gpio.front().map(|item| item.0),
             timed_pokes.front().map(|item| item.0),
             watch_after.map(|item| item.0),

@@ -377,6 +377,21 @@ pub fn apply_run_scene(
                         }
                     }
                 }
+                // The input engine's frame-start and frame-end events after each completed run.
+                "imaging-input" => {
+                    if frame.luma.is_some() {
+                        return Err(format!(
+                            "XP5 scene luma is unsupported for input engine {block_id}"
+                        ));
+                    }
+                    let active = active.clone().ok_or_else(|| {
+                        format!("XP5 scene for input engine {block_id} needs an active interval")
+                    })?;
+                    window
+                        .options
+                        .insert("frame_period_us".into(), period.clone());
+                    window.options.insert("frame_active_us".into(), active);
+                }
                 "movdc" | "imaging-preview" => {
                     window
                         .options
@@ -1651,6 +1666,88 @@ fn block_window(
                 block.id
             ));
         }
+        BlockDevice::HdmiTransmitter {
+            hot_plug_block_id, ..
+        } => {
+            // The transmitter owns the hot-plug word of its cable-status block: one model
+            // answers the sink's hot-plug line there and its DDC and status here.
+            let hot_plug = selection
+                .soc
+                .blocks
+                .iter()
+                .find(|other| &other.id == hot_plug_block_id)
+                .ok_or_else(|| format!("block {}: no block {hot_plug_block_id}", block.id))?;
+            let Some(BlockDevice::CableStatus {
+                connected_level, ..
+            }) = &hot_plug.device
+            else {
+                return Err(format!(
+                    "block {}: {hot_plug_block_id} is not a cable-status word",
+                    block.id
+                ));
+            };
+            options.insert(
+                "interrupt".into(),
+                integer(u64::from(
+                    irq("irq").ok_or_else(|| format!("block {}: no interrupt", block.id))?,
+                )),
+            );
+            options.insert("hot_plug_base".into(), integer(hot_plug.base));
+            options.insert("hot_plug_size".into(), integer(hot_plug.size));
+            options.insert(
+                "connected_level".into(),
+                integer(u64::from(*connected_level)),
+            );
+            // A body with an HDMI connector presents a sink; whether one is plugged in at the
+            // start is the run's input for that part.
+            let connectors: Vec<_> = selection
+                .parts
+                .iter()
+                .filter(|part| {
+                    matches!(
+                        &part.model,
+                        fujimod_catalog::reference::PartModel::Peripheral {
+                            interface: fujimod_catalog::assembly::PeripheralPart::HdmiConnector
+                        }
+                    )
+                })
+                .collect();
+            match connectors.as_slice() {
+                [] => {}
+                [connector] => {
+                    let connected = part_inputs.iter().find_map(|input| match input {
+                        fujimod_catalog_configuration::application_inputs::ApplicationPartInput::HdmiSink {
+                            part_id,
+                            connected,
+                        } if part_id == &connector.id => Some(*connected),
+                        _ => None,
+                    });
+                    options.insert(
+                        "sink_connected".into(),
+                        toml::Value::Boolean(connected.unwrap_or(false)),
+                    );
+                }
+                _ => {
+                    return Err(format!(
+                        "body {} installs more than one HDMI connector",
+                        selection.body.id
+                    ));
+                }
+            }
+            "hdmi-transmitter"
+        }
+        BlockDevice::CableStatus { .. }
+            if block.kind == SocBlockKind::DisplayController
+                && selection.soc.blocks.iter().any(|other| {
+                    matches!(
+                        &other.device,
+                        Some(BlockDevice::HdmiTransmitter { hot_plug_block_id, .. })
+                            if hot_plug_block_id == &block.id
+                    )
+                }) =>
+        {
+            return Ok(None);
+        }
         BlockDevice::CableStatus {
             connected_level, ..
         } => match block.kind {
@@ -1760,8 +1857,15 @@ fn block_window(
             stage_handshake(&mut options, handshake.as_ref(), irq("irq"));
             "imaging-rzl2"
         }
-        BlockDevice::ImagingResz { handshake, .. } => {
+        BlockDevice::ImagingResz {
+            handshake,
+            inline_source,
+            ..
+        } => {
             stage_handshake(&mut options, handshake.as_ref(), irq("irq"));
+            if *inline_source {
+                options.insert("inline_source".into(), toml::Value::Boolean(true));
+            }
             "imaging-resz"
         }
         BlockDevice::InputCapture {
@@ -2544,11 +2648,16 @@ pub fn assemble_devices(
             })
         })
         .transpose()?;
+    let hdmi = windows
+        .iter()
+        .find(|window| window.kind == "hdmi-transmitter")
+        .map(|window| graph.at(window.base))
+        .transpose()?;
     let bus = Bus::from_graph(mode, graph)?;
     Ok(DeviceAssembly {
         contacts,
         bus,
-        inputs: crate::session::Inputs::new(resources.pins, gpio_devices, usb),
+        inputs: crate::session::Inputs::new(resources.pins, gpio_devices, usb, hdmi),
         nodes,
     })
 }

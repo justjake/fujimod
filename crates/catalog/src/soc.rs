@@ -642,6 +642,15 @@ pub enum BlockDevice {
         /// Declared basis.
         basis: String,
     },
+    /// On-chip HDMI transmitter: its control registers, the DDC master that reads a sink's EDID
+    /// and SCDC registers, and its interrupt. The transmitter owns the hot-plug status word of
+    /// `hot_plug_block_id`, a display cable-status block, so one model answers both.
+    HdmiTransmitter {
+        /// Display cable-status block whose word reads the sink's hot-plug line.
+        hot_plug_block_id: String,
+        /// Declared basis.
+        basis: String,
+    },
     /// Cable status word: bit 0 reads `connected_level` while a cable is attached.
     CableStatus {
         /// Bit 0 level while a cable is attached.
@@ -752,6 +761,10 @@ pub enum BlockDevice {
         /// Start, completion and acknowledgement handshake, when declared.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         handshake: Option<CompletionHandshake>,
+        /// The scaler takes the RIFP RAW movie stream as an inline source: a class-3 start
+        /// with a zero source address scales the frame the next RIFP run develops.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        inline_source: bool,
         /// Declared basis.
         basis: String,
     },
@@ -1157,6 +1170,7 @@ impl BlockDevice {
                     BlockDevice::Dmp { .. }
                         | BlockDevice::DisplayOutput { .. }
                         | BlockDevice::HdmiTx { .. }
+                        | BlockDevice::HdmiTransmitter { .. }
                         | BlockDevice::DisplayOutputLink { .. }
                         | BlockDevice::Renderer { .. }
                         | BlockDevice::RegisterBlock { .. }

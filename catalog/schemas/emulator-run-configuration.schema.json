@@ -486,6 +486,28 @@
             "acceleration"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Whether an HDMI sink is plugged into an HDMI connector when the run starts.",
+          "properties": {
+            "connected": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "hdmi_sink",
+              "type": "string"
+            },
+            "part_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "part_id",
+            "connected"
+          ],
+          "type": "object"
         }
       ]
     },

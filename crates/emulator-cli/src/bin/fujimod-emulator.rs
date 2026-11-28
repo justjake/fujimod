@@ -36,6 +36,7 @@ into IMAGE at the end of the run;\n\
 the -2 options put a second card in slot 2 of a body that has one.\n\
 --manifest FILE, --watch-pcs ADDR[,ADDR...], --watch-writes ADDR:LEN[,ADDR:LEN...], --dump ADDR:LEN[;ADDR:LEN...], --hash ADDR:LEN[;ADDR:LEN...]\n\
 --gpio PORT:PIN=0|1[,PORT:PIN=0|1...], --poke ADDR=U32, --press TIME_MS:KEY[:HOLD_MS][,...]\n\
+XP5 --hdmi-connect-at MS plugs an HDMI sink into the body's HDMI connector MS guest milliseconds after the run starts.\n\
 XP5 --gpio also takes PORT:PIN=0|1@MS: the level applies MS guest milliseconds after the run starts.\n\
 XP5 --set CONTROL=POSITION[@MS][,...] moves a dial or switch MS guest milliseconds after the run starts\n\
 (X-T5: iso=A|C|125..12800, ss=A|8000..2|1|T|B, ev=-3..+3|C, drive=PANO|ADV|BKT|CH|CL|S|HDR,\n\
@@ -74,7 +75,7 @@ open boots to REC, prints a JSON report of the firmware, boot, stage and engine,
 --gui opens the desktop window on the opened session before the report.\n";
 
 /// Options that take a value, in help order; `--discovery` and `--gui` are flags.
-const VALUED: [&str; 45] = [
+const VALUED: [&str; 46] = [
     "--configuration",
     "--overlay",
     "--engine",
@@ -112,6 +113,7 @@ const VALUED: [&str; 45] = [
     "--dump",
     "--hash",
     "--gpio",
+    "--hdmi-connect-at",
     "--poke",
     "--press",
     "--set",
@@ -781,6 +783,14 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
         second_card_files: boot_options.second_sd_files()?,
         keys: boot_options.text("--keys")?,
         gpio,
+        hdmi_connect_at_ms: boot_options
+            .text("--hdmi-connect-at")?
+            .map(|value| {
+                value
+                    .parse::<u64>()
+                    .map_err(|_| "--hdmi-connect-at takes whole milliseconds".to_owned())
+            })
+            .transpose()?,
         pokes: std::mem::take(&mut boot_options.pokes),
         press: boot_options.text("--press")?,
         settings: boot_options.text("--set")?,
@@ -1148,6 +1158,11 @@ fn run_boot(mut boot_options: Boot) -> Result<Outcome, String> {
         .text("--configuration")?
         .ok_or("required option: --configuration")?;
     let resolved = boot_options.resolve(&configuration_id)?;
+    if boot_options.values.contains_key("--hdmi-connect-at")
+        && !matches!(resolved.configuration.inputs, Some(RunInputs::Xp5(_)))
+    {
+        return Err("--hdmi-connect-at requires an XP5 HDMI transmitter".into());
+    }
     if boot_options.gui && !matches!(resolved.configuration.inputs, Some(RunInputs::Xp5(_))) {
         return run_window(boot_options, resolved);
     }

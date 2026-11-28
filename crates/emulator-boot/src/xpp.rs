@@ -724,6 +724,7 @@ fn block_register_layouts(
             | BlockDevice::MemoryConfiguration { .. }
             | BlockDevice::DdrPhy { .. }
             | BlockDevice::CableStatus { .. }
+            | BlockDevice::HdmiTransmitter { .. }
             | BlockDevice::SdInterface { .. }
             | BlockDevice::SdhciUhs2 { .. }
             | BlockDevice::DisplayOutputLink { .. }

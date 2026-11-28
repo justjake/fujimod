@@ -12,6 +12,8 @@ pub struct Inputs {
     panel: Option<PanelInputs>,
     gpio_devices: Vec<usize>,
     usb: Option<UsbWiring>,
+    /// The HDMI transmitter, which owns the sink's hot-plug line.
+    hdmi: Option<usize>,
 }
 
 /// The devices one USB cable reaches: the DWC3 core (data lines), the
@@ -152,13 +154,38 @@ impl Inputs {
     pub fn use_panel(&mut self, panel: PanelInputs) {
         self.panel = Some(panel);
     }
-    pub(crate) fn new(pins: SharedPins, gpio_devices: Vec<usize>, usb: Option<UsbWiring>) -> Self {
+    pub(crate) fn new(
+        pins: SharedPins,
+        gpio_devices: Vec<usize>,
+        usb: Option<UsbWiring>,
+        hdmi: Option<usize>,
+    ) -> Self {
         Self {
             pins,
             panel: None,
             gpio_devices,
             usb,
+            hdmi,
         }
+    }
+
+    /// Whether the board has an HDMI transmitter.
+    pub fn has_hdmi_transmitter(&self) -> bool {
+        self.hdmi.is_some()
+    }
+
+    /// Plug an HDMI sink into the body's HDMI connector, or unplug it, at the current device
+    /// time. Refused on a board without a transmitter or a body without a connector.
+    pub fn hdmi_cable(&self, session: &mut Session, connected: bool) -> Result<(), String> {
+        use fujimod_emulator_xp5_io::hdmi_transmitter::HdmiTransmitter;
+        let id = self
+            .hdmi
+            .ok_or("this XP5 board declares no HDMI transmitter")?;
+        session
+            .board
+            .with_device_inputs::<HdmiTransmitter, _>(id, |transmitter, now| {
+                transmitter.set_connected(now, connected)
+            })
     }
 
     fn panel(&self) -> Result<&PanelInputs, String> {

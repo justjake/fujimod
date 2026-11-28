@@ -125,6 +125,30 @@ pub fn register_all(
     } else {
         sensor
     };
+    // A RESZ block that takes the RIFP RAW movie stream as an inline source (its catalog
+    // `inline_source` fact) completes the RAW movie path: the sensor's two interleaved packed
+    // RAW12 DMA lanes carry the host scene, RIFP develops the frame they complete, and RESZ
+    // scales it into the two-plane picture the preview and the HDMI output scan out.
+    let inline_source = |w: &DeviceWindow| -> Result<bool, String> {
+        w.options
+            .get("inline_source")
+            .map(|value| {
+                value
+                    .as_bool()
+                    .ok_or_else(|| "inline_source must be a boolean".to_owned())
+            })
+            .transpose()
+            .map(|value| value.unwrap_or(false))
+    };
+    let mut raw_movie = false;
+    for w in windows.iter().filter(|w| w.kind == "imaging-resz") {
+        raw_movie |= inline_source(w)?;
+    }
+    let sensor = if raw_movie {
+        sensor.with_interleaved_raw12(fujimod_emulator_imaging::frame::still_scene)
+    } else {
+        sensor
+    };
     let yc_output = fujimod_emulator_xp5_imaging::imaging::still::YcOutput::default();
     // XT5_MOVIE_PATH=real: the modelled movie data path (MOVDC -> RIFP inline -> RESZ -> TNR,
     // or sensor RAW -> RIFP -> RESZ), see fujimod_emulator_xp5_imaging::imaging::movie.
@@ -295,7 +319,12 @@ pub fn register_all(
                 .with_span(w.size)
                 .with_statistics(statistics.clone())
                 .with_frame_clock(sensor.clone());
-            Box::new(if still_path || movie_path {
+            let device = if raw_movie {
+                device.with_raw_movie()
+            } else {
+                device
+            };
+            Box::new(if still_path || movie_path || raw_movie {
                 device.with_still_path(preview::StillPath {
                     sensor: sensor.clone(),
                     output: yc_output.clone(),
@@ -341,8 +370,10 @@ pub fn register_all(
         if w.base != base || w.size != 0x1000 {
             return Err(format!("invalid {} window", w.kind));
         }
+        let mut options = w.options.clone();
+        options.remove("inline_source");
         let options: fujimod_emulator_xp5_io::completion_stub::Options =
-            toml::Value::Table(w.options.clone())
+            toml::Value::Table(options)
                 .try_into()
                 .map_err(|e| format!("{} options: {e}", w.kind))?;
         // XP5 board time is in nanoseconds.
@@ -359,8 +390,13 @@ pub fn register_all(
                     stub,
                     (still_path || always).then(|| yc_output.clone()),
                 );
-                if movie_path && !always {
+                let resz = if movie_path && !always {
                     resz.with_movie_path(yc_output.clone())
+                } else {
+                    resz
+                };
+                if inline_source(w)? {
+                    resz.with_raw_movie_path(yc_output.clone())
                 } else {
                     resz
                 }
@@ -371,7 +407,13 @@ pub fn register_all(
         if w.base != 0xff946000 || w.size != 0x1000 {
             return Err("invalid input-engine window".into());
         }
-        let device = input::Input::default();
+        let mut device = input::Input::default();
+        if w.options.contains_key("frame_period_us") || w.options.contains_key("frame_active_us") {
+            device = device.with_cadence(
+                ticks(&w.options, "frame_period_us")?,
+                ticks(&w.options, "frame_active_us")?,
+            )?;
+        }
         let device = if retain_words(&w.options)? {
             device.with_retained_words()
         } else {

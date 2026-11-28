@@ -92,9 +92,11 @@
 //! as the valid area of the develop filters, since RESZ reads pixels and lines from 0), the
 //! RESZ class meaning and the TNR register roles (from the parameter block order and the
 //! run93 addresses).
-use super::still::YcPicture;
+use super::still::{ReszJob, YcPicture};
 use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_imaging::{frame::ycbcr, xtrans};
+use fujimod_emulator_sensor_input::sensor::Sensor;
 use fujimod_emulator_xp5_io::completion_stub::CompletionStub;
 use serde_json::Value;
 
@@ -143,9 +145,73 @@ pub fn rifp_inline_picture(word: impl Fn(u64) -> u32) -> Option<Result<YcPicture
     }))
 }
 
-/// TNR 0xffd24000 (kind `imaging-tnr`): the completion stub of 57-develop-stubs-3.toml
-/// (same options) that, with the movie path ([`Tnr::with_movie_path`]), copies the current
-/// two-plane 4:2:0 picture to the output at each start (see the module notes). Registers:
+/// Develop the first packed RAW12 stripe into the class-3 RESZ inline input.
+pub fn rifp_raw_movie(
+    cx: &mut Cx<'_>,
+    word: impl Fn(u64) -> u32,
+    sensor: &Sensor,
+    resz: &ReszJob,
+) -> Result<(), String> {
+    if word(0x08) != 0x1012_2010
+        || (word(0x14) | word(0x18) | word(0x24) | word(0x40) | word(0x44)) != 0
+        || word(0x10) & !7 != 0
+    {
+        return Err("unsupported RIFP RAW movie mode or stripe layout".into());
+    }
+    let pitch = word(0x1c) as usize;
+    let input = u64::from(word(0x0c)) | (u64::from(word(0x10) & 7) << 32);
+    let buffer = sensor.movie_raw_at(input, pitch as u64).ok_or_else(|| {
+        format!("RIFP RAW movie: {input:#x} pitch {pitch:#x} has no completed sensor DMA")
+    })?;
+    let offset = (input - buffer.address) as usize;
+    let row = offset / pitch;
+    let column = offset % pitch / 3 * 2;
+    // The observed mode carries full RAW crop extents in the low halves
+    // of +0x28 and +0x2c. The per-stripe low field of +0x20 saturates.
+    let width = (word(0x28) & 0xffff) as usize + 1;
+    let lines = (word(0x2c) & 0xffff) as usize + 1;
+    if !(offset % pitch).is_multiple_of(3)
+        || column + width > buffer.width as usize
+        || row + lines > buffer.lines as usize
+    {
+        return Err(format!(
+            "RIFP RAW movie: {width}x{lines} at {input:#x} starts at ({column}, {row}) outside DMA {buffer:?}"
+        ));
+    }
+    let length =
+        pitch * (buffer.lines as usize - 1) + xtrans::packed12_bytes(buffer.width as usize);
+    let bytes = cx.ram_bytes(buffer.address, length)?;
+    let phase = (usize::from(buffer.phase.0), usize::from(buffer.phase.1));
+    let raw = xtrans::Raw::packed12(
+        &bytes,
+        pitch,
+        buffer.width as usize,
+        buffer.lines as usize,
+        phase,
+    )?
+    .with_response(xtrans::Response::xt5(buffer.exposure));
+    // Functional approximation at the first stripe: nearest X-Trans
+    // development and a 3:4 prescale. RESZ removes the inactive padding
+    // through its programmed crop.
+    let stream_width = (width * 3).div_ceil(4);
+    let stream_lines = (lines * 3).div_ceil(4);
+    let result = resz.scale_raw_movie(cx, stream_width, stream_lines, |x, y| {
+        ycbcr(raw.rgb(column + x * 4 / 3, row + y * 4 / 3))
+    })?;
+    cx.log(&format!(
+        "RIFP RAW movie: {input:#x} {width}x{lines} from sensor DMA {:#x} at ({column}, {row}), pitch {pitch:#x}",
+        buffer.address
+    ));
+    cx.log(&result);
+    Ok(())
+}
+
+/// TNR 0xffd24000 (kind `imaging-tnr`): a completion stub that, at each start, writes the
+/// engine's output from its registers: the current two-plane 4:2:0 picture, copied to the output
+/// planes. A temporal filter weighs the reference (the previous output) against the current
+/// picture; the weights are not decoded, so the output is the current picture, which a still
+/// scene leaves unchanged by the filter. A start whose layout the model cannot follow is logged
+/// and only completes. Registers:
 ///
 /// * +0x20 / +0x24 and +0x28 / +0x2c: current Y and C (address bits 31..0 / 34..32);
 /// * +0x30 / +0x34 and +0x38 / +0x3c: reference Y and C (the previous output; not read);
@@ -156,17 +222,13 @@ pub fn rifp_inline_picture(word: impl Fn(u64) -> u32) -> Option<Result<YcPicture
 /// The checkpoint is the stub's.
 pub struct Tnr {
     stub: CompletionStub,
-    copy: bool,
 }
 
 impl Tnr {
     pub fn new(stub: CompletionStub) -> Self {
-        Self { stub, copy: false }
+        Self { stub }
     }
-    pub fn with_movie_path(mut self) -> Self {
-        self.copy = true;
-        self
-    }
+
     fn copy(&self, cx: &mut Cx<'_>) -> Result<String, String> {
         let word = |o: u64| self.stub.word(o);
         let address = |low: u64| u64::from(word(low)) | (u64::from(word(low + 4) & 7) << 32);
@@ -188,10 +250,17 @@ impl Tnr {
             address(0x38)
         );
         if [luma, chroma, out_luma, out_chroma].contains(&0)
+            || luma == chroma
+            || out_luma == out_chroma
             || width == 0
             || width % 2 != 0
+            || width > 8192
             || lines == 0
+            || lines > 8192
             || pitches.iter().any(|&p| p < width)
+            || [0x24, 0x2c, 0x54, 0x5c]
+                .iter()
+                .any(|&offset| word(offset) & !7 != 0)
         {
             return Err(format!("{geometry} is outside the modelled layout"));
         }
@@ -225,8 +294,7 @@ impl Device for Tnr {
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
         // As for RESZ: a start while a completion is due is ignored by the stub, and here.
-        let start = self.copy
-            && address & 0xfff == 4
+        let start = address & 0xfff == 4
             && size == 4
             && value & 1 != 0
             && self.stub.next_deadline(cx.now()).is_none();
@@ -327,7 +395,8 @@ mod tests {
     }
 
     /// TNR copies the current Y and C planes (4 x 4, pitch 8) to the output (pitch 16) and
-    /// leaves the bytes past each line alone; without the movie path it writes nothing.
+    /// leaves the bytes past each line alone; a layout it cannot follow (both output planes at
+    /// one address) writes nothing.
     #[test]
     fn tnr_copies_the_current_picture_to_the_output() {
         let mut ram = vec![0xeeu8; 0x1000];
@@ -342,13 +411,13 @@ mod tests {
             ram,
             ..Default::default()
         };
-        let program = |tnr: &mut Tnr, host: &mut RecordingHost| {
+        let program = |tnr: &mut Tnr, host: &mut RecordingHost, out_chroma: u64| {
             let mut cx = Cx::new(host, 0, 0, 0);
             for (offset, value) in [
                 (0x20, RAM),
                 (0x28, RAM + 0x100),
                 (0x50, RAM + 0x400),
-                (0x58, RAM + 0x800),
+                (0x58, out_chroma),
                 (0x60, 8),
                 (0x64, 8),
                 (0x78, 16),
@@ -359,9 +428,9 @@ mod tests {
                 tnr.write(&mut cx, 0xffd2_4000 + offset, 4, value & 0xffff_ffff);
             }
         };
-        program(&mut Tnr::new(tnr_stub()), &mut host);
+        program(&mut Tnr::new(tnr_stub()), &mut host, RAM + 0x400);
         assert!(host.ram[0x400..0xa00].iter().all(|&b| b == 0xee));
-        program(&mut Tnr::new(tnr_stub()).with_movie_path(), &mut host);
+        program(&mut Tnr::new(tnr_stub()), &mut host, RAM + 0x800);
         for y in 0..4 {
             let at = 0x400 + y * 16;
             assert_eq!(host.ram[at..at + 4], host.ram[y * 8..y * 8 + 4]);

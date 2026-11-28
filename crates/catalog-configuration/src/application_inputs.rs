@@ -380,6 +380,8 @@ pub enum ApplicationPartInput {
         angular_rate: [i16; 3],
         acceleration: [i16; 3],
     },
+    /// Whether an HDMI sink is plugged into an HDMI connector when the run starts.
+    HdmiSink { part_id: String, connected: bool },
 }
 
 impl ApplicationPartInput {
@@ -390,7 +392,8 @@ impl ApplicationPartInput {
             | Self::Clock { part_id, .. }
             | Self::IdleLevel { part_id, .. }
             | Self::BisRevision { part_id, .. }
-            | Self::Motion { part_id, .. } => part_id,
+            | Self::Motion { part_id, .. }
+            | Self::HdmiSink { part_id, .. } => part_id,
         }
     }
 }

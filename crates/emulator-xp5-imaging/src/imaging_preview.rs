@@ -138,6 +138,7 @@ pub struct Rifp {
     span: u64,
     /// Opt-in still data path ([`Preview::with_still_path`]).
     still: Option<StillPath>,
+    raw_movie: bool,
 }
 /// What a RIFP still run reads and shares: the sensor's still RAW and RESZ's view of the
 /// RIFP output.
@@ -234,6 +235,7 @@ impl Preview {
                 retain_words,
                 span: 0x1000,
                 still: None,
+                raw_movie: false,
             }));
         }
         let input = InputBuffer::new(
@@ -336,6 +338,13 @@ impl Preview {
     }
     /// RIFP: at the end of each queued run with programmed input and output addresses, develop
     /// or copy the picture (see [`super::still`]).
+    pub fn with_raw_movie(mut self) -> Self {
+        if let Self::Rifp(rifp) = &mut self {
+            rifp.raw_movie = true;
+        }
+        self
+    }
+
     pub fn with_still_path(mut self, still: StillPath) -> Self {
         if let Self::Rifp(rifp) = &mut self {
             rifp.still = Some(still);
@@ -537,6 +546,14 @@ impl Device for Rifp {
             let regs = self.state.regs.clone();
             let r = |o| regs.get(&o).copied().unwrap_or(0);
             let mut ran = None;
+            if self.raw_movie
+                && queued
+                && let Some(job) = still.output.take_raw_movie_job()
+                && let Err(error) = super::movie::rifp_raw_movie(cx, r, &still.sensor, &job)
+            {
+                cx.fail(error);
+                return;
+            }
             // The movie path: a two-plane 4:2:0 YC run ends. The inline RESZ start that waits
             // for it scales the run's input picture (movie module notes).
             if let Some(picture) = still.movie_run(&self.io, r) {
