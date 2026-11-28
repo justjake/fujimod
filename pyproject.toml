@@ -55,7 +55,7 @@ dynamic-function-decorator-return = "error"
 missing-type-argument = "error"
 possibly-unresolved-reference = "error"
 unsound-assignment = "error"
-unsound-return-statement = "error"
+unsound-return = "error"
 unsound-yield = "error"
 unused-ignore-comment = "error"
 
