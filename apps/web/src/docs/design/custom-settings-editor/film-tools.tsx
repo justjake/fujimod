@@ -2,7 +2,17 @@ import { For, Show, createEffect, createSignal } from 'solid-js';
 
 import { Artwork, Monogram, stockArtwork } from '../../../design/artwork';
 import { Chevron, signed } from '../../../design/controls';
-import { ACCENT, COLUMN, HEADING, SMALL, TRACK } from '../../../design/materials';
+import {
+  BODY,
+  CAPTION,
+  CHOSEN,
+  COLUMN,
+  DIM,
+  EDITED,
+  TRACK,
+  VALUE,
+  WELL,
+} from '../../../design/materials';
 import {
   CHROMA_SCALES,
   FILM_TOOL_NAMES,
@@ -167,16 +177,8 @@ export function CurveChannelTabs(props: {
           return (
             <button
               type="button"
-              class="flex h-[24px] min-w-[30px] items-center justify-center gap-[4px] rounded-[5px] px-[6px] text-[13px] leading-none font-semibold tracking-[0.04em]"
-              style={
-                active()
-                  ? {
-                      background: 'var(--m-focus)',
-                      color: '#fff',
-                      'box-shadow': 'var(--m-track-edge)',
-                    }
-                  : { background: 'transparent', color: 'rgb(255 255 255 / 0.65)' }
-              }
+              class={`flex h-[28px] min-w-[34px] items-center justify-center gap-[4px] rounded-[6px] px-[6px] font-semibold ${CAPTION}`}
+              style={active() ? { ...CHOSEN } : { background: 'transparent', color: DIM }}
               onClick={(e) => {
                 e.stopPropagation();
                 props.onSelect(tab.id);
@@ -408,7 +410,7 @@ export function CurveGraph(props: CurveProps) {
             fill={
               changed(i())
                 ? props.channel === 'all'
-                  ? 'var(--m-mark)'
+                  ? EDITED
                   : strokeColor()
                 : i() === props.focus
                   ? strokeColor()
@@ -815,7 +817,7 @@ export function ToneGraph(props: {
                 x2={x() + cw() / 2}
                 y1={Y(0)}
                 y2={Y(pct())}
-                stroke={pct() !== props.opened.bands[i] ? ACCENT : '#fff'}
+                stroke={pct() !== props.opened.bands[i] ? EDITED : '#fff'}
                 stroke-width="4"
                 stroke-linecap="round"
               />
@@ -855,8 +857,10 @@ export function NumbersSheet(props: { s: UnifiedState; update: (s: UnifiedState)
         >
           <Chevron dir="left" size={22} />
         </button>
-        <span class={`font-semibold ${HEADING}`}>{FILM_TOOL_NAMES[n().tool]}</span>
-        <span class={`ml-auto text-white/55 ${SMALL}`}>NUMBERS</span>
+        <span class={`font-semibold ${BODY}`}>{FILM_TOOL_NAMES[n().tool]}</span>
+        <span class={`ml-auto ${CAPTION}`} style={{ color: DIM }}>
+          NUMBERS
+        </span>
       </div>
       <div
         class="grid gap-[8px]"
@@ -864,12 +868,18 @@ export function NumbersSheet(props: { s: UnifiedState; update: (s: UnifiedState)
       >
         <span />
         <For each={labels()}>
-          {(l) => <span class={`text-center text-white/50 ${SMALL}`}>{l}</span>}
+          {(l) => (
+            <span class={`text-center ${CAPTION}`} style={{ color: DIM }}>
+              {l}
+            </span>
+          )}
         </For>
         <For each={labels()}>
           {(rowLabel, r) => (
             <>
-              <span class={`flex items-center text-white/50 ${SMALL}`}>{rowLabel}</span>
+              <span class={`flex items-center ${CAPTION}`} style={{ color: DIM }}>
+                {rowLabel}
+              </span>
               <For each={labels()}>
                 {(_, col) => {
                   const cell = () => r() * size() + col();
@@ -877,14 +887,16 @@ export function NumbersSheet(props: { s: UnifiedState; update: (s: UnifiedState)
                   const on = () => n().cell === cell();
                   return (
                     <div
-                      class="flex h-[54px] touch-none items-center justify-center rounded-[10px] text-[22px] font-medium tabular-nums"
+                      class={`flex h-[52px] touch-none items-center justify-center rounded-[8px] ${VALUE}`}
                       style={
                         fixed()
                           ? {
                               color: 'rgb(255 255 255 / 0.45)',
                               'box-shadow': 'inset 0 0 0 1px rgb(255 255 255 / 0.14)',
                             }
-                          : { ...TRACK(on()), color: '#fff' }
+                          : on()
+                            ? { ...TRACK(true), color: '#fff' }
+                            : { ...WELL, color: '#fff' }
                       }
                       onPointerDown={(e) => {
                         if (fixed()) return;

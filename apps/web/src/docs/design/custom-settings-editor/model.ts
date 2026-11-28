@@ -895,16 +895,6 @@ export const SETTING_GROUP_TITLES: Record<SettingGroupId, string> = {
   effects: 'EFFECTS',
 };
 
-/** Groups rows that share an icon (e.g. Grain Effect + Grain Size) within each section. */
-export function rowsByIcon(group: SettingGroupId): RecipeSetting[][] {
-  const list = RECIPE_SETTINGS.filter((s) => s.group === group);
-  return list.reduce<RecipeSetting[][]>((acc, setting) => {
-    if (setting.continues && acc.length) acc[acc.length - 1].push(setting);
-    else acc.push([setting]);
-    return acc;
-  }, []);
-}
-
 export const ICON_WORDS: Record<string, string> = {
   [0x5f3]: 'Film',
   [0x609]: 'WB',
@@ -1226,10 +1216,11 @@ export function isInFilmArea(focus: FocusTarget): boolean {
   }
 }
 
-export function sectionOfFocus(focus: FocusTarget): RailId {
+/** The rail's section that holds a focus: the film tools are inside FILM. */
+export function sectionOfFocus(focus: FocusTarget): TopSection {
   switch (focus.kind) {
     case 'rail':
-      return focus.id;
+      return (FILM_TOOLS as RailId[]).includes(focus.id) ? 'film' : (focus.id as TopSection);
     case 'raw':
       return 'raw';
     case 'recipe':
@@ -1237,17 +1228,12 @@ export function sectionOfFocus(focus: FocusTarget): RailId {
     case 'film-header':
     case 'film-tiles':
     case 'film-action':
-      return 'film';
     case 'film-tool-header':
-      return focus.tool;
     case 'film-curve':
-      return 'curve';
     case 'film-chroma':
-      return 'chroma';
     case 'film-mix':
-      return 'mix';
     case 'film-luma':
-      return 'luma';
+      return 'film';
     case 'setting': {
       const setting = RECIPE_SETTINGS.find((r) => r.id === focus.id);
       return setting?.group ?? 'light';
@@ -1259,17 +1245,6 @@ export function visibleTopSections(s: UnifiedState): TopSection[] {
   return s.mode === 'raw'
     ? ['raw', 'recipe', 'film', 'light', 'color', 'detail', 'effects']
     : ['recipe', 'film', 'light', 'color', 'detail', 'effects'];
-}
-
-export function visibleRailIds(s: UnifiedState): RailId[] {
-  const list: RailId[] = [];
-  for (const sec of visibleTopSections(s)) {
-    list.push(sec);
-    if (sec === 'film' && !s.collapsed.film) {
-      list.push(...FILM_TOOLS);
-    }
-  }
-  return list;
 }
 
 export function nextName(name: string): string {
@@ -1731,15 +1706,15 @@ export function pressPad(
 function linearStops(s: UnifiedState): FocusTarget[] {
   const stops: FocusTarget[] = [];
   if (s.mode === 'raw' && !s.collapsed.raw) {
-    stops.push({ kind: 'raw', item: 'strip' }, { kind: 'raw', item: 'reflect' });
+    stops.push({ kind: 'raw', item: 'strip' });
     RAW_OPTIONS.forEach((_, i) => stops.push({ kind: 'raw', item: i }));
-    stops.push({ kind: 'raw', item: 'create' });
+    stops.push({ kind: 'raw', item: 'reflect' }, { kind: 'raw', item: 'create' });
   }
   if (!s.collapsed.recipe) {
     stops.push({ kind: 'recipe', item: 'name' }, { kind: 'recipe', item: 'save' });
   }
-  stops.push({ kind: 'film-header' });
   stops.push({ kind: 'film-tiles' });
+  stops.push({ kind: 'film-header' });
   if (!s.collapsed.film) {
     if (isFilmDirty(s)) {
       stops.push({ kind: 'film-action', action: activeFilmEntry(s).isCard ? 'update' : 'saveas' });
@@ -2066,8 +2041,8 @@ export function press(s: UnifiedState, key: CameraKey): UnifiedState {
 
   /* Quick-scroll rail navigation. */
   if (s.focus.kind === 'rail') {
-    const list = visibleRailIds(s);
-    const at = list.indexOf(s.focus.id);
+    const list = visibleTopSections(s);
+    const at = list.indexOf(sectionOfFocus(s.focus));
     if (key === 'up' || key === 'dial-') {
       const next = list[Math.max(0, at - 1)];
       return { ...s, focus: { kind: 'rail', id: next }, scrollTo: next };

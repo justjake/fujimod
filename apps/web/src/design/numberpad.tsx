@@ -1,6 +1,6 @@
 import { For } from 'solid-js';
 
-import { DETAIL, LABEL, TEXT } from './materials';
+import { BODY, CAPTION, DIM, TITLE } from './materials';
 
 /* A number pad down the right edge of the screen, in the fly-outs' solid
    panel, for typing a value instead of stepping to it. The D-pad moves
@@ -82,12 +82,16 @@ export function NumberPad(props: {
       }}
     >
       <div class="flex flex-col gap-[6px] px-[6px] pt-[2px] pb-[4px]">
-        <span class={`font-medium text-white/70 ${TEXT}`}>{props.name}</span>
-        <span class={`h-[30px] text-right font-semibold tabular-nums ${LABEL}`}>
+        <span class={`font-medium ${BODY}`} style={{ color: DIM }}>
+          {props.name}
+        </span>
+        <span class={`h-[30px] text-right font-semibold tabular-nums ${TITLE}`}>
           {props.text}
           <span class="ml-[2px] inline-block h-[28px] w-[3px] translate-y-[3px] bg-white" />
         </span>
-        <span class={`text-right text-white/50 tabular-nums ${DETAIL}`}>{props.range}</span>
+        <span class={`text-right tabular-nums ${CAPTION}`} style={{ color: DIM }}>
+          {props.range}
+        </span>
       </div>
       <div class="grid grow grid-cols-3 grid-rows-5 gap-[6px]">
         <For each={[...PAD_KEYS]}>
@@ -96,7 +100,7 @@ export function NumberPad(props: {
             return (
               <button
                 type="button"
-                class={`flex items-center justify-center rounded-[10px] font-medium ${key === 'OK' ? 'col-span-2' : ''} ${TEXT}`}
+                class={`flex items-center justify-center rounded-[8px] font-medium ${key === 'OK' ? 'col-span-2' : ''} ${BODY}`}
                 style={{
                   background:
                     key === 'OK'
@@ -104,7 +108,7 @@ export function NumberPad(props: {
                       : key === '⌫' || key === '±' || key === '.'
                         ? 'var(--m-key-special)'
                         : 'var(--m-key)',
-                  'box-shadow': props.at === i() ? 'var(--m-focus-edge)' : 'var(--m-key-edge)',
+                  'box-shadow': props.at === i() ? 'var(--m-key-focus)' : 'var(--m-key-edge)',
                   color: off() ? 'rgb(255 255 255 / 0.25)' : '#fff',
                 }}
                 onClick={() => !off() && props.press(key, i())}

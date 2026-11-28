@@ -12,9 +12,10 @@ import type { JSX } from '@solidjs/web';
    screen on the page. Round marks (knots, swatches, dots) stay round. */
 /* Materials: each look names how every role is drawn (the column, the rail,
    rows and their focus, chips, panels, the keyboard), not just two colors. */
-/** The camera menus' option panel: the fly-outs in Glass and the Fujimod menu look. */
+/** The camera menus' option panel: the fly-outs and modals in Glass and the
+ * Fujimod menu look. Its cursor is the focus plate and stripe. */
 const POPUP =
-  '--m-popup: #1e1e20; --m-popup-edge: inset 0 0 0 1px #3e3e42; --m-cursor: #3a3a3c; --m-cursor-edge: inset 0 0 0 0 transparent; --m-separator: #323235; --m-check: #2a7fff;';
+  '--m-popup: #1c1c1e; --m-popup-edge: inset 0 0 0 1px #3a3a3c; --m-cursor: #3a3a3c; --m-cursor-edge: inset 4px 0 0 var(--m-accent); --m-separator: #2c2c2e; --m-check: #fff;';
 
 const LOOKS = {
   /* Drawn from its two dials: glassVars. */
@@ -22,6 +23,7 @@ const LOOKS = {
   contrast: `
     --m-column: #000; --m-column-edge: inset -2px 0 0 #fff;
     --m-popup: #000; --m-popup-edge: inset 0 0 0 2px #fff; --m-cursor: rgb(255 255 255 / 0.2); --m-cursor-edge: inset 0 0 0 3px #ffd60a; --m-separator: rgb(255 255 255 / 0.4); --m-check: #fff;
+    --m-hairline: rgb(255 255 255 / 0.4); --m-edited: #ffd60a;
     --m-panel: #000;
     --m-group: transparent; --m-group-edge: none; --m-group-gap: 4px; --m-group-margin: 0px;
     --m-cell: rgb(255 255 255 / 0.08); --m-cell-edge: inset 0 0 0 1px rgb(255 255 255 / 0.45);
@@ -39,22 +41,22 @@ const LOOKS = {
      top hairline and 2px black bottom shadow, plus beveled picker dials. */
   fujimod: `
     ${POPUP}
-    --m-column: #080808; --m-column-edge: inset -1px 0 0 #000, inset -2px 0 0 rgb(255 255 255 / 0.1);
-    --m-panel: linear-gradient(#1b1b1b, #0e0e0e);
-    --m-group: transparent; --m-group-edge: none; --m-group-gap: 0px; --m-group-margin: -6px;
-    --m-cell: #161616; --m-cell-edge: inset 0 1px 0 #282828, inset 0 -2px 0 #000, inset -1px 0 0 #000;
-    --m-chip: linear-gradient(#3a3a3a, #262626); --m-chip-edge: inset 0 1px 0 rgb(255 255 255 / 0.2), inset 0 -1px 0 rgb(0 0 0 / 0.7), 0 1px 2px rgb(0 0 0 / 0.6);
-    --m-track: linear-gradient(#262626, #1a1a1a); --m-track-edge: inset 0 1px 0 rgb(255 255 255 / 0.12), inset 0 -1px 0 rgb(0 0 0 / 0.8), 0 1px 0 rgb(0 0 0 / 0.9);
-    --m-focus: linear-gradient(#5c5c5e, #3d3d3f); --m-focus-edge: inset 0 0 0 2px #fff, inset 0 -1px 0 rgb(0 0 0 / 0.6), 0 2px 4px rgb(0 0 0 / 0.7);
-    --m-divider: inset 0 1px 0 #000, inset 0 2px 0 rgb(255 255 255 / 0.09);
-    --m-well: linear-gradient(#060606, #121212); --m-well-edge: inset 0 2px 3px rgb(0 0 0 / 0.9), inset 0 -1px 0 rgb(255 255 255 / 0.1);
-    --m-subpanel: #020202; --m-subpanel-edge: inset 0 3px 8px rgb(0 0 0 / 0.95), inset 0 1px 0 #000, inset 0 -1px 0 #282828; --m-rail-capsule-edge: inset 0 1px 3px rgb(0 0 0 / 0.9), inset 0 0 0 1px #282828;
-    --m-mark: #e5333a; --m-mark-plate: #e5333a; --m-mark-ink: #fff;
-    --m-accent: #d4282f; --m-confirm: linear-gradient(#d83a40, #a91d23);
-    --m-title: linear-gradient(#262626, #121212); --m-text-area: rgb(0 0 0 / 0.82); --m-tray: linear-gradient(#141414, #050505);
-    --m-key: linear-gradient(#4a4a4a, #333); --m-key-special: linear-gradient(#2c2c2c, #1e1e1e);
-    --m-key-edge: inset 0 1px 0 rgb(255 255 255 / 0.22), inset 0 -1px 0 rgb(0 0 0 / 0.7), 0 1px 2px rgb(0 0 0 / 0.8);
-    --m-key-focus: inset 0 1px 0 rgb(255 255 255 / 0.4), 0 0 0 2px #fff;`,
+    --m-column: #0b0b0b; --m-column-edge: inset -1px 0 0 #262626;
+    --m-panel: #0b0b0b;
+    --m-group: transparent; --m-group-edge: none; --m-group-gap: 0px; --m-group-margin: 0px;
+    --m-cell: transparent; --m-cell-edge: none;
+    --m-chip: #1c1c1e; --m-chip-edge: inset 0 0 0 1px #3a3a3c;
+    --m-track: transparent; --m-track-edge: none;
+    --m-focus: #3a3a3c; --m-focus-edge: inset 4px 0 0 var(--m-accent);
+    --m-hairline: #262626; --m-divider: none;
+    --m-well: #000; --m-well-edge: inset 0 0 0 1px #1c1c1e;
+    --m-subpanel: #000; --m-subpanel-edge: inset 0 1px 0 #262626, inset 0 -1px 0 #262626; --m-rail-capsule-edge: inset 0 0 0 1px #262626;
+    --m-mark: var(--m-accent); --m-mark-plate: #3a3a3c; --m-mark-ink: #fff; --m-edited: #ffb000;
+    --m-accent: #d4282f; --m-confirm: #d4282f;
+    --m-title: #1c1c1e; --m-text-area: rgb(0 0 0 / 0.82); --m-tray: #0b0b0b;
+    --m-key: #3a3a3c; --m-key-special: #1c1c1e;
+    --m-key-edge: inset 0 0 0 1px #48484a;
+    --m-key-focus: inset 4px 0 0 var(--m-accent), 0 0 0 2px #fff;`,
 };
 type Look = keyof typeof LOOKS;
 const LOOK_NAMES: [Look, string][] = [
@@ -90,14 +92,15 @@ function glassVars(opacity: number, contrast: number, lightness: number): string
     --m-chip-edge: inset 0 1px 0 rgb(255 255 255 / ${edge(0.28)}), inset 0 0 0 1px rgb(255 255 255 / ${edge(0.11)});
     --m-track: rgb(${gray(26, 3)} / ${fill(0.36)}); --m-track-edge: inset 0 1px 0 rgb(255 255 255 / ${edge(0.22)}), inset 0 0 0 1px rgb(255 255 255 / ${edge(0.1)});
     --m-focus: rgb(255 255 255 / ${mix(0.15, 0.26, contrast)});
-    /* Focus is the one white outline on screen. */
-    --m-focus-edge: inset 0 0 0 2px rgb(255 255 255 / 0.95);
+    /* Focus is the plate and the menu's stripe, as in every look. */
+    --m-focus-edge: inset 4px 0 0 var(--m-accent);
     --m-divider: inset 0 1px 0 rgb(255 255 255 / ${edge(0.14)});
+    --m-hairline: rgb(255 255 255 / ${edge(0.12)}); --m-edited: #ffb000;
     --m-accent: ${contrast > 0.5 ? '#8f4fe0' : '#7d3fc2'}; --m-confirm: #0a6bdc;
     --m-title: rgb(${gray(0)} / ${fill(0.55)}); --m-text-area: rgb(${gray(20, 2)} / ${fill(0.42)}); --m-tray: rgb(${gray(26, 2)} / ${fill(0.76)});
     --m-key: rgb(255 255 255 / ${mix(0.28, 0.36, contrast)}); --m-key-special: rgb(255 255 255 / ${mix(0.1, 0.17, contrast)});
     --m-key-edge: inset 0 1px 0 rgb(255 255 255 / ${mix(0, 0.25, contrast)}); --m-key-focus: inset 0 0 0 3px #fff;
-    --m-well: rgb(0 0 0 / ${mix(0.18, 0.34, opacity)}); --m-well-edge: inset 0 1px 0 rgb(0 0 0 / 0.3); --m-mark: #ff9f0a;
+    --m-well: rgb(0 0 0 / ${mix(0.18, 0.34, opacity)}); --m-well-edge: inset 0 1px 0 rgb(0 0 0 / 0.3); --m-mark: var(--m-accent);
     --m-subpanel: rgb(0 0 0 / ${fill(0.42)}); --m-subpanel-edge: inset 0 3px 8px rgb(0 0 0 / 0.45), inset 0 1px 0 rgb(0 0 0 / 0.4), inset 0 -1px 0 rgb(255 255 255 / ${edge(0.16)}); --m-rail-capsule-edge: inset 0 0 0 1px rgb(255 255 255 / ${edge(0.22)});
     /* MARK COLOR CHOICES: a dark plate under mark-colored text, as the iPhone camera's chosen zoom. */
     --m-mark-plate: rgb(44 44 46 / 0.92); --m-mark-ink: #ff9f0a;`;

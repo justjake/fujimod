@@ -57,6 +57,14 @@
   --text-key: 17px;
   --text-key--line-height: 1;
 
+  /* The editors' four sizes (materials.ts): titles, everything read in a
+     row, and the tracked small capitals of labels, scales and key legends. */
+  --text-body: 22px;
+  --text-body--line-height: 1;
+  --text-caption: 18px;
+  --text-caption--line-height: 1;
+  --text-caption--letter-spacing: 0.06em;
+
   /* Layout. */
   --spacing-screen-w: 720px;
   --spacing-screen-h: 480px;
@@ -98,6 +106,35 @@
     width: var(--spacing-stripe);
     background: var(--accent);
   }
+}
+
+/* A pop-up or modal appearing from its anchor (materials.ts APPEAR). */
+@keyframes fm-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+/* A modal's dimming behind it. */
+@keyframes fm-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* A disclosure's content: its height follows its rows (materials.ts EXPAND_MS). */
+.fm-disclosure {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+.fm-disclosure[data-closed] {
+  grid-template-rows: 0fr;
+}
+.fm-disclosure > * {
+  min-height: 0;
+  overflow: hidden;
 }
 
 .focal-review {

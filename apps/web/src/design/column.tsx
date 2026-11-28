@@ -2,7 +2,20 @@ import { Show } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
 import { Chevron } from './controls';
-import { ACCENT, COLUMN, HEADING, TEXT, TRACK } from './materials';
+import {
+  BODY,
+  CAPTION,
+  COLUMN,
+  DIM,
+  EASE,
+  EXPAND_MS,
+  HAIRLINE,
+  HEADER,
+  MARGIN,
+  ROW,
+  TRACK,
+  VALUE,
+} from './materials';
 
 /* The column every editor screen draws its rows in, and the pieces inside it. */
 
@@ -47,88 +60,99 @@ export function reveal(
     scroller.scrollTo({ top: bottom - height + margin, behavior });
 }
 
-/** A titled group of rows, divided from the group above. */
-export function Section(props: {
-  ref?: (element: HTMLElement) => void;
-  title?: string;
-  /** Beside the title on its right, such as a chip. */
-  accessory?: JSX.Element;
-  first?: boolean;
-  /** A long title: a size smaller, and free to wrap. */
-  long?: boolean;
-  children: JSX.Element;
-}) {
-  return (
-    <section
-      ref={(element) => props.ref?.(element)}
-      class={props.first ? 'pt-[8px] pb-[14px]' : 'pt-[10px] pb-[14px]'}
-      style={props.first ? {} : { 'box-shadow': 'var(--m-divider)' }}
-    >
-      <Show when={props.title}>
-        <div class="mb-[6px] flex h-[44px] items-center gap-[8px] px-[6px]">
-          <span
-            class={`grow font-semibold tracking-[0.02em] ${props.long ? TEXT : `whitespace-nowrap ${HEADING}`}`}
-          >
-            {props.title}
-          </span>
-          {props.accessory}
-        </div>
-      </Show>
-      {props.children}
-    </section>
-  );
-}
-
-/** An action in the column: its label on a track, the focused one lit. */
-export function Button(props: {
-  label: string;
-  focused: boolean;
-  /** Filled in the accent, for an action that is done. */
-  accent?: boolean;
-  /** Nothing to do yet. */
-  idle?: boolean;
-  class?: string;
-  /** The name a fly-out opened from this button anchors to. */
-  anchor?: string;
-  onClick: () => void;
+/** A section's header: its label on the left, what the closed section holds
+ * on the right, and a chevron that turns as it opens. The whole row toggles. */
+export function SectionHeader(props: {
+  title: string;
+  /** What the section holds, shown while it is closed. */
+  summary?: JSX.Element;
+  open: boolean;
+  focused?: boolean;
+  onToggle: () => void;
 }) {
   return (
     <button
       type="button"
-      data-anchor={props.anchor}
-      class={`flex h-[47px] items-center justify-center px-[8px] font-semibold whitespace-nowrap ${TEXT} ${props.class ?? ''}`}
+      class="flex w-full items-center gap-[8px] text-left"
       style={{
-        ...TRACK(props.focused),
-        ...(props.accent ? { background: ACCENT } : {}),
-        ...(props.idle ? { color: 'rgb(255 255 255 / 0.35)' } : {}),
+        height: `${HEADER}px`,
+        'padding-inline': `${MARGIN}px`,
+        ...TRACK(Boolean(props.focused)),
       }}
-      onClick={() => props.onClick()}
+      onClick={() => props.onToggle()}
     >
-      {props.label}
+      <span class={`grow truncate font-semibold ${CAPTION}`} style={{ color: DIM }}>
+        {props.title}
+      </span>
+      <Show when={!props.open && props.summary}>
+        <span class={`min-w-0 truncate ${CAPTION}`} style={{ color: DIM }}>
+          {props.summary}
+        </span>
+      </Show>
+      <span
+        class="flex shrink-0"
+        style={{
+          color: DIM,
+          transform: props.open ? 'rotate(90deg)' : 'none',
+          transition: `transform ${EXPAND_MS}ms ${EASE}`,
+        }}
+      >
+        <Chevron dir="right" size={14} />
+      </span>
     </button>
   );
 }
 
-/** A menu row: its name, then its value and a chevron; OK or a tap opens its
- * options in a fly-out, as the camera's menu rows do. */
-export function OptionRow(props: {
-  name: string;
-  value: string;
+/** Content that opens and closes under its header, its height animating. */
+export function Disclosure(props: { open: boolean; children: JSX.Element }) {
+  return (
+    <div class="fm-disclosure" data-closed={props.open ? undefined : ''}>
+      <div>{props.children}</div>
+    </div>
+  );
+}
+
+/** A row in the column: its name on the left and its value on the right,
+ * with an inset hairline under it. `children` replaces the value. */
+export function Row(props: {
+  name: JSX.Element;
+  value?: JSX.Element;
+  /** Before the name: the row's pictogram. */
+  leading?: JSX.Element;
   focused: boolean;
+  /** Opens a fly-out or a further screen. */
+  more?: boolean;
+  /** Disabled, as SAVE with nothing to save. */
+  idle?: boolean;
   anchor?: string;
+  height?: number;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       data-anchor={props.anchor}
-      class={`flex h-[57px] w-full items-center gap-[10px] pr-[10px] pl-[12px] font-medium whitespace-nowrap ${TEXT}`}
-      style={TRACK(props.focused)}
+      class={`flex w-full items-center gap-[8px] text-left whitespace-nowrap ${BODY}`}
+      style={{
+        height: `${props.height ?? ROW}px`,
+        'padding-left': `${MARGIN}px`,
+        'padding-right': `${MARGIN - 2}px`,
+        color: props.idle ? 'rgb(255 255 255 / 0.35)' : props.focused ? '#fff' : DIM,
+        ...TRACK(props.focused),
+        'box-shadow': props.focused ? 'var(--m-focus-edge)' : HAIRLINE,
+      }}
       onClick={() => props.onClick()}
     >
-      <span class="grow text-left">{props.name}</span>
-      <span>{props.value}</span>
-      <Chevron dir="right" size={16} />
+      {props.leading}
+      <span class="min-w-0 grow truncate">{props.name}</span>
+      <Show when={props.value !== undefined}>
+        <span class={`shrink-0 ${VALUE}`} style={{ color: props.idle ? undefined : '#fff' }}>
+          {props.value}
+        </span>
+      </Show>
+      <Show when={props.more}>
+        <Chevron dir="right" size={14} color={DIM} />
+      </Show>
     </button>
   );
 }
