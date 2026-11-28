@@ -1005,7 +1005,11 @@ impl CoreShared {
     }
 
     fn inline_page(&self, address: u32) -> *mut u8 {
-        unsafe { self.direct_pages.get().add((address >> 12) as usize).read() }
+        let offset = unsafe { self.direct_pages.get().add((address >> 12) as usize).read() };
+        if offset.is_null() {
+            return offset;
+        }
+        offset.wrapping_add((address & !4095) as usize)
     }
 
     fn clear_inline_page(&self, page: u32) {
@@ -1069,9 +1073,15 @@ impl CoreShared {
         {
             return;
         }
+        // The JIT adds the full guest address to this bias. Both page
+        // starts are aligned, leaving the low bit for write protection.
+        let bias = backing_page.wrapping_sub((address & !4095) as usize);
+        if bias.is_null() {
+            return; // The JIT reserves zero for a missing page.
+        }
         let page = address >> 12;
         let slot = unsafe { self.direct_pages.get().add(page as usize) };
-        let tagged = backing_page.map_addr(|p| p | usize::from(!write_allowed));
+        let tagged = bias.map_addr(|p| p | usize::from(!write_allowed));
         unsafe { slot.write(tagged) };
         if previous.is_null() {
             self.touched_pages.borrow_mut().push(page);

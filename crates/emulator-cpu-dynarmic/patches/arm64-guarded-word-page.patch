@@ -10,7 +10,7 @@ diff --git a/src/dynarmic/backend/arm64/emit_arm64.cpp b/src/dynarmic/backend/ar
 +    const auto word = args[2].GetImmediateU64();
 +    ctx.guarded_words = ((word >> 25) & 7) == 4 && inline_guard->length > 4
 +        && ctx.conf.timed_a32_memory && !ctx.conf.fastmem_pointer
-+        && !ctx.conf.absolute_offset_page_table && ctx.conf.page_table_pointer_mask_bits == 1;
++        && ctx.conf.absolute_offset_page_table && ctx.conf.page_table_pointer_mask_bits == 1;
 +    const auto Xpage = ctx.guarded_words ? Xfastmem : Xscratch0;
 +    if (ctx.guarded_words) {
 +        code.TST(Wscratch1, 3);
@@ -74,7 +74,7 @@ diff --git a/src/dynarmic/backend/arm64/emit_arm64_memory.cpp b/src/dynarmic/bac
  template<size_t bitsize>
  void InlinePageTableEmitReadMemory(oaknut::CodeGenerator& code, EmitContext& ctx, IR::Inst* inst) {
      auto args = ctx.reg_alloc.GetArgumentInfo(inst);
-@@ -425,8 +434,14 @@
+@@ -425,8 +434,13 @@
 
      SharedLabel fallback = GenSharedLabel(), end = GenSharedLabel();
 
@@ -82,8 +82,7 @@ diff --git a/src/dynarmic/backend/arm64/emit_arm64_memory.cpp b/src/dynarmic/bac
 -    EmitMemoryLdr<bitsize>(code, Rvalue->index(), Xbase, Xoffset, ordered);
 +    if (bitsize == 32 && !ordered && HasGuardedWordPage(ctx, inst)) {
 +        code.CBZ(Xfastmem, *fallback);
-+        code.AND(Xscratch1, Xaddr, page_mask);
-+        EmitMemoryLdr<bitsize>(code, Rvalue->index(), Xfastmem, Xscratch1, false);
++        EmitMemoryLdr<bitsize>(code, Rvalue->index(), Xfastmem, Xaddr, false);
 +    } else {
 +        const auto [Xbase, Xoffset] = InlinePageTableEmitVAddrLookup<bitsize>(code, ctx, Xaddr, fallback);
 +        EmitMemoryLdr<bitsize>(code, Rvalue->index(), Xbase, Xoffset, ordered);
@@ -91,7 +90,7 @@ diff --git a/src/dynarmic/backend/arm64/emit_arm64_memory.cpp b/src/dynarmic/bac
 
      ctx.deferred_emits.emplace_back([&code, &ctx, inst, Xaddr = *Xaddr, Rvalue = *Rvalue, ordered, fallback, end] {
          code.l(*fallback);
-@@ -473,12 +488,18 @@
+@@ -473,12 +487,17 @@
 
      SharedLabel fallback = GenSharedLabel(), end = GenSharedLabel();
 
@@ -103,8 +102,7 @@ diff --git a/src/dynarmic/backend/arm64/emit_arm64_memory.cpp b/src/dynarmic/bac
 -    EmitMemoryStr<bitsize>(code, Rvalue->index(), Xbase, Xoffset, ordered);
 +    if (bitsize == 32 && !ordered && HasGuardedWordPage(ctx, inst)) {
 +        code.CBZ(Xfastmem, *fallback);
-+        code.AND(Xscratch1, Xaddr, page_mask);
-+        EmitMemoryStr<bitsize>(code, Rvalue->index(), Xfastmem, Xscratch1, false);
++        EmitMemoryStr<bitsize>(code, Rvalue->index(), Xfastmem, Xaddr, false);
 +    } else {
 +        if (ctx.conf.state_observe_stores_offset != 0) {
 +            code.LDRB(Wscratch0, Xstate, ctx.conf.state_observe_stores_offset);

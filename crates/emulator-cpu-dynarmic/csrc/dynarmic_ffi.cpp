@@ -378,6 +378,7 @@ DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks, bool rprof
     conf.arch_version = ArchVersion::v7;
     // ARM64's inline page table callback path checks MemoryAbort.
     conf.page_table = &inst->page_table;
+    conf.absolute_offset_page_table = true;
     conf.timed_read32_cache = static_cast<Dynarmic::A32::TimedRead32Cache*>(callbacks->inline_read32);
     conf.page_table_pointer_mask_bits = 1;
     conf.detect_misaligned_access_via_page_table = 16 | 32 | 64;
