@@ -606,22 +606,30 @@ fn cohort_ends_when_its_first_core_reaches_the_limit() {
         phase: 0,
         ratio: Ratio::new(1, 1).unwrap(),
     };
-    let mut epoch = super::Epoch::new(3, clock, 100, fujimod_perf::EngineEndReason::OtherExit);
+    // No core is behind at the start of a window.
+    let mut epoch = super::Epoch::new(
+        3,
+        clock,
+        100,
+        fujimod_perf::EngineEndReason::OtherExit,
+        vec![0; 3],
+    );
     let cohort = [0, 1, 2];
     assert!(epoch.open(&cohort));
     // Owner callbacks split the epoch into segments; each core keeps its
     // remaining share while every core has some left.
-    assert_eq!(epoch.advance(1, 30).unwrap(), 30);
-    assert_eq!(epoch.advance(2, 60).unwrap(), 30);
+    epoch.observe(1, 30).unwrap();
+    epoch.observe(2, 60).unwrap();
     assert!(epoch.open(&cohort));
     assert_eq!((epoch.room(0), epoch.room(1), epoch.room(2)), (100, 70, 40));
     // Core 2 reaches the limit. Cores 0 and 1 still have room, but they
-    // would run alone against core 2's stores, so the cohort ends and time
-    // advances to the furthest core only.
-    assert_eq!(epoch.advance(2, 40).unwrap(), 40);
-    assert_eq!(epoch.advance(0, 10).unwrap(), 0);
+    // would run alone against core 2's stores, so the cohort ends.
+    epoch.observe(2, 40).unwrap();
+    epoch.observe(0, 10).unwrap();
     assert!(!epoch.open(&cohort));
-    assert_eq!(epoch.clock(2).unwrap().now, 1100);
+    // Guest time belongs to the timeline, which places each core's clock at
+    // the frontier plus its own lag; the epoch only tracks the window.
+    assert_eq!(epoch.room(2), 0);
     // A core outside the cohort (waiting or not released) does not end it.
     assert!(epoch.open(&[0, 1]));
 }

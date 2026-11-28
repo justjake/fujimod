@@ -16,7 +16,6 @@ pub(super) struct Epoch {
     /// Entries each core is behind the shared frontier, mirrored from the
     /// timeline so a lagging core is granted its window plus its lag.
     lag: Vec<u64>,
-    quantum: u64,
 }
 impl Epoch {
     fn new(
@@ -25,7 +24,6 @@ impl Epoch {
         limit: u64,
         boundary: fujimod_perf::EngineEndReason,
         lag: Vec<u64>,
-        quantum: u64,
     ) -> Self {
         Self {
             clock,
@@ -33,7 +31,6 @@ impl Epoch {
             boundary,
             progress: vec![0; cores],
             lag,
-            quantum,
         }
     }
     pub(super) fn constrain(
@@ -78,12 +75,6 @@ impl Epoch {
         self.limit
             .saturating_sub(self.progress[core])
             .saturating_add(self.lag[core])
-    }
-    /// The most a core may run in one segment. Running further than this drags
-    /// every peer's lag past one quantum, so a device access on a peer would
-    /// be served later than its own instruction stream reached.
-    pub(super) fn segment(&self, core: usize) -> u64 {
-        self.room(core).min(self.quantum)
     }
     /// Whether the cohort runs another segment. It ends when its first core
     /// reaches the limit: a peer that executed less does not run on alone,
@@ -170,16 +161,18 @@ impl State {
         // only the excess moves the frontier, and every other runnable core
         // falls behind by it. Advancing by the furthest core put a peer's
         // device reads in the future of its own instruction stream.
-        let pending_lag = self.parallel.as_ref().unwrap().lag[core];
-        let frontier_entries = delta.saturating_sub(pending_lag);
+        // `advance_processor` consumes this core's lag itself: entries within
+        // the lag only catch it up, and only the excess moves the frontier.
+        // Clamp to the next deadline so the frontier never crosses an
+        // unserviced event; the run budget already stops each core there.
         let boundary = self.timeline.ratio().budget(
             self.timeline.now(),
             self.timeline.phase(),
             self.clock_limit.unwrap_or(u64::MAX),
         )?;
-        let allowed = self.timeline.budget(frontier_entries.min(boundary))?;
+        let allowed = self.timeline.budget(delta.min(boundary))?;
         self.timeline
-            .advance_processor(core, pending_lag.saturating_add(allowed), |c| released[c] && !waiting[c])?;
+            .advance_processor(core, allowed, |c| released[c] && !waiting[c])?;
         let lag = self.timeline.lags().to_vec();
         self.parallel.as_mut().unwrap().lag = lag;
         Ok(())
@@ -213,7 +206,6 @@ impl Board {
                 budget as u64,
                 boundary,
                 lag,
-                quantum as u64,
             ));
             state.code_run = RunCode::Unknown;
         }
@@ -265,7 +257,7 @@ impl Board {
                 }
             }
             let (blocks, _thumb_slice) = if let Some(core) = mprofile {
-                let room = self.state.borrow().parallel.as_ref().unwrap().segment(core);
+                let room = self.state.borrow().parallel.as_ref().unwrap().room(core);
                 self.prepare_mprofile_segment(core, room)?
             } else {
                 (false, None)
@@ -274,7 +266,7 @@ impl Board {
                 let mut state = self.state.borrow_mut();
                 for &core in cores {
                     let epoch = state.parallel.as_ref().unwrap();
-                    let room = epoch.segment(core);
+                    let room = epoch.room(core);
                     let cpu = &self.cpus[core];
                     if cpu.features().guest_clock {
                         cpu.set_guest_clock(state.timeline.processor_clock(core)?)?;

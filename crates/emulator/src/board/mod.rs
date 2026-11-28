@@ -3869,6 +3869,15 @@ impl Host for Services<'_> {
         }
     }
     fn now(&self) -> u64 {
+        // A device callback runs on one core's behalf. Give it that core's own
+        // guest time, not the cohort frontier: the frontier is the furthest
+        // peer, so serving every read at it let a fast core put a slow peer's
+        // device access in the future of its own instruction stream.
+        if let Some(core) = self.active_core
+            && let Ok(clock) = self.timeline.processor_clock(core)
+        {
+            return clock.now;
+        }
         self.timeline.now()
     }
     fn request_pause(&mut self) -> Result<(), String> {
