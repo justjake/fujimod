@@ -302,7 +302,9 @@ impl Block18000 {
             match (global, o) {
                 (false, 0x600) => return v & !0x31 == 0 && (v >> 4) & 3 <= 2,
                 // Other field layouts; stored, not interpreted (contrast and metering are refused for this layout).
-                (false, 0x310) | (true, 0x8 | 0x48 | 0x4c) => return true,
+                // Global +0x18 holds two 11-bit fields, +0x1c flags in bits 8 and 16, and +0x200..+0x3fc 64
+                // byte-packed pairs, written together by one EXR Pro table load.
+                (false, 0x310) | (true, 0x8 | 0x18 | 0x1c | 0x48 | 0x4c | 0x200..=0x3fc) => return true,
                 _ => {}
             }
         }
