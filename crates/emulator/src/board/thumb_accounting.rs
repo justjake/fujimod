@@ -41,6 +41,7 @@ impl Window {
         } else {
             None
         };
+        self.clear_pages();
         let mut pointer = self.record?;
         // The board owns this thread-affine CPU. Both this call and the
         // operations below execute while stopped or in its serialized callback.
@@ -50,12 +51,51 @@ impl Window {
         Some(Slice(pointer))
     }
 
+    /// Clear all armed Thumb pages (low-1 MiB bitmap and single-page fallback)
+    /// at the start of a slice or on code-coherence flushes.
+    pub fn clear_pages(&mut self) {
+        if let Some(mut recovery) = self.recovery {
+            let record = unsafe { recovery.as_mut() };
+            record.thumb_page_bitmap = [0; 16];
+            record.thumb_accounting.thumb_page = u64::MAX;
+        } else if let Some(mut pointer) = self.record {
+            let record = unsafe { pointer.as_mut() };
+            record.thumb_page = u64::MAX;
+        }
+    }
+
+    /// Arm the given proven pages without touching the grant. Called when a
+    /// slice starts, so the first block that leaves its own page still passes
+    /// the guard instead of calling the host for a page the shadow has
+    /// already proven.
+    pub fn seed_pages(&mut self, pages: &[u64]) {
+        let Some(mut recovery) = self.recovery else {
+            return;
+        };
+        let record = unsafe { recovery.as_mut() };
+        for &page_address in pages {
+            let page = page_address >> 10;
+            if page < 1024 {
+                record.thumb_page_bitmap[(page >> 6) as usize] |= 1u64 << (page & 63);
+            }
+        }
+    }
+
     #[inline]
     pub fn arm(&mut self, pc: u64, remaining: u64) {
-        if let Some(mut pointer) = self.record {
+        if let Some(mut recovery) = self.recovery {
+            self.granted = remaining.min(i64::MAX as u64) as i64;
+            let record = unsafe { recovery.as_mut() };
+            record.thumb_accounting.thumb_page = pc & !0x3ff;
+            let page = pc >> 10;
+            if page < 1024 {
+                record.thumb_page_bitmap[(page >> 6) as usize] |= 1u64 << (page & 63);
+            }
+            record.thumb_accounting.accounting.budget = self.granted;
+        } else if let Some(mut pointer) = self.record {
             self.granted = remaining.min(i64::MAX as u64) as i64;
             let record = unsafe { pointer.as_mut() };
-            record.thumb_page = pc & !0xfff;
+            record.thumb_page = pc & !0x3ff;
             record.accounting.budget = self.granted;
         }
     }
@@ -110,5 +150,68 @@ impl Window {
         let entered = (granted - remaining) as u64;
         self.entries += entered;
         Ok(entered)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fujimod_emulator_cpu::BlockAccounting;
+
+    fn zeroed_recovery() -> ThumbBlockRecoveryAccounting {
+        ThumbBlockRecoveryAccounting {
+            thumb_accounting: ThumbBlockAccounting {
+                accounting: BlockAccounting {
+                    budget: 0,
+                    head: 0,
+                    ring: std::ptr::null_mut(),
+                    mask: 0,
+                    enabled: 0,
+                    pause_requested: std::ptr::null(),
+                },
+                thumb_page: 0,
+            },
+            last_block_start: 0,
+            last_block_remaining_budget: 0,
+            last_block_bytes: 0,
+            last_block_icount: 0,
+            thumb_page_bitmap: [0; 16],
+        }
+    }
+
+    #[test]
+    fn arm_accumulates_low_1mib_pages_and_clear_pages_resets_them() {
+        let mut raw = zeroed_recovery();
+        let recovery = NonNull::from(&mut raw);
+        let mut window = Window {
+            record: Some(recovery.cast()),
+            recovery: Some(recovery),
+            granted: 0,
+            entries: 0,
+        };
+
+        // Arm 1 KiB pages including boundary bits 0, 63, 64, and 1023.
+        for pc in [0x0000_0004u64, 0x0000_fc10, 0x0001_0004, 0x000f_fffe] {
+            window.arm(pc, 100);
+        }
+        assert_eq!(raw.thumb_page_bitmap[0], (1u64 << 0) | (1u64 << 63));
+        assert_eq!(raw.thumb_page_bitmap[1], 1u64 << 0);
+        for word in &raw.thumb_page_bitmap[2..15] {
+            assert_eq!(*word, 0);
+        }
+        assert_eq!(raw.thumb_page_bitmap[15], 1u64 << 63);
+        assert_eq!(raw.thumb_accounting.thumb_page, 0x000f_fc00);
+        assert_eq!(raw.thumb_accounting.accounting.budget, 100);
+
+        // Addresses at or above 1 MiB update thumb_page (1 KiB aligned) without touching the bitmap.
+        window.arm(0x0010_04bc, 50);
+        assert_eq!(raw.thumb_accounting.thumb_page, 0x0010_0400);
+        assert_eq!(raw.thumb_page_bitmap[0], (1u64 << 0) | (1u64 << 63));
+        assert_eq!(raw.thumb_page_bitmap[1], 1u64 << 0);
+        assert_eq!(raw.thumb_page_bitmap[15], 1u64 << 63);
+
+        window.clear_pages();
+        assert_eq!(raw.thumb_page_bitmap, [0; 16]);
+        assert_eq!(raw.thumb_accounting.thumb_page, u64::MAX);
     }
 }

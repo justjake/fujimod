@@ -23,6 +23,7 @@ pub const FEATURE_THUMB_IT_ACCOUNTING: u32 = 1 << 26;
 pub const FEATURE_TRANSLATION_TIMING_COUNTERS: u32 = 1 << 27;
 pub const FEATURE_M4_CLASSIFIER_HISTOGRAM: u32 = 1 << 28;
 pub const FEATURE_TRANSLATION_REPEAT_DETAILS: u32 = 1 << 29;
+pub const FEATURE_THUMB_PAGE_BITMAP: u32 = 1 << 30;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct TlbiEvent {
@@ -93,9 +94,16 @@ pub struct Extensions {
     /// Test exit requests inline at block entry and after memory accesses.
     pub set_block_exits: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub set_entry_exits: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
+    /// Request a pause from another thread. The request survives into the
+    /// next run and wakes a run that is already executing.
+    pub request_pause: Option<unsafe extern "C" fn(Engine) -> Error>,
     pub set_instruction_counter: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub set_guard_diagnostics: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub add_restart_boundary: Option<unsafe extern "C" fn(Engine, *mut usize, u64, u64) -> Error>,
+    /// Report a guest store that covered bytes a translation was made from,
+    /// before that translation is retired (physical first byte, width).
+    pub set_code_store:
+        Option<unsafe extern "C" fn(Engine, Option<CodeStore>, *mut c_void) -> Error>,
     pub reset_instruction_counter: Option<unsafe extern "C" fn(Engine) -> Error>,
     pub instruction_counter: Option<unsafe extern "C" fn(Engine) -> u64>,
     // uc_embedder_features bits (0 without the export): 1 = block hook size bit 31
@@ -108,6 +116,8 @@ pub struct Extensions {
     pub accounting: Option<unsafe extern "C" fn(Engine) -> *mut Accounting>,
     pub exit_counters: Option<unsafe extern "C" fn(Engine) -> *const u64>,
     pub translation_repeat_counters: Option<unsafe extern "C" fn(Engine, *mut usize) -> *const u64>,
+    pub translation_generation_counters:
+        Option<unsafe extern "C" fn(Engine, *mut usize) -> *const u64>,
 }
 
 impl Extensions {
@@ -150,6 +160,7 @@ impl Extensions {
                 self.set_entry_exits.is_some(),
                 "uc_embedder_set_entry_exits",
             ),
+            (self.request_pause.is_some(), "uc_emu_request_pause"),
             (
                 self.set_instruction_counter.is_some()
                     && self.reset_instruction_counter.is_some()
@@ -168,6 +179,10 @@ impl Extensions {
             (
                 self.features & FEATURE_INLINE_BLOCK_ACCOUNTING != 0,
                 "uc_embedder_features (translated block accounting)",
+            ),
+            (
+                self.features & FEATURE_THUMB_PAGE_BITMAP != 0,
+                "uc_embedder_features (Thumb proven-page bitmap)",
             ),
         ]
         .into_iter()
@@ -202,7 +217,8 @@ pub struct ThumbAccounting {
     pub thumb_page: u64,
 }
 /// Recovery extension to the Thumb accounting layout. Read only when the
-/// linked library reports `FEATURE_THUMB_BLOCK_RECOVERY`.
+/// linked library reports `FEATURE_THUMB_BLOCK_RECOVERY` and
+/// `FEATURE_THUMB_PAGE_BITMAP`.
 #[repr(C)]
 pub struct ThumbRecoveryAccounting {
     pub thumb_accounting: ThumbAccounting,
@@ -210,9 +226,39 @@ pub struct ThumbRecoveryAccounting {
     pub last_block_remaining_budget: i64,
     pub last_block_bytes: u32,
     pub last_block_icount: u32,
+    pub thumb_page_bitmap: [u64; 16],
 }
+const _: () = {
+    assert!(std::mem::size_of::<Accounting>() == 48);
+    assert!(std::mem::offset_of!(Accounting, pause_requested) == 40);
+    assert!(std::mem::size_of::<ThumbAccounting>() == 56);
+    assert!(std::mem::offset_of!(ThumbAccounting, thumb_page) == 48);
+    assert!(std::mem::size_of::<ThumbRecoveryAccounting>() == 208);
+    assert!(std::mem::offset_of!(ThumbRecoveryAccounting, last_block_start) == 56);
+    assert!(std::mem::offset_of!(ThumbRecoveryAccounting, last_block_remaining_budget) == 64);
+    assert!(std::mem::offset_of!(ThumbRecoveryAccounting, last_block_bytes) == 72);
+    assert!(std::mem::offset_of!(ThumbRecoveryAccounting, last_block_icount) == 76);
+    assert!(std::mem::offset_of!(ThumbRecoveryAccounting, thumb_page_bitmap) == 80);
+    assert!(
+        std::mem::size_of::<ThumbRecoveryAccounting>()
+            == std::mem::size_of::<fujimod_emulator_cpu::ThumbBlockRecoveryAccounting>()
+    );
+    assert!(
+        std::mem::align_of::<ThumbRecoveryAccounting>()
+            == std::mem::align_of::<fujimod_emulator_cpu::ThumbBlockRecoveryAccounting>()
+    );
+    assert!(
+        std::mem::offset_of!(ThumbRecoveryAccounting, thumb_page_bitmap)
+            == std::mem::offset_of!(
+                fujimod_emulator_cpu::ThumbBlockRecoveryAccounting,
+                thumb_page_bitmap
+            )
+    );
+};
 pub type InsnFilter = unsafe extern "C" fn(*mut c_void, u64, u32) -> c_int;
 pub type Restart = unsafe extern "C" fn(*mut c_void, u64);
+/// A guest store covered translated bytes: physical first byte and width.
+pub type CodeStore = unsafe extern "C" fn(*mut c_void, u64, i32);
 macro_rules! api {
     ($($field:ident : unsafe extern "C" fn($($args:tt)*) -> $result:ty),+ $(,)?) => {
         pub struct Api {
@@ -300,6 +346,7 @@ mod linked {
         fn uc_embedder_set_parallel_cpus(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_set_block_exits(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_set_entry_exits(engine: Engine, enabled: bool) -> Error;
+        fn uc_emu_request_pause(engine: Engine) -> Error;
         fn uc_embedder_set_instruction_counter(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_set_guard_diagnostics(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_add_restart_boundary(
@@ -308,11 +355,18 @@ mod linked {
             begin: u64,
             end: u64,
         ) -> Error;
+        fn uc_embedder_set_code_store(
+            engine: Engine,
+            callback: Option<CodeStore>,
+            user: *mut c_void,
+        ) -> Error;
         fn uc_embedder_reset_instruction_counter(engine: Engine) -> Error;
         fn uc_embedder_instruction_counter(engine: Engine) -> u64;
         fn uc_embedder_accounting(engine: Engine) -> *mut Accounting;
         fn uc_embedder_exit_counters(engine: Engine) -> *const u64;
         fn uc_embedder_translation_repeat_counters(engine: Engine, count: *mut usize)
+        -> *const u64;
+        fn uc_embedder_translation_generation_counters(engine: Engine, count: *mut usize)
         -> *const u64;
         fn uc_embedder_features() -> u32;
     }
@@ -333,14 +387,19 @@ mod linked {
             set_parallel_cpus: Some(uc_embedder_set_parallel_cpus),
             set_block_exits: Some(uc_embedder_set_block_exits),
             set_entry_exits: Some(uc_embedder_set_entry_exits),
+            request_pause: Some(uc_emu_request_pause),
             set_instruction_counter: Some(uc_embedder_set_instruction_counter),
             set_guard_diagnostics: Some(uc_embedder_set_guard_diagnostics),
             add_restart_boundary: Some(uc_embedder_add_restart_boundary),
+            set_code_store: Some(uc_embedder_set_code_store),
             reset_instruction_counter: Some(uc_embedder_reset_instruction_counter),
             instruction_counter: Some(uc_embedder_instruction_counter),
             accounting: Some(uc_embedder_accounting),
             exit_counters: Some(uc_embedder_exit_counters),
             translation_repeat_counters: Some(uc_embedder_translation_repeat_counters),
+            translation_generation_counters: Some(
+                uc_embedder_translation_generation_counters,
+            ),
             features: unsafe { uc_embedder_features() },
         }
     }

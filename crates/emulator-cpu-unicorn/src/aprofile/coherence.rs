@@ -22,6 +22,8 @@
 //! deterministic. An empty range list costs one branch per call.
 use std::collections::BTreeMap;
 
+use super::a64::CacheOp;
+
 #[cfg(test)]
 mod tests;
 
@@ -91,6 +93,49 @@ impl CoherentRanges {
 
     pub fn is_empty(&self) -> bool {
         self.ranges.is_empty()
+    }
+
+    /// The line size in bytes.
+    pub fn line_bytes(&self) -> u64 {
+        self.line_bytes
+    }
+
+    /// Whether the bytes `[address, address + len)` lie entirely inside one
+    /// declared range. A maintenance operation on a line the model tracks
+    /// still reaches memory through the processor view when the line is not
+    /// covered, so a range end must refuse rather than assume.
+    pub fn covers_bytes(&self, address: u64, len: usize) -> bool {
+        self.ranges
+            .iter()
+            .any(|&(begin, end)| begin <= address && (address + len as u64) <= end)
+    }
+
+    /// Apply one maintenance operation to every line `[begin, end)` touches,
+    /// in ascending address order, and return the patches to put back.
+    ///
+    /// The result is the same sequence of calls the per-instruction path
+    /// makes when the loop walks the range line by line, so a batched range
+    /// and a walked one leave the model in one state.
+    pub fn maintain_range(&mut self, operation: CacheOp, begin: u64, end: u64) -> Vec<Patch> {
+        if begin >= end {
+            return Vec::new();
+        }
+        let mut patches = Vec::new();
+        let mut line = begin & !(self.line_bytes - 1);
+        while line < end {
+            let at = line;
+            let more = match operation {
+                CacheOp::Clean => self.clean_line(at),
+                CacheOp::Invalidate => self.invalidate_line(at),
+                CacheOp::CleanInvalidate => self.clean_invalidate_line(at),
+                // An instruction invalidate drops translations, not data, and
+                // never reaches this model.
+                CacheOp::InvalidateInstruction => Vec::new(),
+            };
+            patches.extend(more);
+            line += self.line_bytes;
+        }
+        patches
     }
 
     fn covers(&self, line: u64) -> bool {

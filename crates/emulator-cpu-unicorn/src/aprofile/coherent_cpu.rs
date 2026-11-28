@@ -127,6 +127,52 @@ impl Execution {
         Ok(())
     }
 
+    /// Apply one by-address maintenance operation to every line `[begin, end)`
+    /// touches, as one call.
+    ///
+    /// A counted range loop performs the same operation once per iteration and
+    /// stops on the first line past its bound; this walks the same ascending
+    /// lines, so the model ends in the state the loop would have left it in.
+    /// Returns the operation's line size so the caller can round its range.
+    pub(super) fn coherent_maintenance_range(
+        &self,
+        operation: super::a64::CacheOp,
+        begin: u64,
+        end: u64,
+    ) -> Result<u64, String> {
+        let mut guard = self.coherence.borrow_mut();
+        let Some(core) = guard.as_mut() else {
+            return Err("a maintenance range needs an attached coherence domain".into());
+        };
+        let mut shared = core.domain.0.borrow_mut();
+        self.flush_restore(&mut shared)?;
+        let model = &mut shared.model;
+        let patches = model.maintain_range(operation, begin, end);
+        self.put_back(&patches)?;
+        Ok(model.line_bytes())
+    }
+
+    /// The line size of the attached coherence model, when there is one.
+    pub(super) fn coherence_line_bytes(&self) -> Option<u64> {
+        let guard = self.coherence.borrow();
+        let core = guard.as_ref()?;
+        let shared = core.domain.0.borrow();
+        Some(shared.model.line_bytes())
+    }
+
+    /// Whether the whole span lies inside one declared coherent range. A
+    /// batched range that leaves it cannot resolve each line's memory type,
+    /// so the prover refuses instead of guessing.
+    pub(super) fn coherence_covers(&self, begin: u64, end: u64) -> bool {
+        let guard = self.coherence.borrow();
+        let Some(core) = guard.as_ref() else {
+            return true;
+        };
+        let shared = core.domain.0.borrow();
+        let length = usize::try_from(end - begin).unwrap_or(usize::MAX);
+        shared.model.covers_bytes(begin, length)
+    }
+
     fn flush_restore(&self, shared: &mut Shared) -> Result<(), String> {
         let pending = std::mem::take(&mut shared.restore);
         self.put_back(&pending)

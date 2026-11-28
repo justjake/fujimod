@@ -40,6 +40,7 @@ impl Cpu for Core {
         Features {
             architectural_exits: true,
             instruction_limit: true,
+            guest_clock: !self.execution.a32,
             instruction_progress: true,
             tighten_instruction_limit: true,
             backing_observation: true,
@@ -49,7 +50,48 @@ impl Cpu for Core {
         }
     }
     fn set_execution_policy(&self, policy: ExecutionPolicy) -> Result<(), String> {
-        self.execution.cpu.set_execution_policy(policy)
+        let e = &self.execution;
+        e.memory.require_stopped()?;
+        if e.policy.get() != policy {
+            e.cpu.set_execution_policy(policy)?;
+            if !e.a32 {
+                if e.pause_requested.is_some() {
+                    e.cpu
+                        .set_parallel_cpus(policy == ExecutionPolicy::Interactive)?;
+                }
+                e.cpu
+                    .set_entry_exits(policy == ExecutionPolicy::Interactive)?;
+            }
+            e.cpu.invalidate_code(None)?;
+            e.policy.set(policy);
+        }
+        Ok(())
+    }
+    fn set_loop_mode(&self, mode: loops::LoopMode) -> Result<(), String> {
+        let e = &self.execution;
+        e.memory.require_stopped()?;
+        if e.loop_mode.get() != mode {
+            e.cpu.invalidate_code(None)?;
+            e.loop_mode.set(mode);
+        }
+        Ok(())
+    }
+    fn set_loop_window(&self, stable: bool) -> Result<(), String> {
+        let e = &self.execution;
+        if e.active.get() {
+            return Err("loop window requires a stopped processor".into());
+        }
+        e.loop_window.set(stable);
+        Ok(())
+    }
+    fn set_guest_clock(&self, clock: Clock) -> Result<(), String> {
+        let e = &self.execution;
+        if e.active.get() {
+            return Err("guest clock anchor requires a stopped processor".into());
+        }
+        clock.after(0)?;
+        e.clock.set(Some(clock));
+        Ok(())
     }
     fn exception_entries(&self) -> Option<armv7a::Entries> {
         self.execution.a32.then(|| self.execution.entries.get())
@@ -191,10 +233,18 @@ impl Cpu for Core {
         address: u64,
         bytes: usize,
         callbacks: Mmio,
-        _reads: Vec<FastMmioRead>,
+        reads: Vec<FastMmioRead>,
     ) -> Result<(), String> {
-        // Exact runs dispatch through the owner at every device access.
-        unsafe { self.map_mmio(address, bytes, callbacks) }
+        let e = &self.execution;
+        if e.a32 {
+            return unsafe { self.map_mmio(address, bytes, callbacks) };
+        }
+        unsafe { e.cpu.map_mmio_fast(address, bytes, callbacks, reads)? };
+        if let Err(error) = e.device(address, bytes) {
+            e.cpu.unmap(address, bytes)?;
+            return Err(error);
+        }
+        Ok(())
     }
     fn unmap(&self, address: u64, bytes: usize) -> Result<(), String> {
         let e = &self.execution;
@@ -229,8 +279,25 @@ impl Cpu for Core {
         if e.active.get() {
             return Err("nested A-profile execution is refused".into());
         }
+        let _guest_tick = crate::GuestClockTickScope::new(e.policy.get());
+        // `FUJIMOD_A64_LOOP_PROOFS=0` is a host-only measurement switch: it
+        // runs the same code with the prover off, so a benchmark can compare
+        // the two without a second build.
+        // Read once per process: runs are too frequent for a getenv each.
+        static PROOFS_ALLOWED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        let proofs_allowed = *PROOFS_ALLOWED
+            .get_or_init(|| std::env::var("FUJIMOD_A64_LOOP_PROOFS").as_deref() != Ok("0"));
+        e.prove_loops.set(
+            e.loop_window.replace(false)
+                && proofs_allowed
+                && e.can_prove_loops()
+                && request.until.is_none()
+                && request.instructions.is_some(),
+        );
         e.count.set(0);
+        unsafe { (*e.record.as_ptr()).enabled = if e.coarse() { 2 } else { 1 } };
         e.reset();
+        e.update_guest_tick()?;
         e.cap.set(
             request
                 .instructions
@@ -247,9 +314,9 @@ impl Cpu for Core {
         if request.watchdog_us != 0 {
             return Err("counted A-profile runs require exact limits or explicit owner stops, without a host watchdog".into());
         }
-        let _reservation = e
-            .memory
-            .reserve_run(e.id.get(), ExecutionPolicy::Exact, false)?;
+        let _reservation =
+            e.memory
+                .reserve_run(e.id.get(), e.policy.get(), e.pause_requested.is_some())?;
         if e.memory.flush_pending() {
             e.memory.flush()?;
         }
@@ -308,6 +375,21 @@ impl Cpu for Core {
             let flush = e.memory.flush_pending();
             if flush {
                 e.memory.flush()?;
+            }
+            // A pause requested while this run was executing has to end it.
+            // The engine's block hook honors the pause before the owner's
+            // block callback runs, so a restart requested by a store is left
+            // pending when the pause stops the guest. Retrying in place would
+            // re-enter the engine at the same PC and be stopped before that
+            // block ever runs, forever. Finish the run instead, leaving the
+            // stopped state and the pending restart exactly as a pause at a
+            // block entry leaves them.
+            if e.pause_requested
+                .as_ref()
+                .is_some_and(|pause| pause.load(std::sync::atomic::Ordering::Acquire) != 0)
+            {
+                e.stopped.set(true);
+                return Ok(exit);
             }
             if !e.stopped.get()
                 && (flush || e.restart.get().is_some())
@@ -452,6 +534,7 @@ impl Cpu for Core {
             }
             // Owner aborts: the abort settles first, then its observers run.
             Hook::Exception { .. } if e.owner_aborts.get() => None,
+            Hook::Synchronization { .. } if e.pause_requested.is_some() => None,
             _ => Some(unsafe { e.cpu.install_hook(hook)? }),
         };
         e.index.borrow_mut().insert(key, hook);
@@ -511,6 +594,39 @@ impl Cpu for Core {
         self.execution.cpu.precise_store_pc(on)
     }
     fn exit_counters(&self) -> Result<BTreeMap<&'static str, u64>, String> {
-        self.execution.cpu.exit_counters()
+        let mut counters = self.execution.cpu.exit_counters()?;
+        let p = &self.execution.proofs;
+        p.report();
+        if !self.execution.a32 {
+            counters.insert("loop_candidate_entries", p.candidate_entries.get());
+            counters.insert("loop_proofs_attempted", p.proofs_attempted.get());
+            counters.insert("loop_poll_instructions", p.poll_instructions.get());
+            counters.insert("loop_counted_instructions", p.counted_instructions.get());
+            counters.insert(
+                "loop_accelerated_instructions",
+                p.accelerated_instructions.get(),
+            );
+            counters.insert("loop_proofs_failed_structural", p.failed_structural.get());
+            counters.insert(
+                "loop_proofs_failed_window_inactive",
+                p.failed_window_inactive.get(),
+            );
+            counters.insert("loop_proofs_failed_observer", p.failed_observer.get());
+            counters.insert("loop_proofs_failed_cache", p.failed_cache.get());
+            counters.insert(
+                "loop_proofs_failed_loop_bytes_unavailable",
+                p.failed_read_unavailable.get(),
+            );
+            counters.insert(
+                "loop_proofs_failed_loop_condition_not_taken",
+                p.failed_leaving.get(),
+            );
+            counters.insert(
+                "loop_proofs_failed_iteration_model_unsupported",
+                p.failed_model.get(),
+            );
+            counters.insert("loop_proofs_failed_budget_room", p.failed_budget.get());
+        }
+        Ok(counters)
     }
 }

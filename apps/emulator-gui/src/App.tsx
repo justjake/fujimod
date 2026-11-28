@@ -9,6 +9,7 @@ import { faultFrom } from '@fujimod/emulator-ui/engine/fault';
 import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import { nativePanel } from './panel';
 import { RemoteEngine } from '@fujimod/emulator-ui/engine/remote';
+import { ViewportControls } from '@fujimod/emulator-ui/ViewportControls';
 import type { NativeCamera, NativeCatalog, NativeSessionState } from './native';
 import type { BootChoice, LauncherCamera, LaunchRequest } from './launch';
 import { desktopBridge } from './desktop';
@@ -27,6 +28,8 @@ export default function App() {
   const [pageError, setPageError] = createSignal('');
   const [busy, setBusy] = createSignal(false);
   const [runtime, setRuntime] = createSignal<ReturnType<typeof startSession>>();
+  const [model, setModel] = createSignal('');
+  const [realTime, setRealTime] = createSignal(false);
   let viewer!: HTMLDivElement, lcd!: HTMLCanvasElement;
   let engine: RemoteEngine | undefined;
   const updateState = (write: (value: ReturnType<typeof sessionState>) => void) => {
@@ -42,6 +45,7 @@ export default function App() {
       value.promptVisible = false;
       value.message = 'Connecting to native emulator…';
     });
+    setModel(launched.model);
     const photo = new RemoteEngine(launched.endpoint, (error) => {
       updateState((value) => {
         value.message = shownError(error);
@@ -227,7 +231,22 @@ export default function App() {
           lcd = element;
         }}
         selectFile={() => {}}
-        toolbar={<span />}
+        toolbar={
+          <ViewportControls
+            active={state().toolbarVisible}
+            title={model()}
+            speed={state().speed}
+            realTime={realTime()}
+            toggleRealTime={() => {
+              const on = !realTime();
+              void engine?.setRealTime(on).then(() => setRealTime(on));
+            }}
+            modSupported={false}
+            modEnabled={false}
+            modDisabled
+            selectMod={() => {}}
+          />
+        }
       >
         <Show when={state().idle}>
           <section class="launcher" aria-labelledby="emulator-title">

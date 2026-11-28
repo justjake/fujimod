@@ -17,21 +17,11 @@ impl Clock {
     }
     pub fn count(self, now: u64) -> Result<u64, String> {
         self.validate()?;
-        // The common product fits 64 bits; the wide form is the same value.
-        if let Some(product) = now.checked_mul(self.counter_hz) {
-            return Ok(product / self.ticks_per_second);
-        }
-        // floor((a * t + b) * h / t) = a * h + floor(b * h / t) for b < t.
-        let (whole, rest) = (now / self.ticks_per_second, now % self.ticks_per_second);
-        if let Some(count) = rest.checked_mul(self.counter_hz).and_then(|part| {
-            whole
-                .checked_mul(self.counter_hz)?
-                .checked_add(part / self.ticks_per_second)
-        }) {
-            return Ok(count);
-        }
-        u64::try_from(now as u128 * self.counter_hz as u128 / self.ticks_per_second as u128)
-            .map_err(|_| "architectural counter overflow".into())
+        fujimod_emulator_cpu::architectural_counter_count(
+            now,
+            self.counter_hz,
+            self.ticks_per_second,
+        )
     }
     fn at_count(self, count: u64) -> Result<u64, String> {
         self.validate()?;

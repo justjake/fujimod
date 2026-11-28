@@ -20,6 +20,28 @@ struct Mapping {
 static MAPPINGS: Mutex<Vec<Mapping>> = Mutex::new(Vec::new());
 static POISON: Mutex<Vec<(Identity, String)>> = Mutex::new(Vec::new());
 static NEXT: AtomicU64 = AtomicU64::new(1);
+/// Each live native engine, so another thread can raise a pause on it. The
+/// engine stays owned by its creating thread for every other operation; only
+/// `uc_emu_request_pause` is documented safe across threads.
+static ENGINES: Mutex<Vec<(Identity, usize)>> = Mutex::new(Vec::new());
+pub(super) fn register_engine(core: Identity, raw: usize) {
+    ENGINES.lock().unwrap().push((core, raw));
+}
+pub(super) fn request_pause(core: Identity) -> Result<(), String> {
+    let raw = ENGINES
+        .lock()
+        .unwrap()
+        .iter()
+        .find(|(owner, _)| *owner == core)
+        .map(|&(_, raw)| raw)
+        .ok_or("processor has no live native engine")?;
+    let api = super::ffi::Api::linked()?;
+    let request = api
+        .extensions
+        .request_pause
+        .ok_or("CPU backend has no cross-thread pause request")?;
+    super::check(&api, unsafe { request(raw as *mut std::ffi::c_void) })
+}
 fn overlaps(a: u64, n: usize, b: u64, m: usize) -> bool {
     a < b.saturating_add(m as u64) && b < a.saturating_add(n as u64)
 }
@@ -234,4 +256,5 @@ pub(super) fn remove_except(core: Identity, address: u64, bytes: usize, keep: Op
 pub(super) fn drop_core(core: Identity) {
     MAPPINGS.lock().unwrap().retain(|m| m.core != core);
     POISON.lock().unwrap().retain(|(owner, _)| *owner != core);
+    ENGINES.lock().unwrap().retain(|(owner, _)| *owner != core);
 }

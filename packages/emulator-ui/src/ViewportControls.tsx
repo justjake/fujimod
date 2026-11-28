@@ -15,10 +15,13 @@ export function ViewportControls(props: {
   webcamDisabled?: boolean;
   webcamError?: string;
   toggleWebcam?: () => void;
+  /** Whether the camera is held to the wall clock; absent where it always is. */
+  realTime?: boolean;
+  toggleRealTime?: () => void;
   modSupported: boolean;
   modEnabled: boolean;
   modDisabled: boolean;
-  feedback: EmulatorFeedbackActions;
+  feedback?: EmulatorFeedbackActions;
   selectMod: (enabled: boolean) => void;
 }) {
   const [picking, setPicking] = createSignal(false);
@@ -78,11 +81,11 @@ export function ViewportControls(props: {
       ref={(element) => (bar = element)}
       id="viewer-tools"
       class="viewport-bar"
-      data-ready={String(props.feedback.ready)}
+      data-ready={String(props.feedback?.ready ?? true)}
       role="toolbar"
       aria-label="Camera"
       // An idle viewer shows the bar only to recover a saved report.
-      hidden={!props.active && !props.feedback.saved}
+      hidden={!props.active && !props.feedback?.saved}
     >
       <Show when={props.active}>
         <span id="camera-title">{props.title}</span>
@@ -137,6 +140,15 @@ export function ViewportControls(props: {
         <Show when={props.speed !== undefined && Number.isFinite(props.speed)}>
           <SpeedGauge speed={props.speed!} />
         </Show>
+        <Show when={props.toggleRealTime}>
+          <button
+            id="real-time-toggle"
+            type="button"
+            onClick={() => props.toggleRealTime?.()}
+          >
+            {props.realTime ? 'Limit 100%' : 'No limit'}
+          </button>
+        </Show>
       </Show>
       <span class="viewport-bar-spacer" />
       <Show when={props.active && props.webcamSupported}>
@@ -162,25 +174,25 @@ export function ViewportControls(props: {
           <Icon name="camera" size={16} />
         </button>
       </Show>
-      <Show when={props.active}>
+      <Show when={props.active && props.feedback}>
         <button
           type="button"
           id="feedback-open"
           aria-label="Report a bug or idea"
           title="Report a bug or idea"
-          disabled={!props.feedback.ready}
-          onClick={() => props.feedback.open()}
+          disabled={!props.feedback?.ready}
+          onClick={() => props.feedback?.open()}
         >
           <Icon name="bug" size={16} />
         </button>
       </Show>
-      <Show when={props.feedback.saved}>
+      <Show when={props.feedback?.saved}>
         <button
           type="button"
           id="feedback-recover"
           aria-label="Download saved report"
           title="Download saved report"
-          onClick={() => props.feedback.recover()}
+          onClick={() => props.feedback?.recover()}
         >
           <Icon name="download" size={16} />
         </button>

@@ -80,6 +80,9 @@ impl Monitors {
         }
         Ok(Self {
             epoch: u128::from_le_bytes(bytes[8..24].try_into().unwrap()),
+            // A restored archive is a new reservation state, so the generation
+            // starts over: no cached answer can outlive the restore.
+            reservations: 0,
             cores,
         })
     }

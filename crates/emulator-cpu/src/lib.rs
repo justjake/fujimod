@@ -233,6 +233,63 @@ pub struct ProjectedDeviceWindow {
 pub type DeviceReadProjection =
     unsafe fn(u64, u32, u64, *mut c_void) -> Option<ProjectedDeviceRead>;
 
+/// Read-only state published by an A-profile architectural counter model.
+/// The owner continues to handle writes, timer controls, and interrupts.
+#[derive(Clone, Copy, Debug)]
+pub struct FastCounters {
+    pub counter_hz: u64,
+    pub ticks_per_second: u64,
+    pub pmu_hz: u64,
+    pub pmu_control: u32,
+    pub pmu_enabled: bool,
+    pub pmu_offset: u64,
+    pub pmu_anchor: u64,
+}
+
+impl FastCounters {
+    /// Cycle count before architectural wrap, shared with PMU overflow logic.
+    pub fn pmu_raw(self, now: u64) -> Result<u128, String> {
+        let elapsed = now
+            .checked_sub(self.pmu_anchor)
+            .ok_or("PMU clock moved backward")?;
+        let cycles = if self.pmu_control & 1 != 0 && self.pmu_enabled {
+            (u128::from(elapsed) * u128::from(self.pmu_hz))
+                .checked_div(u128::from(self.ticks_per_second))
+                .ok_or("invalid architectural counter clock")?
+                / if self.pmu_control & 8 != 0 { 64 } else { 1 }
+        } else {
+            0
+        };
+        Ok(u128::from(self.pmu_offset) + cycles)
+    }
+}
+
+/// Convert a guest tick to an architectural counter value.
+pub fn architectural_counter_count(
+    now: u64,
+    counter_hz: u64,
+    ticks_per_second: u64,
+) -> Result<u64, String> {
+    if ticks_per_second == 0 {
+        return Err("invalid architectural counter clock".into());
+    }
+    // The common product fits 64 bits; the wide form is the same value.
+    if let Some(product) = now.checked_mul(counter_hz) {
+        return Ok(product / ticks_per_second);
+    }
+    // floor((a * t + b) * h / t) = a * h + floor(b * h / t) for b < t.
+    let (whole, rest) = (now / ticks_per_second, now % ticks_per_second);
+    if let Some(count) = rest.checked_mul(counter_hz).and_then(|part| {
+        whole
+            .checked_mul(counter_hz)?
+            .checked_add(part / ticks_per_second)
+    }) {
+        return Ok(count);
+    }
+    u64::try_from(now as u128 * counter_hz as u128 / ticks_per_second as u128)
+        .map_err(|_| "architectural counter overflow".into())
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Access {
     Read,
@@ -450,6 +507,9 @@ pub struct Features {
     pub watched_stores: bool,
     pub backing_observation: bool,
     pub store_pc_control: bool,
+    /// The backend reports each store that covers translated bytes
+    /// (`observe_code_stores`), before retiring that translation.
+    pub code_store_observation: bool,
 }
 #[derive(Clone, Copy, Debug)]
 pub enum HookRange {
@@ -582,7 +642,8 @@ pub struct ThumbBlockAccounting {
     pub accounting: BlockAccounting,
     pub thumb_page: u64,
 }
-/// Optional append-only record for recovering precharged Thumb blocks.
+/// Optional append-only record for recovering precharged Thumb blocks and
+/// tracking proven 1 KiB pages across the low 1 MiB (`0x0000_0000..0x0010_0000`).
 /// Available only when [`Features::thumb_block_recovery`] is true; a zero
 /// `last_block_bytes` means there is no current recovery record.
 #[repr(C)]
@@ -592,7 +653,21 @@ pub struct ThumbBlockRecoveryAccounting {
     pub last_block_remaining_budget: i64,
     pub last_block_bytes: u32,
     pub last_block_icount: u32,
+    pub thumb_page_bitmap: [u64; 16],
 }
+const _: () = {
+    assert!(std::mem::size_of::<BlockAccounting>() == 48);
+    assert!(std::mem::size_of::<ThumbBlockAccounting>() == 56);
+    assert!(std::mem::offset_of!(ThumbBlockAccounting, thumb_page) == 48);
+    assert!(std::mem::size_of::<ThumbBlockRecoveryAccounting>() == 208);
+    assert!(std::mem::offset_of!(ThumbBlockRecoveryAccounting, last_block_start) == 56);
+    assert!(
+        std::mem::offset_of!(ThumbBlockRecoveryAccounting, last_block_remaining_budget) == 64
+    );
+    assert!(std::mem::offset_of!(ThumbBlockRecoveryAccounting, last_block_bytes) == 72);
+    assert!(std::mem::offset_of!(ThumbBlockRecoveryAccounting, last_block_icount) == 76);
+    assert!(std::mem::offset_of!(ThumbBlockRecoveryAccounting, thumb_page_bitmap) == 80);
+};
 /// A checkpoint associated with an owning processor. Durable export carries
 /// data only; `Cpu::import_snapshot` binds that data to a receiving processor.
 pub trait Snapshot: Any {
@@ -734,6 +809,9 @@ pub trait Cpu {
     }
     fn set_device_read_anchor(&self, _anchor: Option<DeviceReadAnchor>) {}
 
+    fn set_fast_counters(&self, _counters: Option<FastCounters>) -> Result<(), String> {
+        Ok(())
+    }
     fn read_register(&self, register: Register, out: &mut [u8]) -> Result<usize, String>;
     fn write_register(&self, register: Register, bytes: &[u8]) -> Result<(), String>;
     fn coprocessor(&self, register: arm::Coprocessor, value: Option<u64>) -> Result<u64, String>;
@@ -1018,6 +1096,20 @@ pub trait Cpu {
     /// # Safety
     /// The callback context must outlive installation, as for install_hook.
     unsafe fn translation_hooks(&self, hooks: Option<TranslationHooks>) -> Result<(), String>;
+    /// Report each store that covers bytes a translation was made from, with
+    /// the physical first byte and width, before that translation is retired.
+    /// None removes the observer. A store on a code page that covers no
+    /// translated byte never reports.
+    ///
+    /// # Safety
+    /// The callback context must outlive installation, as for install_hook.
+    unsafe fn observe_code_stores(
+        &self,
+        _callback: Option<unsafe fn(*mut c_void, u64, usize)>,
+        _data: *mut c_void,
+    ) -> Result<(), String> {
+        Err("CPU backend has no code-store observer".into())
+    }
     fn retry_block(&self, instructions: u32) -> Result<(), String>;
     fn request_restart(&self) -> Result<(), String>;
     fn accounting(&self) -> Option<NonNull<BlockAccounting>>;

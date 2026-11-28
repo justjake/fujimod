@@ -79,6 +79,7 @@ pub struct Options {
     translation_cache_size_bytes: Option<u32>,
     epoch: Option<(u64, Vec<u64>)>,
     ram_fill: Option<u8>,
+    unicorn_workers: Option<bool>,
 }
 
 impl Options {
@@ -88,6 +89,7 @@ impl Options {
             translation_cache_size_bytes: None,
             epoch: None,
             ram_fill: None,
+            unicorn_workers: None,
         }
     }
 
@@ -106,6 +108,13 @@ impl Options {
     /// Set a smaller cache for focused tests.
     pub fn with_translation_cache_size_bytes(mut self, bytes: u32) -> Self {
         self.translation_cache_size_bytes = Some(bytes);
+        self
+    }
+
+    /// Run a Unicorn XP5 board's cores on worker threads in concurrent
+    /// windows, instead of `FUJIMOD_UNICORN_WORKERS` deciding.
+    pub fn with_unicorn_workers(mut self, on: bool) -> Self {
+        self.unicorn_workers = Some(on);
         self
     }
 }
@@ -181,8 +190,51 @@ pub(super) struct Engines {
         any(target_os = "linux", target_os = "macos")
     ))]
     dynarmic_code: fujimod_emulator_cpu_dynarmic::CodeVisibility,
+    #[cfg(not(target_os = "emscripten"))]
+    unicorn_workers: bool,
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     hypervisor: Option<fujimod_emulator_cpu_hvf::Vm>,
+}
+
+/// Whether the M-profile companion runs on its own native worker thread.
+///
+/// Only the Unicorn engine can use it. Under the Hypervisor engine the AArch64
+/// cores are native VMs driven from the owner thread, so moving the M-profile
+/// core to a worker turns every cohort handoff into a thread hop while the
+/// owner can no longer do useful work in the same window: measured on an Apple
+/// Silicon host, the worker arrangement took 139.7k interactive windows against
+/// 31.7k inlined, with a 641 us mean window instead of 184 us.
+///
+/// On the Unicorn engine workers are opt-in, through
+/// [`Options::with_unicorn_workers`] or `FUJIMOD_UNICORN_WORKERS=1`. Their
+/// concurrent cohort windows let cores drift up to a whole window apart, so a
+/// lagging core reads devices at a peer's time: on xt5-431 the M4 is never
+/// released. Concurrency is also not a measured win yet: below four hardware
+/// threads the workers thrash their futexes. Serialized slices stay the default
+/// until a measurement shows otherwise.
+fn unicorn_workers(graph: &Graph, options: &Options) -> bool {
+    let one_m4_companion = graph
+        .processors
+        .iter()
+        .filter(|p| p.model == Model::CortexM4)
+        .count()
+        == 1
+        && graph.processors.iter().any(|p| p.model == Model::ArmV8A);
+    if !one_m4_companion || options.engine != RunEngine::Unicorn {
+        return false;
+    }
+    if let Some(on) = options.unicorn_workers {
+        return on;
+    }
+    match std::env::var("FUJIMOD_UNICORN_WORKERS").ok().as_deref() {
+        Some("0") => false,
+        Some("1") => true,
+        Some(other) => {
+            debug_assert!(false, "unexpected FUJIMOD_UNICORN_WORKERS={other}");
+            false
+        }
+        None => false,
+    }
 }
 impl Engines {
     fn new(graph: &Graph, options: &Options) -> Result<Self, String> {
@@ -221,6 +273,8 @@ impl Engines {
                 any(target_os = "linux", target_os = "macos")
             ))]
             dynarmic_code: Default::default(),
+            #[cfg(not(target_os = "emscripten"))]
+            unicorn_workers: unicorn_workers(graph, options),
             #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
             hypervisor,
         })
@@ -262,6 +316,25 @@ impl Engines {
             ));
             #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
             return Err("Hypervisor engine requires macOS ARM64".into());
+        }
+        #[cfg(not(target_os = "emscripten"))]
+        if self.unicorn_workers {
+            use fujimod_emulator_cpu_unicorn::worker;
+            match model {
+                Model::CortexM4 => {
+                    return Ok(Box::new(worker::spawn_mprofile(
+                        translation_cache_size_bytes,
+                        true,
+                    )?));
+                }
+                Model::ArmV8A => {
+                    return Ok(Box::new(worker::spawn_aprofile(
+                        translation_cache_size_bytes,
+                        memory.shared(),
+                    )?));
+                }
+                _ => {}
+            }
         }
         let raw = self
             .unicorn
