@@ -6,6 +6,7 @@
 
 mod ffi;
 mod loops;
+mod rprofile;
 mod snapshot;
 mod status;
 
@@ -332,6 +333,7 @@ struct NativeReadWindow {
 const NATIVE_PAGE_SLOTS: usize = 32;
 
 struct CoreShared {
+    mpu: Option<RefCell<rprofile::Mpu>>,
     exclusive: RefCell<Option<BoardExclusive>>,
     observe_exclusive_stores: Cell<bool>,
     #[cfg(test)]
@@ -516,17 +518,36 @@ impl CoreShared {
     }
 
     fn translate(&self, address: u32, access: Access) -> Result<u64, String> {
-        self.walk(address, access)?
-            .map_err(|status| format!("ARMv7 page fault at {address:#010x} (status {status:#04x})"))
+        self.walk(address, 1, access)?.map_err(|status| {
+            format!("ARMv7 memory fault at {address:#010x} (status {status:#04x})")
+        })
     }
 
-    fn walk(&self, address: u32, access: Access) -> Result<Result<u64, u32>, String> {
-        self.walk_descriptors(address, access, |_, _| {})
+    fn walk(&self, address: u32, bytes: usize, access: Access) -> Result<Result<u64, u32>, String> {
+        self.walk_descriptors(address, bytes, access, |_, _| {})
+    }
+
+    fn walk_native_page(
+        &self,
+        address: u32,
+        access: Access,
+        descriptor: impl FnMut(*const [u8; 4], u32),
+    ) -> Result<Result<u64, u32>, String> {
+        if self.mpu.is_some() {
+            let begin = address & !4095;
+            // The MPU can change permissions inside a page. Cache a pointer
+            // only after checking the entire page for the requested access.
+            return self
+                .walk_descriptors(begin, 4096, access, descriptor)
+                .map(|result| result.map(|physical| physical + u64::from(address - begin)));
+        }
+        self.walk_descriptors(address, 1, access, descriptor)
     }
 
     fn walk_descriptors(
         &self,
         address: u32,
+        bytes: usize,
         access: Access,
         mut descriptor: impl FnMut(*const [u8; 4], u32),
     ) -> Result<Result<u64, u32>, String> {
@@ -542,6 +563,12 @@ impl CoreShared {
             fcseidr,
             cpsr,
         } = control;
+        if let Some(mpu) = &self.mpu {
+            return Ok(mpu
+                .borrow()
+                .check(sctlr, cpsr, address, bytes, access)
+                .map(|()| u64::from(address)));
+        }
         if sctlr & 1 == 0 {
             return Ok(Ok(address.into()));
         }
@@ -628,7 +655,12 @@ impl CoreShared {
             // Key the native translations by the inputs the short-descriptor
             // walker uses. Guest reads still see unmodified CP15 registers.
             control.cpsr = u32::from(control.cpsr & 31 == 0x10);
-            control.sctlr &= (1 << 29) | (1 << 25) | (1 << 23) | 1;
+            let rprofile = self.mpu.is_some();
+            control.sctlr &= if rprofile {
+                (1 << 17) | (1 << 13) | 1
+            } else {
+                (1 << 29) | (1 << 25) | (1 << 23) | 1
+            };
             control.ttbcr &= (1 << 31) | (1 << 5) | (1 << 4) | 7;
             let split = control.ttbcr & 7;
             control.ttbr0 &= u32::MAX << (14 - split);
@@ -638,9 +670,10 @@ impl CoreShared {
                 control.ttbr1 = 0;
                 control.ttbcr &= !(1 << 5);
             }
-            if control.sctlr & 1 == 0 {
+            if control.sctlr & 1 == 0 || rprofile {
                 control = ffi::DynarmicMemoryControl {
                     cpsr: control.cpsr,
+                    sctlr: if rprofile { control.sctlr } else { 0 },
                     ..Default::default()
                 };
             }
@@ -739,7 +772,7 @@ impl CoreShared {
                 pointer.cast::<[u8; 4]>().read()
             })));
         }
-        let physical = match self.walk_descriptors(address, Access::Fetch, |p, _| {
+        let physical = match self.walk_descriptors(address, 4, Access::Fetch, |p, _| {
             if compiled {
                 self.watch_compiled_descriptor(p, address);
             }
@@ -779,8 +812,14 @@ impl CoreShared {
         unsafe { ffi::dynarmic_abort_access(self.inst.get()) };
     }
 
-    fn walk_for_guest(&self, address: u32, access: Access, protected: Fault) -> Option<u64> {
-        match self.walk(address, access) {
+    fn walk_for_guest(
+        &self,
+        address: u32,
+        bytes: usize,
+        access: Access,
+        protected: Fault,
+    ) -> Option<u64> {
+        match self.walk(address, bytes, access) {
             Ok(Ok(physical)) => Some(physical),
             Ok(Err(status)) => {
                 self.abort.set(Some((address, status, access)));
@@ -810,7 +849,8 @@ impl CoreShared {
         let mut addresses = [(std::ptr::null_mut(), 0); 2];
         let needed = if output.is_some() { 2 } else { 1 };
         for (index, &(virtual_address, count)) in pieces.iter().enumerate() {
-            let Some(physical) = self.walk_for_guest(virtual_address, access, protected) else {
+            let Some(physical) = self.walk_for_guest(virtual_address, count, access, protected)
+            else {
                 return 0;
             };
             let Some((Mapping::Backing { ptr, permissions, .. }, offset)) = self.mapping(physical, count)
@@ -873,7 +913,8 @@ impl CoreShared {
         if !previous.is_null() && (previous.addr() & 1 == 0 || access != Access::Write) {
             return;
         }
-        let Ok(Ok(physical)) = self.walk_descriptors(address, Access::Read, |p, _| {
+        let within = (address & 4095) as usize;
+        let Ok(Ok(physical)) = self.walk_native_page(address, Access::Read, |p, _| {
             self.watch_code_backing(p.cast())
         }) else {
             return;
@@ -887,7 +928,6 @@ impl CoreShared {
         else {
             return;
         };
-        let within = (address & 4095) as usize;
         let backing_page = unsafe { ptr.as_ptr().add(offset) };
         if permissions & 1 == 0
             || backing_page.addr() & 4095 != 0
@@ -901,8 +941,12 @@ impl CoreShared {
         let write_allowed = (access == Access::Write || self.observed_backings.borrow().is_empty())
             && !self.code_visibility.watched(pointer)
             && permissions & 2 != 0
-            && (access == Access::Write
-                || self.walk(address, Access::Write).ok().and_then(Result::ok) == Some(physical));
+            && (self.mpu.is_none() && access == Access::Write
+                || self
+                    .walk_native_page(address, Access::Write, |_, _| {})
+                    .ok()
+                    .and_then(Result::ok)
+                    == Some(physical));
         // Only the ARM64 emitter checks the write-protection tag on stores.
         if !write_allowed && !cfg!(target_arch = "aarch64") {
             return;
@@ -1042,7 +1086,7 @@ impl CoreShared {
         let mut descriptors = [None; 2];
         let mut n = 0;
         let physical = self
-            .walk_descriptors(address, access, |ptr, value| {
+            .walk_native_page(address, access, |ptr, value| {
                 descriptors[n] = Some((ptr, value));
                 n += 1;
             })
@@ -1320,7 +1364,7 @@ impl CoreShared {
         if size > room {
             return self.cross_page_ram(address, size, room, access, protected, output);
         }
-        let Some(physical) = self.walk_for_guest(address, access, protected) else {
+        let Some(physical) = self.walk_for_guest(address, size, access, protected) else {
             return 0;
         };
         let mut mapped = self.mapping(physical, size);
@@ -1435,10 +1479,11 @@ impl Core {
         model: Model,
         code_visibility: CodeVisibility,
     ) -> Result<Self, String> {
-        if model != Model::CortexA7 {
-            return Err("Dynarmic requires a Cortex-A7 processor".into());
+        if !matches!(model, Model::CortexA7 | Model::CortexR5F) {
+            return Err("Dynarmic requires a Cortex-A7 or Cortex-R5F processor".into());
         }
         let shared = Box::new(CoreShared {
+            mpu: (model == Model::CortexR5F).then(RefCell::default),
             exclusive: RefCell::new(None),
             observe_exclusive_stores: Cell::new(false),
             #[cfg(test)]
@@ -1499,7 +1544,7 @@ impl Core {
             write: Self::write,
         };
 
-        let inst = unsafe { ffi::dynarmic_create(&cb) };
+        let inst = unsafe { ffi::dynarmic_create(&cb, model == Model::CortexR5F) };
         if inst.is_null() {
             return Err("failed to create Dynarmic JIT instance".into());
         }
@@ -1829,6 +1874,15 @@ impl Cpu for Core {
         if register.cp != 15 || register.wide {
             return Err("Dynarmic only supports 32-bit CP15 accesses".into());
         }
+        if self.shared.mpu.is_some()
+            && let Some(register) = rprofile::MpuRegister::decode(register)
+        {
+            let value = value
+                .map(u32::try_from)
+                .transpose()
+                .map_err(|_| "CP15 value exceeds 32 bits")?;
+            return self.mpu_register(register, value).map(u64::from);
+        }
         if let Some(val) = value {
             let word = u32::try_from(val).map_err(|_| "CP15 value exceeds 32 bits")?;
             unsafe {
@@ -1912,9 +1966,16 @@ impl Cpu for Core {
             Access::Fetch => 4,
         };
         while !bytes.is_empty() {
-            let translated = self.translate(address, access)?;
             let room = 4096 - (address as usize & 4095);
             let (chunk, remaining) = bytes.split_at_mut(room.min(bytes.len()));
+            let address32 =
+                u32::try_from(address).map_err(|_| "Dynarmic virtual address exceeds 32 bits")?;
+            let translated =
+                self.shared
+                    .walk(address32, chunk.len(), access)?
+                    .map_err(|status| {
+                        format!("ARMv7 memory fault at {address:#010x} (status {status:#04x})")
+                    })?;
             let Some((
                 Mapping::Backing {
                     ptr, permissions, ..

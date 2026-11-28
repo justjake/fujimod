@@ -1,5 +1,5 @@
 //! Architectural state of a stopped Dynarmic processor on an exact board.
-use super::{Core, ffi, status};
+use super::{Core, ffi, rprofile, status};
 use fujimod_emulator_cpu::{Identity, Snapshot, armv7a};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -24,6 +24,7 @@ struct State {
     cache_ids: [u32; 3],
     irq: bool,
     exception_entries: [u64; 4],
+    mpu: Option<rprofile::Mpu>,
 }
 
 impl Saved {
@@ -59,6 +60,7 @@ impl Saved {
                     .collect(),
                 cache_ids,
                 irq: core.irq.get(),
+                mpu: core.shared.mpu.as_ref().map(|mpu| mpu.borrow().clone()),
                 exception_entries: [
                     entries.irq,
                     entries.undefined,
@@ -79,6 +81,8 @@ impl Saved {
         status::bank(state.cpsr)?;
         if !rest.is_empty()
             || state.fpexc & !0x4000_0000 != 0
+            || state.mpu.is_some() != core.shared.mpu.is_some()
+            || state.mpu.as_ref().is_some_and(|mpu| !mpu.valid())
             || !state
                 .cp15
                 .iter()
@@ -106,6 +110,9 @@ impl Saved {
         *core.banks.borrow_mut() = state.banks.clone();
         core.fpexc.set(state.fpexc);
         core.irq.set(state.irq);
+        if let (Some(current), Some(saved)) = (&core.shared.mpu, &state.mpu) {
+            current.borrow_mut().clone_from(saved);
+        }
         let [irq, undefined, data_abort, prefetch_abort] = state.exception_entries;
         core.exception_entries.set(armv7a::Entries {
             irq,

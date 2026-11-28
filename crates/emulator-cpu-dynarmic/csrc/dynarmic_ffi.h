@@ -44,7 +44,7 @@ typedef struct DynarmicMemoryControl {
 
 typedef struct DynarmicInstance DynarmicInstance;
 
-DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks);
+DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks, bool rprofile);
 void dynarmic_destroy(DynarmicInstance* inst);
 
 void dynarmic_set_translation_context(DynarmicInstance* inst, uint32_t value);

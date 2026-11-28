@@ -19,8 +19,12 @@ struct DynarmicInstance;
 
 class CP15Impl final : public Coprocessor {
 public:
-    explicit CP15Impl(DynarmicInstance* inst) : instance(inst) {
+    explicit CP15Impl(DynarmicInstance* inst, bool rprofile) : instance(inst) {
         regs.fill(0);
+        if (rprofile) {
+            regs[encode(0, 0, 0, 0)] = 0x411fc153; // MIDR (ARM Cortex-R5 r1p3)
+            return;
+        }
         regs[encode(0, 0, 0, 0)] = 0x410fc075; // MIDR (ARM Cortex-A7 r0p5)
         regs[encode(0, 0, 0, 1)] = 0x8444c004; // CTR
         regs[encode(0, 0, 0, 5)] = 0x80000000; // MPIDR (Multiprocessor Affinity, Core 0 default)
@@ -343,12 +347,12 @@ void UserCallbacksImpl::ExceptionRaised(VAddr pc, Exception exception) {
 
 extern "C" {
 
-DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks) {
+DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks, bool rprofile) {
     auto inst = std::make_unique<DynarmicInstance>();
     inst->callbacks = *callbacks;
 
     inst->callbacks_impl = std::make_unique<UserCallbacksImpl>(inst->callbacks, inst.get());
-    inst->cp15_impl = std::make_shared<CP15Impl>(inst.get());
+    inst->cp15_impl = std::make_shared<CP15Impl>(inst.get(), rprofile);
 
     UserConfig conf;
     conf.callbacks = inst->callbacks_impl.get();

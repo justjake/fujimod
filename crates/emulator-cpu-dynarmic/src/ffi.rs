@@ -74,7 +74,10 @@ pub struct DynarmicMemoryControl {
 pub enum DynarmicInstance {}
 
 unsafe extern "C" {
-    pub fn dynarmic_create(callbacks: *const DynarmicCallbacks) -> *mut DynarmicInstance;
+    pub fn dynarmic_create(
+        callbacks: *const DynarmicCallbacks,
+        rprofile: bool,
+    ) -> *mut DynarmicInstance;
     pub fn dynarmic_destroy(inst: *mut DynarmicInstance);
     pub fn dynarmic_set_translation_context(inst: *mut DynarmicInstance, value: u32);
     pub fn dynarmic_observe_stores(inst: *mut DynarmicInstance, enabled: bool);

@@ -4,7 +4,7 @@ use crate::Access;
 
 pub mod tcm;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Region {
     pub base: u32,
     pub size: u32,

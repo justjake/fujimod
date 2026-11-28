@@ -144,6 +144,9 @@ impl Core {
         if !arm::condition_passes(condition, cpsr) {
             return Ok(None);
         }
+        if self.mpu_instruction(word, user)? {
+            return Ok(Some(next));
+        }
         if !user && armv7a::data_cache_set_way(word) {
             // This backend has a coherent RAM view and no private data cache.
             return Ok(Some(next));
