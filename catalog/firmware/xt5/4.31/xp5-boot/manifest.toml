@@ -6,6 +6,12 @@ load_firmware = true
 # waits in delay loops, so it runs in block execution. The guest state is the same either way.
 mprofile_block_execution = true
 
+# The XP5 SoC's AE statistics block (catalog/soc/xp5/blocks/statistics.json, located on the X100VI
+# and X-H2S) sits at 0xff800000. On the X-T5 4.31 that address is the boot SRAM below, where the
+# statistics model writes its banks into memory for the stock AE service; a statistics window there
+# leaves the AE without measurements, so a half press never completes AE/AF and no still is taken.
+remove_windows = [0xff800000]
+
 # Device windows: xt5-431.d/*.toml, merged in filename order.
 
 [[ram]]
