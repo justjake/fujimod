@@ -4,6 +4,7 @@
 //! shared aperture and dispatches each declared channel to exactly one mode.
 use fujimod_emulator_devices::{
     Cx, Device,
+    bus::ReadValidity,
     checkpoint::Checkpoint,
     graph::{Mapping, validate_mappings},
 };
@@ -196,6 +197,14 @@ impl Device for Controller {
         self.modes[self.mode(address, size)?]
             .device
             .read_without_advance(address, size, now)
+    }
+
+    fn projected_value_until(&self, address: u64, size: u8) -> Option<ReadValidity> {
+        // The bus also stops the projection at the controller's next event,
+        // which may be due to any of its channels.
+        self.modes[self.mode(address, size)?]
+            .device
+            .projected_value_until(address, size)
     }
 
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
@@ -395,6 +404,10 @@ mod tests {
         let before = d.fingerprint().unwrap();
         let status = BASE + 0x24;
         assert_eq!(d.read_without_advance(status, 4, 1), Some(1));
+        let validity = d.projected_value_until(status, 4).unwrap();
+        assert_eq!(validity.before, 2);
+        assert_eq!(validity.countdown_expiry, None);
+        assert!(d.projected_value_until(status, 2).is_none());
         assert_eq!(d.read_without_advance(status, 2, 1), None);
         assert_eq!(d.read_without_advance(status, 4, 2), None);
         assert_eq!(&host.ram[0x2000..0x2040], &[0; 64]);
@@ -404,6 +417,7 @@ mod tests {
         advance(&mut d, &mut host, 2);
         assert_eq!(&host.ram[0x2000..0x2040], &[0x6d; 64]);
         assert_eq!(d.read_without_advance(status, 4, 2), Some(0x40));
+        assert_eq!(d.projected_value_until(status, 4).unwrap().before, u64::MAX);
         assert_eq!(read(&mut d, &mut host, status), 0x40);
         assert_eq!(read(&mut d, &mut host, BASE + 0x44), 0x3000);
         assert_eq!(d.next_deadline(2), None);
