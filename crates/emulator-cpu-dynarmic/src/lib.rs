@@ -3558,14 +3558,14 @@ mod tests {
             let cpu = Core::new(Model::CortexA7).unwrap();
             cpu.map_zeroed(0x1000, 4096, 7).unwrap();
             for (index, word) in [
-                0xe150_0001u32, // cmp r0, r1
-                0x2040_0001,    // subcs r0, r0, r1
+                0xe150_0121u32, // cmp r0, r1, lsr #2
+                0x2040_0121,    // subcs r0, r0, r1, lsr #2
                 0x2182_2003,    // orrcs r2, r2, r3
                 0x33a0_4048,    // movcc r4, #72
-                0xe150_0001,    // cmp r0, r1
-                0x2040_0001,    // subcs r0, r0, r1
+                0xe150_0121,    // cmp r0, r1, lsr #2
+                0x2040_0121,    // subcs r0, r0, r1, lsr #2
                 0x2182_20a3,    // orrcs r2, r2, r3, lsr #1
-                0x31a0_4101,    // movcc r4, r1, lsl #2
+                0x31a0_4001,    // movcc r4, r1
                 0x23a0_4050,    // movcs r4, #80
                 0x4284_4005,    // addmi r4, r4, #5
                 0x4084_4083,    // addmi r4, r4, r3, lsl #1
@@ -3578,7 +3578,7 @@ mod tests {
                 cpu.write_memory(0x1000 + index as u64 * 4, &word.to_le_bytes())
                     .unwrap();
             }
-            for (reg, value) in [17u32, 11, 1, 8, 7].into_iter().enumerate() {
+            for (reg, value) in [17u32, 44, 1, 8, 7].into_iter().enumerate() {
                 cpu.write_register(arm::CORE[reg], &value.to_le_bytes())
                     .unwrap();
             }

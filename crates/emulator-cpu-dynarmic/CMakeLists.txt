@@ -21,7 +21,8 @@ set(DYNARMIC_PATCHES
     "${CMAKE_CURRENT_SOURCE_DIR}/patches/a32-select-nzcv.patch"
     "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-entry-budget.patch"
     "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-deferred-transfer-guard.patch"
-    "${CMAKE_CURRENT_SOURCE_DIR}/patches/ir-verification.patch")
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/ir-verification.patch"
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-local-arithmetic.patch")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${DYNARMIC_PATCHES})
 file(REMOVE_RECURSE "${DYNARMIC_SOURCE}")
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/vendor/dynarmic/"

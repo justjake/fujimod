@@ -1,0 +1,91 @@
+diff --git a/src/dynarmic/backend/arm64/a32_address_space.cpp b/src/dynarmic/backend/arm64/a32_address_space.cpp
+index 10e72155..58d8b10a 100644
+--- a/src/dynarmic/backend/arm64/a32_address_space.cpp
++++ b/src/dynarmic/backend/arm64/a32_address_space.cpp
+@@ -3,6 +3,8 @@
+  * SPDX-License-Identifier: 0BSD
+  */
+
++#include <array>
++
+ #include "dynarmic/backend/arm64/a32_address_space.h"
+
+ #include "dynarmic/backend/arm64/a32_jitstate.h"
+@@ -16,6 +18,7 @@
+ #include "dynarmic/frontend/A32/translate/a32_translate.h"
+ #include "dynarmic/interface/A32/config.h"
+ #include "dynarmic/interface/exclusive_monitor.h"
++#include "dynarmic/ir/basic_block.h"
+ #include "dynarmic/ir/opt/passes.h"
+
+ namespace Dynarmic::Backend::Arm64 {
+@@ -218,6 +221,61 @@ A32AddressSpace::A32AddressSpace(const A32::UserConfig& conf)
+     EmitPrelude();
+ }
+
++static IR::Value WithoutIdentity(IR::Value value) {
++    while (value.IsIdentity()) {
++        value = value.GetInst()->GetArg(0);
++    }
++    return value;
++}
++
++static bool SameOperand(IR::Value left, IR::Value right) {
++    left = WithoutIdentity(left);
++    right = WithoutIdentity(right);
++    if (left.IsImmediate() != right.IsImmediate()) {
++        return false;
++    }
++    return left.IsImmediate()
++        ? left.GetImmediateAsU64() == right.GetImmediateAsU64()
++        : left.GetInst() == right.GetInst();
++}
++
++// Compilers often compare a shifted operand and then conditionally perform
++// the same subtraction. Keep this search local to limit compile time and
++// host register lifetimes.
++static void ReuseLocalArithmetic(IR::Block& block) {
++    std::array<IR::Inst*, 8> recent{};
++    size_t next = 0;
++    for (auto& inst : block) {
++        switch (inst.GetOpcode()) {
++        case IR::Opcode::Add32:
++        case IR::Opcode::Sub32:
++        case IR::Opcode::LogicalShiftLeft32:
++        case IR::Opcode::LogicalShiftRight32:
++        case IR::Opcode::ArithmeticShiftRight32:
++        case IR::Opcode::RotateRight32:
++            break;
++        default:
++            continue;
++        }
++
++        if (!inst.HasAssociatedPseudoOperation()) {
++            for (IR::Inst* prior : recent) {
++                if (prior && prior->GetOpcode() == inst.GetOpcode()
++                    && SameOperand(prior->GetArg(0), inst.GetArg(0))
++                    && SameOperand(prior->GetArg(1), inst.GetArg(1))
++                    && SameOperand(prior->GetArg(2), inst.GetArg(2))) {
++                    inst.ReplaceUsesWith(IR::Value{prior});
++                    break;
++                }
++            }
++        }
++        if (inst.GetOpcode() != IR::Opcode::Identity) {
++            recent[next] = &inst;
++            next = (next + 1) % recent.size();
++        }
++    }
++}
++
+ IR::Block A32AddressSpace::GenerateIR(IR::LocationDescriptor descriptor) const {
+     IR::Block ir_block = A32::Translate(A32::LocationDescriptor{descriptor}, conf.callbacks, {conf.arch_version, conf.define_unpredictable_behaviour, conf.hook_hint_instructions});
+
+@@ -232,6 +290,7 @@ IR::Block A32AddressSpace::GenerateIR(IR::LocationDescriptor descriptor) const {
+     if (conf.HasOptimization(OptimizationFlag::ConstProp)) {
+         Optimization::A32ConstantMemoryReads(ir_block, conf.callbacks);
+         Optimization::ConstantPropagation(ir_block);
++        ReuseLocalArithmetic(ir_block);
+         Optimization::DeadCodeElimination(ir_block);
+     }
+     Optimization::IdentityRemovalPass(ir_block);
