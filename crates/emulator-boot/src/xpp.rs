@@ -1649,10 +1649,17 @@ pub fn assemble(resolved: &ResolvedConfiguration, inputs: &Inputs<'_>) -> Result
     let profile = body_profile(resolved)?;
     let maps = block_register_layouts(&selection.soc, &profile.block_overrides)?;
     let gic = gic_node(&selection.soc)?;
-    let (numerator, denominator) = reset
-        .execution_clock
-        .as_ref()
-        .map_or((1, 1), |clock| clock.instructions_per_tick);
+    // The body's execution clock overrides the processor's declared rate.
+    let (numerator, denominator) = match (&reset.execution_clock, &emulation.instructions_per_tick)
+    {
+        (Some(clock), _) => clock.instructions_per_tick,
+        (None, Some(rate)) => (rate.numerator, rate.denominator),
+        (None, None) => {
+            return Err(
+                "neither the processor emulation nor the body declares an instruction rate".into(),
+            );
+        }
+    };
     let dram_address_space_limit_bytes = resolved.dram_address_space_limit_bytes()?;
     let execution = graph::assemble_with_starts(
         selection,

@@ -39,7 +39,7 @@ fn processors_keep_the_choices_their_soc_profiles_held() {
     assert_eq!(
         xp4.instructions_per_tick,
         Some(RunInstructionRate {
-            numerator: 1,
+            numerator: 6,
             denominator: 1,
         })
     );
@@ -62,6 +62,13 @@ fn processors_keep_the_choices_their_soc_profiles_held() {
     let xpp = emulation("xpp");
     assert_eq!(xpp.cpu_model, "Cortex-A7");
     assert_eq!(xpp.runtime_abi, "armv7a-unicorn-v1");
+    assert_eq!(
+        xpp.instructions_per_tick,
+        Some(RunInstructionRate {
+            numerator: 4,
+            denominator: 1,
+        })
+    );
     assert!(xpp.limits.iter().any(|limit| limit.contains("Cortex-A7")));
 }
 
