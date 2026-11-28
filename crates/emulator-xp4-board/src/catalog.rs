@@ -675,8 +675,10 @@ impl Catalog {
             })
             .collect::<Result<Vec<_>, String>>()?;
         out.insert("movdc".into(), json!(movdc));
-        if let Some(phy) = self.device("usb_phy") {
-            let input = &self.board["usb_phy_input"];
+        // The PHY's reset registers are read from a body, so a body that
+        // declares none (the X-T4 2.12) runs without the PHY, as before.
+        let input = &self.board["usb_phy_input"];
+        if let Some(phy) = self.device("usb_phy").filter(|_| input.is_object()) {
             out.insert(
                 "usb_phy".into(),
                 json!([phy.base(), input["registers"], input["parallel"]]),
@@ -878,6 +880,38 @@ pub fn definition(
 mod tests {
     use super::*;
 
+    /// Full-boot XP4 configurations that cannot build a board yet, and why.
+    /// Each must still fail, so a fix also removes its entry here.
+    const INCOMPLETE: [(&str, &str); 1] = [(
+        "x100v-301-handoff",
+        "XP4 SPI controller and explicit MISO input must be selected together",
+    )];
+
+    /// Every bundled full-boot run configuration of an XP4 body, except
+    /// the incomplete ones, which are checked to fail as recorded.
+    fn xp4_configurations() -> Vec<(&'static str, ResolvedConfiguration)> {
+        use fujimod_catalog_configuration::{RunConfiguration, RunPurpose};
+        let mut configurations = Vec::new();
+        for id in RunConfiguration::bundled_ids() {
+            let resolved =
+                ResolvedConfiguration::bundled(id).unwrap_or_else(|e| panic!("{id}: {e}"));
+            if resolved.reference.soc.id != "xp4"
+                || resolved.configuration.purpose != RunPurpose::RomBoot
+            {
+                continue;
+            }
+            match INCOMPLETE.iter().find(|(incomplete, _)| *incomplete == id) {
+                Some((_, reason)) => {
+                    let built = Catalog::new(&resolved).and_then(|c| c.body_fields());
+                    assert_eq!(built.err().as_deref(), Some(*reason), "{id}");
+                }
+                None => configurations.push((id, resolved)),
+            }
+        }
+        assert!(configurations.iter().any(|(id, _)| *id == "xt4-212"));
+        configurations
+    }
+
     fn xt3() -> Catalog {
         Catalog::new(&ResolvedConfiguration::bundled("xt3-511").unwrap()).unwrap()
     }
@@ -886,32 +920,42 @@ mod tests {
     /// when set, for comparison with another builder.
     #[test]
     fn every_xp4_configuration_builds() {
-        for id in ["xt3-511", "xt30-201-boot", "xe4-201-handoff"] {
-            let catalog = Catalog::new(&ResolvedConfiguration::bundled(id).unwrap()).unwrap();
-            let mut fields = catalog.processor_fields().unwrap();
-            fields.extend(
-                catalog
-                    .body_fields()
-                    .unwrap_or_else(|e| panic!("{id}: {e}")),
-            );
-            if let Ok(dir) = std::env::var("FUJIMOD_XP4_CATALOG_DIR") {
-                std::fs::write(
-                    format!("{dir}/{id}.json"),
-                    serde_json::to_string_pretty(&fields).unwrap(),
-                )
-                .unwrap();
+        let mut failures = Vec::new();
+        for (id, resolved) in xp4_configurations() {
+            let fields = Catalog::new(&resolved).and_then(|catalog| {
+                let mut fields = catalog.processor_fields()?;
+                fields.extend(catalog.body_fields()?);
+                Ok(fields)
+            });
+            match fields {
+                Ok(fields) => {
+                    if let Ok(dir) = std::env::var("FUJIMOD_XP4_CATALOG_DIR") {
+                        std::fs::write(
+                            format!("{dir}/{id}.json"),
+                            serde_json::to_string_pretty(&fields).unwrap(),
+                        )
+                        .unwrap();
+                    }
+                }
+                Err(error) => failures.push(format!("{id}: {error}")),
             }
         }
+        assert!(failures.is_empty(), "{failures:#?}");
     }
 
     #[test]
     fn every_xp4_configuration_is_a_definition() {
-        for id in ["xt3-511", "xt30-201-boot", "xe4-201-handoff"] {
-            let resolved = ResolvedConfiguration::bundled(id).unwrap();
-            let cores = resolved.reference.soc.processors.len();
-            let registers = vec![vec![(fujimod_emulator_cpu::Register::Pc, 0x40000)]; cores];
-            definition(&resolved, registers, &[0x1000]).unwrap_or_else(|e| panic!("{id}: {e}"));
-        }
+        let failures: Vec<_> = xp4_configurations()
+            .into_iter()
+            .filter_map(|(id, resolved)| {
+                let cores = resolved.reference.soc.processors.len();
+                let registers = vec![vec![(fujimod_emulator_cpu::Register::Pc, 0x40000)]; cores];
+                definition(&resolved, registers, &[0x1000])
+                    .err()
+                    .map(|error| format!("{id}: {error}"))
+            })
+            .collect();
+        assert!(failures.is_empty(), "{failures:#?}");
     }
 
     #[test]
