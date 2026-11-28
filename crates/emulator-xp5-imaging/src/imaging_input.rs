@@ -121,6 +121,12 @@ pub struct Input {
     cadence: Option<[u64; 2]>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     frame_edge: Option<(u64, FrameEdge)>,
+    /// Device configuration from the manifest, not guest state.
+    #[serde(skip)]
+    busy_status: bool,
+    /// Bit 0 of the last write to +0x04 (engine run), kept after the frame completes.
+    #[serde(default)]
+    enabled: bool,
 }
 impl Input {
     pub fn with_cadence(mut self, period: u64, active: u64) -> Result<Self, String> {
@@ -169,6 +175,14 @@ impl Input {
         self.idle_status = true;
         self
     }
+    /// Read word 15 (+0x17c) as a busy status: bit 31 set while the engine is enabled (last +0x04
+    /// write had bit 0 set) and bit 0 of word 0 (+0x140) is clear. X-E5 0x34f0070 treats both
+    /// clear as idle; the live-view stop 0x34a861c only unregisters frame callbacks when the
+    /// check 0x34e1e60 sees bit 31 set. The firmware never writes +0x17c. Inferred polarity.
+    pub fn with_busy_status(mut self) -> Self {
+        self.busy_status = true;
+        self
+    }
     fn retains(&self, offset: u64, size: u8) -> bool {
         self.retain_words && size == 4 && offset & 3 == 0 && offset < 0x1000
     }
@@ -190,6 +204,9 @@ impl Device for Input {
             8 => u64::from(self.word_08),
             0xc => u64::from(self.word_0c),
             0x48 => u64::from(self.acknowledge),
+            0x17c if self.busy_status => {
+                u64::from(self.enabled && self.configuration[0] & 1 == 0) << 31
+            }
             0x17c if self.idle_status => u64::from(self.configuration[0] & 1 == 0) << 31,
             0x140..=0x17c if offset.is_multiple_of(4) => {
                 u64::from(self.configuration[((offset - 0x140) / 4) as usize])
@@ -223,6 +240,7 @@ impl Device for Input {
             self.generation = self.generation.wrapping_add(1);
             self.deadline = None;
             self.running = value & 1 != 0;
+            self.enabled = self.running;
             if self.running {
                 self.deadline = Some(cx.now() + 1_000_000);
                 cx.schedule(self.deadline.unwrap(), self.generation | (1 << 63));
@@ -278,16 +296,17 @@ impl Device for Input {
             self.ready = true;
         }
     }
-    fujimod_emulator_devices::checkpoint_fields!(ready: bool, generation: u64, running: bool, pending: u32, frames: u64, deadline: Option<u64>, frame_completion: bool, acknowledge: bool, configuration: [u32; 16], word_08: u32, word_0c: u32, #[serde(default)] retained: BTreeMap<u64, u32>, #[serde(default)] frame_edge: Option<(u64, FrameEdge)>);
+    fujimod_emulator_devices::checkpoint_fields!(ready: bool, generation: u64, running: bool, pending: u32, frames: u64, deadline: Option<u64>, frame_completion: bool, acknowledge: bool, configuration: [u32; 16], word_08: u32, word_0c: u32, #[serde(default)] retained: BTreeMap<u64, u32>, #[serde(default)] frame_edge: Option<(u64, FrameEdge)>, #[serde(default)] enabled: bool);
     fn save(&self) -> Value {
         serde_json::to_value(self).unwrap()
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
-        let (retain_words, idle_status, cadence) =
-            (self.retain_words, self.idle_status, self.cadence);
+        let (retain_words, idle_status, busy_status, cadence) =
+            (self.retain_words, self.idle_status, self.busy_status, self.cadence);
         *self = serde_json::from_value(value.clone())
             .map_err(|e| format!("input engine checkpoint: {e}"))?;
-        (self.retain_words, self.idle_status, self.cadence) = (retain_words, idle_status, cadence);
+        (self.retain_words, self.idle_status, self.busy_status, self.cadence) =
+            (retain_words, idle_status, busy_status, cadence);
         Ok(())
     }
 }
@@ -503,6 +522,32 @@ mod tests {
             restored.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946140, 4),
             0
         );
+    }
+    #[test]
+    fn input_busy_status_option_reports_busy_while_enabled() {
+        let mut input = Input::default().with_busy_status();
+        let mut host = RecordingHost::default();
+        let read = |input: &mut Input, host: &mut RecordingHost| {
+            input.read(&mut Cx::new(host, 0, 0, 0), 0xff94617c, 4)
+        };
+        // Never started: idle.
+        assert_eq!(read(&mut input, &mut host), 0);
+        input.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff946004, 4, 1);
+        assert_eq!(read(&mut input, &mut host), 1 << 31);
+        // The frame completion clears `running`, but the engine stays enabled.
+        input.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff946140, 4, 0x12c0_0002);
+        assert_eq!(read(&mut input, &mut host), 1 << 31);
+        // Word 0 bit 0 set: not busy.
+        input.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff946140, 4, 0x12c0_ff03);
+        assert_eq!(read(&mut input, &mut host), 0);
+        input.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff946140, 4, 0x12c0_0002);
+        let checkpoint = input.checkpoint().unwrap();
+        let mut restored = Input::default().with_busy_status();
+        restored.restore_checkpoint(&checkpoint).unwrap();
+        assert_eq!(read(&mut restored, &mut host), 1 << 31);
+        // Disabled through +0x04: idle.
+        input.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff946004, 4, 0);
+        assert_eq!(read(&mut input, &mut host), 0);
     }
     #[test]
     fn phy_and_input_reset_wait_for_their_guest_deadlines() {
