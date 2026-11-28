@@ -1,0 +1,62 @@
+diff --git a/src/dynarmic/backend/arm64/a32_address_space.cpp b/src/dynarmic/backend/arm64/a32_address_space.cpp
+--- a/src/dynarmic/backend/arm64/a32_address_space.cpp
++++ b/src/dynarmic/backend/arm64/a32_address_space.cpp
+@@ -372,6 +372,18 @@
+     prelude_info.add_ticks = EmitCallTrampoline<&A32::UserCallbacks::AddTicks>(code, conf.callbacks);
+     prelude_info.get_ticks_remaining = EmitCallTrampoline<&A32::UserCallbacks::GetTicksRemaining>(code, conf.callbacks);
+ 
++    const auto enter_guest_fpcr = [&] {
++        oaknut::Label already_set;
++        code.LDR(Wscratch0, Xstate, offsetof(A32JitState, upper_location_descriptor));
++        code.AND(Wscratch0, Wscratch0, 0xffff0000);
++        code.MRS(Xscratch1, oaknut::SystemReg::FPCR);
++        code.STR(Wscratch1, SP, offsetof(StackLayout, save_host_fpcr));
++        code.EOR(Wscratch1, Wscratch1, Wscratch0);
++        code.CBZ(Wscratch1, already_set);
++        code.MSR(oaknut::SystemReg::FPCR, Xscratch0);
++        code.l(already_set);
++    };
++
+     oaknut::Label return_from_run_code, l_return_to_dispatcher;
+ 
+     prelude_info.run_code = code.xptr<PreludeInfo::RunCodeFuncType>();
+@@ -401,11 +413,7 @@
+             code.STR(Xticks, SP, offsetof(StackLayout, cycles_to_run));
+         }
+ 
+-        code.LDR(Wscratch0, Xstate, offsetof(A32JitState, upper_location_descriptor));
+-        code.AND(Wscratch0, Wscratch0, 0xffff0000);
+-        code.MRS(Xscratch1, oaknut::SystemReg::FPCR);
+-        code.STR(Wscratch1, SP, offsetof(StackLayout, save_host_fpcr));
+-        code.MSR(oaknut::SystemReg::FPCR, Xscratch0);
++        enter_guest_fpcr();
+ 
+         code.LDAR(Wscratch0, Xhalt);
+         code.CBNZ(Wscratch0, return_from_run_code);
+@@ -439,11 +447,7 @@
+             code.STR(Xticks, SP, offsetof(StackLayout, cycles_to_run));
+         }
+ 
+-        code.LDR(Wscratch0, Xstate, offsetof(A32JitState, upper_location_descriptor));
+-        code.AND(Wscratch0, Wscratch0, 0xffff0000);
+-        code.MRS(Xscratch1, oaknut::SystemReg::FPCR);
+-        code.STR(Wscratch1, SP, offsetof(StackLayout, save_host_fpcr));
+-        code.MSR(oaknut::SystemReg::FPCR, Xscratch0);
++        enter_guest_fpcr();
+ 
+         oaknut::Label step_hr_loop;
+         code.l(step_hr_loop);
+@@ -512,8 +516,13 @@
+             code.BL(prelude_info.add_ticks);
+         }
+ 
++        oaknut::Label host_fpcr_restored;
+         code.LDR(Wscratch0, SP, offsetof(StackLayout, save_host_fpcr));
++        code.MRS(Xscratch1, oaknut::SystemReg::FPCR);
++        code.EOR(Wscratch1, Wscratch1, Wscratch0);
++        code.CBZ(Wscratch1, host_fpcr_restored);
+         code.MSR(oaknut::SystemReg::FPCR, Xscratch0);
++        code.l(host_fpcr_restored);
+ 
+         oaknut::Label exit_hr_loop;
+         code.l(exit_hr_loop);

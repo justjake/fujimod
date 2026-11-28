@@ -4067,6 +4067,38 @@ mod tests {
             unsafe { ffi::dynarmic_get_reg(cpu.inst, 2) },
             13.0f32.to_bits()
         );
+
+        #[cfg(target_arch = "aarch64")]
+        {
+            let read_fpcr = || {
+                let value: u64;
+                unsafe { std::arch::asm!("mrs {value}, fpcr", value = out(reg) value) };
+                value
+            };
+            let saved = read_fpcr();
+            let round_up = 1 << 22;
+            let host = saved & !(3 << 22) | round_up;
+            cpu.write_register(arm::CORE[0], &1.0f32.to_bits().to_le_bytes())
+                .unwrap();
+            cpu.write_register(arm::CORE[1], &0x3380_0000u32.to_le_bytes())
+                .unwrap(); // Half an ULP at 1.0.
+            unsafe { ffi::dynarmic_set_fpscr(cpu.inst, 0) };
+            unsafe { std::arch::asm!("msr fpcr, {value}", value = in(reg) host) };
+            let different_modes = run(0x1000, 5);
+            let different_host = read_fpcr();
+            let nearest = unsafe { ffi::dynarmic_get_reg(cpu.inst, 2) };
+            unsafe { ffi::dynarmic_set_fpscr(cpu.inst, round_up as u32) };
+            let equal_modes = run(0x1000, 5);
+            let equal_host = read_fpcr();
+            let upward = unsafe { ffi::dynarmic_get_reg(cpu.inst, 2) };
+            unsafe { std::arch::asm!("msr fpcr, {value}", value = in(reg) saved) };
+            different_modes.unwrap();
+            equal_modes.unwrap();
+            assert_eq!(different_host, host);
+            assert_eq!(equal_host, host);
+            assert_eq!(nearest, 1.0f32.to_bits());
+            assert_eq!(upward, 1.0f32.to_bits() + 2);
+        }
     }
 
     #[test]
