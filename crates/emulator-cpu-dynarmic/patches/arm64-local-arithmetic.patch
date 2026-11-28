@@ -1,5 +1,4 @@
 diff --git a/src/dynarmic/backend/arm64/a32_address_space.cpp b/src/dynarmic/backend/arm64/a32_address_space.cpp
-index 10e72155..58d8b10a 100644
 --- a/src/dynarmic/backend/arm64/a32_address_space.cpp
 +++ b/src/dynarmic/backend/arm64/a32_address_space.cpp
 @@ -3,6 +3,8 @@
@@ -11,15 +10,16 @@ index 10e72155..58d8b10a 100644
  #include "dynarmic/backend/arm64/a32_address_space.h"
 
  #include "dynarmic/backend/arm64/a32_jitstate.h"
-@@ -16,6 +18,7 @@
+@@ -16,6 +18,8 @@
  #include "dynarmic/frontend/A32/translate/a32_translate.h"
  #include "dynarmic/interface/A32/config.h"
  #include "dynarmic/interface/exclusive_monitor.h"
 +#include "dynarmic/ir/basic_block.h"
++#include "dynarmic/ir/opcodes.h"
  #include "dynarmic/ir/opt/passes.h"
 
  namespace Dynarmic::Backend::Arm64 {
-@@ -218,6 +221,61 @@ A32AddressSpace::A32AddressSpace(const A32::UserConfig& conf)
+@@ -218,6 +222,61 @@ A32AddressSpace::A32AddressSpace(const A32::UserConfig& conf)
      EmitPrelude();
  }
 
@@ -81,7 +81,7 @@ index 10e72155..58d8b10a 100644
  IR::Block A32AddressSpace::GenerateIR(IR::LocationDescriptor descriptor) const {
      IR::Block ir_block = A32::Translate(A32::LocationDescriptor{descriptor}, conf.callbacks, {conf.arch_version, conf.define_unpredictable_behaviour, conf.hook_hint_instructions});
 
-@@ -232,6 +290,7 @@ IR::Block A32AddressSpace::GenerateIR(IR::LocationDescriptor descriptor) const {
+@@ -232,6 +291,7 @@ IR::Block A32AddressSpace::GenerateIR(IR::LocationDescriptor descriptor) const {
      if (conf.HasOptimization(OptimizationFlag::ConstProp)) {
          Optimization::A32ConstantMemoryReads(ir_block, conf.callbacks);
          Optimization::ConstantPropagation(ir_block);
