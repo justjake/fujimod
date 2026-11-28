@@ -402,7 +402,6 @@ mod tests {
         check_peer_store(["unicorn", "unicorn"]);
     }
     #[cfg(all(
-        feature = "dynarmic",
         target_arch = "aarch64",
         any(target_os = "linux", target_os = "macos")
     ))]

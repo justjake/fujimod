@@ -185,7 +185,6 @@ pub fn validate_engine(
 pub(super) struct Engines {
     unicorn: Option<Library>,
     #[cfg(all(
-        feature = "dynarmic",
         any(target_arch = "aarch64", target_arch = "x86_64"),
         any(target_os = "linux", target_os = "macos")
     ))]
@@ -225,7 +224,6 @@ impl Engines {
         Ok(Self {
             unicorn,
             #[cfg(all(
-                feature = "dynarmic",
                 any(target_arch = "aarch64", target_arch = "x86_64"),
                 any(target_os = "linux", target_os = "macos")
             ))]
@@ -245,7 +243,6 @@ impl Engines {
         let model = processor.model;
         if processor.cpu_backend == RunCpuBackend::Dynarmic {
             #[cfg(all(
-                feature = "dynarmic",
                 any(target_arch = "aarch64", target_arch = "x86_64"),
                 any(target_os = "linux", target_os = "macos")
             ))]
@@ -256,7 +253,6 @@ impl Engines {
                 )?,
             ));
             #[cfg(not(all(
-                feature = "dynarmic",
                 any(target_arch = "aarch64", target_arch = "x86_64"),
                 any(target_os = "linux", target_os = "macos")
             )))]
@@ -306,12 +302,11 @@ impl Engines {
     }
 }
 #[cfg(not(all(
-    feature = "dynarmic",
     any(target_arch = "aarch64", target_arch = "x86_64"),
     any(target_os = "linux", target_os = "macos")
 )))]
 fn dynarmic_unavailable() -> String {
-    "cpu_backend=dynarmic requires the Cargo dynarmic feature on x86-64 or ARM64 Linux or macOS"
+    "cpu_backend=dynarmic requires an x86-64 or ARM64 Linux or macOS host"
         .into()
 }
 
@@ -394,7 +389,6 @@ impl Graph {
             return Err("cpu_backend=dynarmic requires a Cortex-A7 processor".into());
         }
         #[cfg(not(all(
-            feature = "dynarmic",
             any(target_arch = "aarch64", target_arch = "x86_64"),
             any(target_os = "linux", target_os = "macos")
         )))]

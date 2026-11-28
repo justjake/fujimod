@@ -1,7 +1,3 @@
-#[cfg(not(feature = "jit"))]
-fn main() {}
-
-#[cfg(feature = "jit")]
 fn main() {
     let arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap();
     let os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();

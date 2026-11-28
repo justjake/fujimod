@@ -243,7 +243,6 @@ fn translated_accounting_lands_on_the_expected_state() {
 }
 
 #[cfg(all(
-    feature = "dynarmic",
     any(target_arch = "aarch64", target_arch = "x86_64"),
     any(target_os = "linux", target_os = "macos")
 ))]
@@ -324,7 +323,6 @@ fn dynarmic_scheduler_window_matches_instruction_observation() {
 }
 
 #[cfg(all(
-    feature = "dynarmic",
     target_arch = "aarch64",
     any(target_os = "linux", target_os = "macos")
 ))]
@@ -442,7 +440,6 @@ fn projected_device_reads_preserve_fractional_clock_and_deadline() {
 }
 
 #[cfg(all(
-    feature = "dynarmic",
     target_arch = "aarch64",
     any(target_os = "linux", target_os = "macos")
 ))]
