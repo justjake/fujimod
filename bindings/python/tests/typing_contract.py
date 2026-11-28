@@ -27,7 +27,7 @@ if TYPE_CHECKING:
         assert_type(await session.read_memory(0, 4), bytes)
         assert_type(await session.device_info(usb.InfoSelector.Product), str)
         await session.device_info(usb.CameraMode.Record)  # ty: ignore[invalid-argument-type]  # Enum groups remain distinct across the bridge.
-        session.missing_operation()  # ty: ignore[unresolved-attribute]  # The bridge must not silently become dynamic.
+        session.missing_operation()  # ty: ignore[missing-attribute]  # The bridge must not silently become dynamic.
 
     def emulator_inputs() -> None:
         board = Board.from_inputs(
