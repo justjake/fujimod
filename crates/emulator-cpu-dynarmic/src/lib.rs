@@ -332,8 +332,6 @@ struct NativeReadWindow {
     additional_reads: u64,
 }
 
-const NATIVE_PAGE_SLOTS: usize = 32;
-
 struct CoreShared {
     rprofile: Option<rprofile::Profile>,
     exclusive: RefCell<Option<BoardExclusive>>,
@@ -374,7 +372,7 @@ struct CoreShared {
     touched_pages: RefCell<Vec<u32>>,
     observed_backings: RefCell<Vec<BackingObserver>>,
 
-    native_pages: [[Cell<Option<NativePage>>; NATIVE_PAGE_SLOTS]; 3],
+    native_pages: [Cell<Option<NativePage>>; 24],
     fault: RefCell<Option<ExecutionError>>,
     abort: Cell<Option<(u32, u32, Access)>>,
     inst: Cell<*mut ffi::DynarmicInstance>,
@@ -1077,15 +1075,10 @@ impl CoreShared {
         let generation = self.native_generation.get();
         let group = match access {
             Access::Read => 0,
-            Access::Write => 1,
-            Access::Fetch => 2,
+            Access::Write => 8,
+            Access::Fetch => 16,
         };
-        // Fold region bits into the index so equally aligned sections can
-        // cache simultaneously, including a stack, data page, and MMIO.
-        let folded = page ^ (page >> 10);
-        let index = (folded ^ (folded >> NATIVE_PAGE_SLOTS.trailing_zeros())) as usize
-            & (NATIVE_PAGE_SLOTS - 1);
-        let slot = &self.native_pages[group][index];
+        let slot = &self.native_pages[group + (page as usize & 7)];
         if let Some(cached) = slot.get()
             && cached.generation == generation
             && cached.page == page
@@ -1838,12 +1831,23 @@ impl Cpu for Core {
             instruction_limit: true,
             instruction_progress: true,
             tighten_instruction_limit: true,
+            guest_clock: self.shared.rprofile.is_some(),
             ..Default::default()
         }
     }
 
     fn supports_projected_device_reads(&self) -> bool {
         cfg!(target_arch = "aarch64")
+    }
+
+    fn set_guest_clock(&self, clock: Clock) -> Result<(), String> {
+        let profile = self
+            .shared
+            .rprofile
+            .as_ref()
+            .ok_or("Dynarmic has no R-profile clock")?;
+        profile.clock.set(Some(clock));
+        Ok(())
     }
 
     fn set_device_read_anchor(&self, anchor: Option<DeviceReadAnchor>) {

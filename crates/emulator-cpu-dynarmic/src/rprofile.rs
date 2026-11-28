@@ -1,8 +1,8 @@
 //! Cortex-R5F memory-protection state that does not exist in the A32 JIT.
 use super::{Core, Mapping, ffi};
 use fujimod_emulator_cpu::{
-    Access, arm,
-    armv7r::{self, tcm},
+    Access, Clock, arm,
+    armv7r::{self, pmu, tcm},
 };
 use serde::{Deserialize, Serialize};
 use std::cell::{Cell, RefCell};
@@ -19,6 +19,8 @@ pub struct Config {
 
 pub(super) struct Profile {
     pub mpu: RefCell<Mpu>,
+    pub clock: Cell<Option<Clock>>,
+    pmu: Cell<pmu::Counter>,
     tcm: [tcm::Bank; 2],
     pub cp14_identity: Cell<u32>,
 }
@@ -26,6 +28,8 @@ pub(super) struct Profile {
 #[derive(Serialize, Deserialize)]
 pub(super) struct Saved {
     mpu: Mpu,
+    clock: Option<Clock>,
+    pmu: pmu::Counter,
     tcm: [SavedBank; 2],
     cp14_identity: u32,
 }
@@ -40,6 +44,8 @@ impl Profile {
     pub fn new(config: Config) -> Result<Self, String> {
         Ok(Self {
             mpu: Default::default(),
+            clock: Cell::new(None),
+            pmu: Cell::new(pmu::Counter::default()),
             tcm: tcm::banks(config.tcm)?,
             cp14_identity: Cell::new(config.cp14_identity),
         })
@@ -74,6 +80,8 @@ impl Profile {
     pub fn capture(&self) -> Saved {
         Saved {
             mpu: self.mpu.borrow().clone(),
+            clock: self.clock.get(),
+            pmu: self.pmu.get(),
             cp14_identity: self.cp14_identity.get(),
             tcm: std::array::from_fn(|index| {
                 let bank = &self.tcm[index];
@@ -98,6 +106,9 @@ impl Profile {
         if !saved.mpu.valid() {
             return Err("invalid saved MPU selector".into());
         }
+        if let Some(clock) = saved.clock {
+            clock.after(0)?;
+        }
         for (bank, saved) in self.tcm.iter().zip(&saved.tcm) {
             let length = bank.memory.len();
             if saved.bytes.len() != length
@@ -117,6 +128,8 @@ impl Profile {
 
     pub fn restore(&self, saved: &Saved) {
         self.mpu.borrow_mut().clone_from(&saved.mpu);
+        self.clock.set(saved.clock);
+        self.pmu.set(saved.pmu);
         self.cp14_identity.set(saved.cp14_identity);
         for (bank, saved) in self.tcm.iter().zip(&saved.tcm) {
             bank.register.set(saved.register);
@@ -161,6 +174,7 @@ pub(super) enum MpuRegister {
 #[derive(Clone, Copy)]
 pub(super) enum SystemRegister {
     Mpu(MpuRegister),
+    Pmu(arm::Coprocessor),
     Tcm(usize),
     Identity,
 }
@@ -169,6 +183,9 @@ impl SystemRegister {
     pub fn decode(cp: arm::Coprocessor) -> Option<Self> {
         if let Some(reg) = MpuRegister::decode(cp) {
             return Some(Self::Mpu(reg));
+        }
+        if pmu::selected(cp) {
+            return Some(Self::Pmu(cp));
         }
         if cp.wide || cp.opc1 != 0 {
             return None;
@@ -302,6 +319,29 @@ impl Core {
                     self.shared.mapping_changed();
                 }
                 Ok(profile.mpu.borrow().read(register))
+            }
+            SystemRegister::Pmu(register) => {
+                if register.wide || register.crn != 9 {
+                    return Err("unmodeled R-profile PMU selector".into());
+                }
+                let clock = profile
+                    .clock
+                    .get()
+                    .ok_or("R-profile PMU requires an explicit guest clock")?;
+                let entries = if self.run_limit.get().is_some() {
+                    self.last_progress.get()
+                } else {
+                    0
+                };
+                let mut counter = profile.pmu.get();
+                let result = counter.access(
+                    register.crm,
+                    register.opc2,
+                    value,
+                    clock.after(entries)?.now,
+                )?;
+                profile.pmu.set(counter);
+                Ok(result)
             }
             SystemRegister::Tcm(index) => {
                 let bank = &profile.tcm[index];
@@ -494,5 +534,44 @@ mod tests {
         cpu.restore(imported.as_ref()).unwrap();
         run(0x2000, 1);
         assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 3) }, 7);
+    }
+
+    #[test]
+    fn pmu_reads_use_the_guest_clock_at_the_instruction_boundary() {
+        use fujimod_emulator_cpu::timeline::Ratio;
+        let cpu = Core::new(Model::CortexR5F).unwrap();
+        cpu.map_zeroed(0, 4096, 7).unwrap();
+        cpu.set_guest_clock(Clock {
+            now: 100,
+            phase: 0,
+            ratio: Ratio::new(1, 2).unwrap(),
+        })
+        .unwrap();
+        cpu.write_register(arm::CORE[0], &1u32.to_le_bytes())
+            .unwrap();
+        cpu.write_register(arm::CORE[1], &0x8000_0000u32.to_le_bytes())
+            .unwrap();
+        for (index, word) in [
+            0xee09_0f1cu32, // mcr p15, 0, r0, c9, c12, 0 (PMCR)
+            0xee09_1f3c,    // mcr p15, 0, r1, c9, c12, 1 (PMCNTENSET)
+            0xe1a0_0000,    // mov r0, r0
+            0xee19_2f1d,    // mrc p15, 0, r2, c9, c13, 0 (PMCCNTR)
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            cpu.write_memory(index as u64 * 4, &word.to_le_bytes())
+                .unwrap();
+        }
+        cpu.set_loop_window(true).unwrap();
+        cpu.run(Run {
+            begin: 0,
+            until: None,
+            watchdog_us: 0,
+            instructions: Some(4),
+        })
+        .unwrap();
+        assert_eq!(cpu.instruction_progress(), Some(4));
+        assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 2) }, 4);
     }
 }

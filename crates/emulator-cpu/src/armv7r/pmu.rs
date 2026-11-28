@@ -1,10 +1,10 @@
 //! Retained R-profile counter law: the cycle counter advances on the explicitly
 //! supplied guest clock, gated by PMCR.E and PMCNTENSET.C. No host clock or
 //! instruction-observation cadence contributes to it.
-use super::*;
+use crate::arm;
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(super) struct Counter {
+pub struct Counter {
     control: u32,
     enabled: u32,
     interrupts: u32,
@@ -14,7 +14,7 @@ pub(super) struct Counter {
     observed: u64,
 }
 
-pub(super) fn selected(r: arm::Coprocessor) -> bool {
+pub fn selected(r: arm::Coprocessor) -> bool {
     r.cp == 15
         && ((r.wide && r.crm == 9)
             || (r.opc1 == 0
@@ -22,14 +22,14 @@ pub(super) fn selected(r: arm::Coprocessor) -> bool {
                     || (r.crn == 14 && (8..=15).contains(&r.crm)))))
 }
 impl Counter {
-    fn check(crm: u32, opc2: u32) -> Result<(), String> {
+    pub fn check(crm: u32, opc2: u32) -> Result<(), String> {
         if matches!((crm, opc2), (12, 0..=3) | (13, 0) | (14, 1..=2)) {
             Ok(())
         } else {
             Err("unmodeled R-profile PMU selector".into())
         }
     }
-    pub(super) fn count(self, now: u64) -> u64 {
+    pub fn count(self, now: u64) -> u64 {
         if self.control & 1 != 0 && self.enabled & 0x80000000 != 0 {
             now.wrapping_sub(self.start)
         } else {
@@ -46,7 +46,7 @@ impl Counter {
         }
         self.observed = count;
     }
-    pub(super) fn access(
+    pub fn access(
         &mut self,
         crm: u32,
         opc2: u32,
@@ -101,33 +101,6 @@ impl Counter {
         }
     }
 }
-impl Execution {
-    pub(super) fn pmu_access(
-        &self,
-        crm: u32,
-        opc2: u32,
-        value: Option<u32>,
-    ) -> Result<u32, String> {
-        Counter::check(crm, opc2)?;
-        let clock = self
-            .clock
-            .get()
-            .ok_or("R-profile PMU requires an explicit guest clock")?;
-        let now = clock
-            .after(if self.active.get() {
-                self.progress()
-                    .ok_or("missing R-profile PMU instruction progress")?
-            } else {
-                0
-            })?
-            .now;
-        let mut counter = self.pmu.get();
-        let result = counter.access(crm, opc2, value, now)?;
-        self.pmu.set(counter);
-        Ok(result)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

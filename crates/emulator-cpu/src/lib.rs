@@ -190,7 +190,7 @@ impl ExecutionPolicy {
 }
 /// Guest-clock anchor for architectural registers implemented by a backend.
 /// Its phase and ratio are supplied by the execution owner, never host time.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Clock {
     pub now: u64,
     pub phase: u64,

@@ -7,7 +7,10 @@ use crate::{
     memory::{Memory, OwnerBarrierLease},
 };
 use fujimod_emulator_cpu::*;
-use fujimod_emulator_cpu::{armv7r::tcm as tcm_banks, memory::Backing};
+use fujimod_emulator_cpu::{
+    armv7r::{pmu, tcm as tcm_banks},
+    memory::Backing,
+};
 use std::cell::{Cell, RefCell, UnsafeCell};
 use std::collections::BTreeMap;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -23,7 +26,6 @@ mod exclusive;
 mod loops;
 mod mapping;
 use crate::observers;
-mod pmu;
 mod run;
 mod snapshot;
 mod tcm;
@@ -1236,5 +1238,32 @@ impl crate::memory::CodeOwner for Execution {
     }
     fn prepare_code_write(&self) -> Result<(), String> {
         self.prepare_flush()
+    }
+}
+
+impl Execution {
+    pub(super) fn pmu_access(
+        &self,
+        crm: u32,
+        opc2: u32,
+        value: Option<u32>,
+    ) -> Result<u32, String> {
+        Counter::check(crm, opc2)?;
+        let clock = self
+            .clock
+            .get()
+            .ok_or("R-profile PMU requires an explicit guest clock")?;
+        let now = clock
+            .after(if self.active.get() {
+                self.progress()
+                    .ok_or("missing R-profile PMU instruction progress")?
+            } else {
+                0
+            })?
+            .now;
+        let mut counter = self.pmu.get();
+        let result = counter.access(crm, opc2, value, now)?;
+        self.pmu.set(counter);
+        Ok(result)
     }
 }
