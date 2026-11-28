@@ -551,16 +551,23 @@ impl Memory {
         let end = address
             .checked_add(bytes as u64)
             .ok_or("physical memory access overflow")?;
-        let chunks = Chunks {
+        let mut chunks = Chunks {
             memory: self,
             mappings: self.mappings.borrow(),
             address,
             end,
             access,
+            first: None,
         };
         // Reject the complete range before any copy or monitor notification.
-        for chunk in chunks.clone() {
-            chunk?;
+        // Retain the first decoded span so a single-span transfer decodes once.
+        if let Some(first) = chunks.next().transpose()? {
+            if chunks.address != chunks.end {
+                for chunk in chunks.clone() {
+                    chunk?;
+                }
+            }
+            chunks.first = Some(first);
         }
         Ok(chunks)
     }
@@ -722,6 +729,7 @@ struct Chunks<'a> {
     address: u64,
     end: u64,
     access: Access,
+    first: Option<(u64, NonNull<u8>, usize)>,
 }
 impl Clone for Chunks<'_> {
     fn clone(&self) -> Self {
@@ -731,12 +739,16 @@ impl Clone for Chunks<'_> {
             address: self.address,
             end: self.end,
             access: self.access,
+            first: self.first,
         }
     }
 }
 impl Iterator for Chunks<'_> {
     type Item = Result<(u64, NonNull<u8>, usize), String>;
     fn next(&mut self) -> Option<Self::Item> {
+        if let Some(first) = self.first.take() {
+            return Some(Ok(first));
+        }
         if self.address == self.end {
             return None;
         }
