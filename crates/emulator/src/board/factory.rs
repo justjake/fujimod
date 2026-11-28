@@ -175,21 +175,13 @@ pub fn validate_engine(
             .into_iter()
             .any(|model| !matches!(model, Model::ArmV8A | Model::CortexM4))
     {
-        return Err(
-            "Hypervisor boards support AArch64 cores and Unicorn M-profile companions".into(),
-        );
+        return Err("Hypervisor boards support AArch64 cores and Cortex-M4 companions".into());
     }
     Ok(())
 }
 
 pub(super) struct Engines {
     unicorn: Option<Library>,
-    #[cfg(all(
-        feature = "dynarmic",
-        any(target_arch = "aarch64", target_arch = "x86_64"),
-        any(target_os = "linux", target_os = "macos")
-    ))]
-    dynarmic_code: fujimod_emulator_cpu_dynarmic::CodeVisibility,
     #[cfg(not(target_os = "emscripten"))]
     unicorn_workers: bool,
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
@@ -237,7 +229,7 @@ fn unicorn_workers(graph: &Graph, options: &Options) -> bool {
     }
 }
 impl Engines {
-    fn new(graph: &Graph, options: &Options) -> Result<Self, String> {
+    fn new(graph: &Graph, options: &Options, _ram: &super::memory::Memory) -> Result<Self, String> {
         validate_engine(
             options.engine,
             graph.processors.iter().map(|processor| processor.model),
@@ -257,7 +249,9 @@ impl Engines {
         };
         #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
         let hypervisor = if need_hvf {
-            Some(fujimod_emulator_cpu_hvf::Vm::new()?)
+            Some(fujimod_emulator_cpu_hvf::Vm::new_with_code_tracker(
+                _ram.code_tracker.clone(),
+            )?)
         } else {
             None
         };
@@ -267,12 +261,6 @@ impl Engines {
         }
         Ok(Self {
             unicorn,
-            #[cfg(all(
-                feature = "dynarmic",
-                any(target_arch = "aarch64", target_arch = "x86_64"),
-                any(target_os = "linux", target_os = "macos")
-            ))]
-            dynarmic_code: Default::default(),
             #[cfg(not(target_os = "emscripten"))]
             unicorn_workers: unicorn_workers(graph, options),
             #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
@@ -285,6 +273,7 @@ impl Engines {
         options: &Options,
         translation_cache_size_bytes: u32,
         memory: &fujimod_emulator_cpu_unicorn::memory::Memory,
+        ram: &super::memory::Memory,
     ) -> Result<Box<dyn Cpu>, String> {
         let model = processor.model;
         if processor.cpu_backend == RunCpuBackend::Dynarmic {
@@ -293,12 +282,16 @@ impl Engines {
                 any(target_arch = "aarch64", target_arch = "x86_64"),
                 any(target_os = "linux", target_os = "macos")
             ))]
-            return Ok(Box::new(
-                fujimod_emulator_cpu_dynarmic::Core::new_with_code_visibility(
+            {
+                let cpu = fujimod_emulator_cpu_dynarmic::Core::new_with_code_tracker(
                     model,
-                    self.dynarmic_code.clone(),
-                )?,
-            ));
+                    ram.code_tracker.clone(),
+                )?;
+                if !ram.all_code_writers_report {
+                    cpu.enable_unreported_writes();
+                }
+                return Ok(Box::new(cpu));
+            }
             #[cfg(not(all(
                 feature = "dynarmic",
                 any(target_arch = "aarch64", target_arch = "x86_64"),
@@ -341,6 +334,7 @@ impl Engines {
             .as_ref()
             .ok_or("Unicorn engine was not constructed")?
             .open(model, translation_cache_size_bytes)?;
+        let raw = raw.with_code_tracker(ram.code_tracker.clone())?;
         // Cortex-A7 cores run on the counted A-profile backend in ARM state.
         // FUJIMOD_A7_PER_INSTRUCTION keeps the per-instruction ARMv7-A path,
         // for comparing the two.
@@ -419,8 +413,9 @@ impl Graph {
                 .iter()
                 .filter(|processor| processor.cpu_backend == RunCpuBackend::Dynarmic)
         };
-        if dynarmic().any(|processor| processor.model != Model::CortexA7) {
-            return Err("cpu_backend=dynarmic requires a Cortex-A7 processor".into());
+        if dynarmic().any(|processor| !matches!(processor.model, Model::CortexA7 | Model::CortexM4))
+        {
+            return Err("cpu_backend=dynarmic requires a Cortex-A7 or Cortex-M4 processor".into());
         }
         #[cfg(not(all(
             feature = "dynarmic",
@@ -574,7 +569,7 @@ impl Graph {
         self.validate()?;
         let peripheral_pages = self.peripheral_pages()?;
         // Validate maps before creating a process-wide native VM.
-        let ram = super::memory::Memory::new(
+        let mut ram = super::memory::Memory::new(
             self.ram
                 .iter()
                 .map(|r| {
@@ -597,12 +592,27 @@ impl Graph {
             Some(bytes) => bytes,
             None => translation_cache_size_bytes(unicorn_processors)?,
         };
-        let engines = Engines::new(&self, &options)?;
+        let engines = Engines::new(&self, &options, &ram)?;
+        ram.all_code_writers_report = true;
+        #[cfg(not(target_os = "emscripten"))]
+        {
+            // Worker cohorts retain their existing code coherence. They
+            // cannot share a thread-affine tracker with the M4.
+            ram.all_code_writers_report &= !engines.unicorn_workers;
+        }
         let memory = fujimod_emulator_cpu_unicorn::memory::Memory::default();
         let cpus = self
             .processors
             .iter()
-            .map(|p| engines.cpu(p, &options, translation_cache_size_bytes, &memory))
+            .map(|p| {
+                engines.cpu(
+                    p,
+                    &options,
+                    translation_cache_size_bytes,
+                    &memory,
+                    &ram,
+                )
+            })
             .collect::<Result<Vec<_>, _>>()?;
         for (core, cpu) in cpus.iter().enumerate() {
             for a in self.mappings.iter().filter(|a| a.core == core) {

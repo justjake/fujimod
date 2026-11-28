@@ -12,6 +12,7 @@ use std::sync::{Arc, Condvar, Mutex};
 pub mod arm;
 pub mod arm64;
 pub mod armv7a;
+pub mod code;
 pub mod exclusive;
 pub mod loop_proof;
 pub mod loops;
@@ -433,6 +434,8 @@ pub enum Exit {
     /// A framework-owned instruction has not entered. PC names its unchanged
     /// entry and progress excludes it; the owner completes and charges it.
     BeforeInstruction(u32),
+    /// A Thumb branch completed with the given EXC_RETURN target.
+    MProfileExceptionReturn(u32),
     Stopped,
     Hint(Hint),
     Trap(Trap),
@@ -950,7 +953,17 @@ pub trait Cpu {
     fn unmap(&self, address: u64, bytes: usize) -> Result<(), String>;
     fn protect(&self, address: u64, bytes: usize, permissions: u32) -> Result<(), String>;
     fn invalidate_code(&self, range: Option<(u64, u64)>) -> Result<(), String>;
+    /// Recheck translated code after backing could have changed without a
+    /// write notification. The owner must quiesce all backing writers first.
+    fn revalidate_code(&self) -> Result<(), String> {
+        self.invalidate_code(None)
+    }
     fn run(&self, request: Run) -> Result<Exit, ExecutionError>;
+    /// Run an M-profile batch after the controller has observed its first
+    /// entry. Return at the next architectural observation or budget boundary.
+    fn run_mprofile_batch(&self, request: Run) -> Result<Exit, ExecutionError> {
+        self.run(request)
+    }
     /// Start a run without waiting for its next callback or completion.
     fn start_run(&self, _request: Run) -> Result<RunToken, ExecutionError> {
         Err(ExecutionError::Backend(

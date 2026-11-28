@@ -24,7 +24,7 @@ pub struct RunFactoryOptions {
     /// Explicit H.264 backend; absence selects the local platform default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub video_encoder_backend: Option<fujimod_catalog_construction::VideoEncoderBackend>,
-    /// CPU backend for Cortex-A7 processors. Absence selects Unicorn.
+    /// CPU backend for Cortex-A7 and Cortex-M4 processors. Absence selects Unicorn.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cpu_backend: Option<RunCpuBackend>,
     /// Selected auxiliary control profile. Absence preserves the base selection.
@@ -199,7 +199,7 @@ pub struct RunFactoryOptions {
     pub hdmi_sink: Option<RunHdmiSink>,
 }
 
-/// Execution backend for Cortex-A7 processors.
+/// Execution backend for Cortex-A7 and Cortex-M4 processors.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(

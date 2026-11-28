@@ -21,11 +21,20 @@ typedef enum DynarmicExitReason {
     DYNARMIC_EXIT_REASON_REPLAY = 10,
 } DynarmicExitReason;
 
+typedef enum ThumbBatchInstruction {
+    THUMB_BATCH_ORDINARY,
+    THUMB_BATCH_OBSERVE,
+    THUMB_BATCH_SINGLE_ACCESS,
+    THUMB_BATCH_STACK_ACCESS,
+} ThumbBatchInstruction;
+
 typedef struct DynarmicCallbacks {
     void* user_data;
     void* inline_read32;
     uint32_t (*batch_instruction)(uint32_t);
+    ThumbBatchInstruction (*thumb_batch_instruction)(void*, uint16_t);
     void (*guard_transfer)(void*, uint32_t, uint32_t);
+    void (*guard_thumb_stack)(void*, uint32_t, uint32_t);
     bool (*read_code)(void*, uint32_t, uint32_t*);
     uint64_t (*read)(void*, uint32_t, uint32_t);
     uint32_t (*timed_read32)(void*, uint32_t, uint64_t);
@@ -44,7 +53,7 @@ typedef struct DynarmicMemoryControl {
 
 typedef struct DynarmicInstance DynarmicInstance;
 
-DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks);
+DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks, bool thumb_only);
 void dynarmic_destroy(DynarmicInstance* inst);
 
 void dynarmic_set_translation_context(DynarmicInstance* inst, uint32_t value);
@@ -62,6 +71,8 @@ void dynarmic_invalidate_cache(DynarmicInstance* inst, uint32_t vaddr, size_t le
 
 uint32_t dynarmic_get_reg(DynarmicInstance* inst, uint32_t reg);
 void dynarmic_set_reg(DynarmicInstance* inst, uint32_t reg, uint32_t val);
+uint32_t dynarmic_get_s(DynarmicInstance* inst, uint32_t reg);
+void dynarmic_set_s(DynarmicInstance* inst, uint32_t reg, uint32_t val);
 
 uint32_t dynarmic_get_cpsr(DynarmicInstance* inst);
 void dynarmic_set_cpsr(DynarmicInstance* inst, uint32_t val);

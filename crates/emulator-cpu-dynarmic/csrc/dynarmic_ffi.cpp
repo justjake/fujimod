@@ -4,6 +4,7 @@
 #include "dynarmic/interface/A32/coprocessor.h"
 #include "dynarmic/interface/exclusive_monitor.h"
 #include "dynarmic/frontend/A32/a32_ir_emitter.h"
+#include "dynarmic/frontend/A32/a32_types.h"
 #include "dynarmic/ir/basic_block.h"
 #include "dynarmic/ir/cond.h"
 #include <memory>
@@ -111,6 +112,11 @@ public:
         self->callbacks.guard_transfer(self->callbacks.user_data, word, base);
     }
 
+    static void GuardThumbStack(std::uint64_t ctx, std::uint64_t instruction, std::uint64_t sp) {
+        const auto* self = reinterpret_cast<UserCallbacksImpl*>(ctx);
+        self->callbacks.guard_thumb_stack(self->callbacks.user_data, instruction, sp);
+    }
+
     bool PreCodeReadHook(bool thumb, VAddr pc, IREmitter& ir) override;
 
     std::optional<std::uint32_t> MemoryReadCode(VAddr vaddr) override;
@@ -189,6 +195,7 @@ private:
     std::optional<std::uint32_t> ReadCheckedCode(VAddr address);
     std::optional<PrefetchedCode> prefetched_code;
     bool compiled_multiple_transfer = false;
+    bool compiled_thumb_access = false;
     DynarmicCallbacks callbacks;
     DynarmicInstance* instance;
     std::uint64_t remaining_ticks = 0;
@@ -197,6 +204,7 @@ private:
 
 struct DynarmicInstance {
     DynarmicCallbacks callbacks;
+    bool thumb_only;
     std::unique_ptr<UserCallbacksImpl> callbacks_impl;
     std::shared_ptr<CP15Impl> cp15_impl;
     ExclusiveMonitor monitor{1};
@@ -218,6 +226,48 @@ bool UserCallbacksImpl::PreCodeReadHook(bool thumb, VAddr pc, IREmitter& ir) {
     if (start.SingleStepping()) return true;
     const bool entry = start.PC() == pc;
     prefetched_code.reset();
+    if (instance->thumb_only) {
+        const auto end_block = [&] {
+            if (entry) {
+                if (thumb) ir.BranchWritePC(ir.Imm32(pc));
+                else ir.BXWritePC(ir.Imm32(pc));
+                ir.CallSupervisor(ir.Imm32(exit_before_instruction));
+                ir.SetTerm(Dynarmic::IR::Term::CheckHalt{Dynarmic::IR::Term::ReturnToDispatch{}});
+            } else {
+                ir.SetTerm(Dynarmic::IR::Term::LinkBlock{ir.current_location});
+            }
+            return false;
+        };
+        // EXC_RETURN targets and failed Thumb exchanges never fetch code.
+        if (!thumb || pc >= 0xffffffe0) return end_block();
+        if (entry) compiled_thumb_access = false;
+        if (compiled_thumb_access || pc - start.PC() >= max_block_instructions * 2)
+            return end_block();
+        const VAddr aligned = pc & ~3u;
+        if (const auto word = ReadCheckedCode(aligned)) {
+            const auto first = static_cast<uint16_t>(*word >> ((pc & 2) * 8));
+            const auto kind = callbacks.thumb_batch_instruction(callbacks.user_data, first);
+            const bool stack = kind == THUMB_BATCH_STACK_ACCESS;
+            const bool access = stack || kind == THUMB_BATCH_SINGLE_ACCESS;
+            if (kind == THUMB_BATCH_OBSERVE || (access && !entry)
+                || (stack && ir.current_location.IT().IsInITBlock()))
+                return end_block();
+            if (first >= 0xe800 && (pc & 2) && !ReadCheckedCode(aligned + 4))
+                return end_block();
+            // A single memory access can replay through the board on a page
+            // miss. Give it its own block so the abort has no retired prefix.
+            compiled_thumb_access = access;
+            if (stack) {
+                ir.CallHostFunction(&UserCallbacksImpl::GuardThumbStack,
+                    ir.Imm64(reinterpret_cast<uintptr_t>(this)), ir.Imm64(first),
+                    ir.ZeroExtendWordToLong(ir.GetRegister(Reg::SP)));
+            }
+            prefetched_code = PrefetchedCode{aligned, *word};
+        } else {
+            return end_block();
+        }
+        return true;
+    }
     if (entry) compiled_multiple_transfer = false;
     const auto word = thumb ? std::nullopt : ReadCheckedCode(pc);
     const auto consume_word = [&] {
@@ -343,9 +393,10 @@ void UserCallbacksImpl::ExceptionRaised(VAddr pc, Exception exception) {
 
 extern "C" {
 
-DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks) {
+DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks, bool thumb_only) {
     auto inst = std::make_unique<DynarmicInstance>();
     inst->callbacks = *callbacks;
+    inst->thumb_only = thumb_only;
 
     inst->callbacks_impl = std::make_unique<UserCallbacksImpl>(inst->callbacks, inst.get());
     inst->cp15_impl = std::make_shared<CP15Impl>(inst.get());
@@ -354,6 +405,8 @@ DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks) {
     conf.callbacks = inst->callbacks_impl.get();
     conf.global_monitor = &inst->monitor;
     conf.arch_version = ArchVersion::v7;
+    conf.thumb_only = thumb_only;
+    conf.always_little_endian = thumb_only;
     // ARM64's inline page table callback path checks MemoryAbort.
     conf.page_table = &inst->page_table;
     conf.timed_read32_cache = static_cast<Dynarmic::A32::TimedRead32Cache*>(callbacks->inline_read32);
@@ -371,7 +424,9 @@ DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks) {
     conf.hook_hint_instructions = true;
     conf.hook_isb = false;
 
-    conf.coprocessors[15] = inst->cp15_impl;
+    if (!thumb_only) {
+        conf.coprocessors[15] = inst->cp15_impl;
+    }
 
     inst->jit = std::make_unique<Jit>(conf);
     return inst.release();
@@ -474,6 +529,14 @@ void dynarmic_set_reg(DynarmicInstance* inst, uint32_t reg, uint32_t val) {
     if (inst && reg <= 15) {
         inst->jit->Regs()[reg] = val;
     }
+}
+
+uint32_t dynarmic_get_s(DynarmicInstance* inst, uint32_t reg) {
+    return inst->jit->ExtRegs()[reg];
+}
+
+void dynarmic_set_s(DynarmicInstance* inst, uint32_t reg, uint32_t val) {
+    inst->jit->ExtRegs()[reg] = val;
 }
 
 uint32_t dynarmic_get_cpsr(DynarmicInstance* inst) {

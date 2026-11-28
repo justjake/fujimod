@@ -3,4 +3,4 @@
 	url = https://github.com/justjake/unicorn.git
 [submodule "emulator-dynarmic"]
 	path = crates/emulator-cpu-dynarmic/vendor/dynarmic
-	url = https://github.com/azahar-emu/dynarmic.git
+	url = https://github.com/justjake/dynarmic.git

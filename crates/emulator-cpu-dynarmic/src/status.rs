@@ -29,14 +29,6 @@ pub(super) struct Banks {
 }
 
 impl Core {
-    fn reg(&self, r: u32) -> u32 {
-        unsafe { ffi::dynarmic_get_reg(self.inst, r) }
-    }
-
-    fn set_reg(&self, r: u32, value: u32) {
-        unsafe { ffi::dynarmic_set_reg(self.inst, r, value) };
-    }
-
     pub(super) fn set_cpsr(&self, value: u32) -> Result<(), String> {
         let old = self.cpsr();
         let previous = bank(old)?;
@@ -80,10 +72,6 @@ impl Core {
 
     pub(super) fn vfp_accessible(&self) -> bool {
         self.fpexc.get() != 0 && self.vfp_permitted()
-    }
-
-    fn cpsr(&self) -> u32 {
-        unsafe { ffi::dynarmic_get_cpsr(self.inst) }
     }
 
     fn spsr_bank(&self) -> Result<usize, String> {

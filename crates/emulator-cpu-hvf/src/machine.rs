@@ -1,10 +1,10 @@
 //! VM-wide stage-2 mappings. All CPUs must be stopped during map/host writes.
 use super::ffi;
 use fujimod_emulator_cpu::exclusive::{Monitors, Owner, Saved, Shared};
-use fujimod_emulator_cpu::{Identity, MemoryRegion};
-use std::collections::BTreeMap;
+use fujimod_emulator_cpu::{Identity, MemoryRegion, Trap, code::CodeTracker};
+use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::c_void;
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Mutex, RwLock, Weak};
 
 pub const PAGE: usize = 0x4000;
 static LIVE: Mutex<Weak<Machine>> = Mutex::new(Weak::new());
@@ -37,10 +37,18 @@ struct Mapping {
     permissions: u32,
     _allocation: Option<Arc<Allocation>>,
 }
+#[derive(Default)]
+struct CodeWatches {
+    revision: Option<u64>,
+    /// Guest IPA page to its declared permissions, including write.
+    protected: BTreeMap<u64, u32>,
+}
 pub struct Machine {
     maps: Mutex<BTreeMap<u64, Mapping>>,
     devices: Mutex<BTreeMap<Identity, Vec<(u64, u64)>>>,
     pub(super) monitors: Shared,
+    code_watches: Mutex<CodeWatches>,
+    pub(super) native_execution: RwLock<()>,
 }
 impl Machine {
     pub fn create() -> Result<Arc<Self>, String> {
@@ -57,6 +65,8 @@ impl Machine {
             maps: Mutex::new(BTreeMap::new()),
             devices: Mutex::new(BTreeMap::new()),
             monitors: Arc::new(Mutex::new(Monitors::default())),
+            code_watches: Mutex::new(CodeWatches::default()),
+            native_execution: RwLock::new(()),
         });
         *live = Arc::downgrade(&vm);
         Ok(vm)
@@ -148,6 +158,146 @@ impl Machine {
                 _allocation: allocation,
             },
         );
+        self.code_watches
+            .lock()
+            .map_err(|_| "HVF code watches poisoned")?
+            .revision = None;
+        Ok(())
+    }
+    fn protect(address: u64, size: usize, permissions: u32) -> Result<(), String> {
+        unsafe {
+            ffi::check(
+                ffi::hv_vm_protect(address, size, permissions as u64),
+                "protect mapping",
+            )
+        }
+    }
+
+    /// Install stage-2 protections before entering a native run. Every guest
+    /// mapping of a watched backing page must fault, including writable aliases.
+    pub(super) fn sync_code_watches(&self, tracker: &CodeTracker) -> Result<(), String> {
+        let revision = tracker.watch_revision();
+        if revision == 0 {
+            return Ok(());
+        }
+        let maps = self.maps.lock().map_err(|_| "HVF maps poisoned")?;
+        let mut watches = self
+            .code_watches
+            .lock()
+            .map_err(|_| "HVF code watches poisoned")?;
+        if watches.revision == Some(revision) {
+            return Ok(());
+        }
+        let _parked = self
+            .native_execution
+            .try_write()
+            .map_err(|_| "HVF code watches require parked vCPUs")?;
+        let mut backing_pages = BTreeSet::new();
+        tracker.watched_pages(|page| {
+            backing_pages.insert(page & !(PAGE - 1));
+        });
+        for (&base, mapping) in maps
+            .iter()
+            .filter(|(_, mapping)| mapping.permissions & 2 != 0)
+        {
+            let end = mapping.pointer + (mapping.end - base) as usize;
+            for &pointer in backing_pages.range(mapping.pointer..end) {
+                let ipa = base + (pointer - mapping.pointer) as u64;
+                if let std::collections::btree_map::Entry::Vacant(entry) =
+                    watches.protected.entry(ipa)
+                {
+                    Self::protect(ipa, PAGE, mapping.permissions & !2)?;
+                    entry.insert(mapping.permissions);
+                }
+            }
+        }
+        watches.revision = Some(revision);
+        Ok(())
+    }
+
+    pub(super) fn is_code_page(&self, address: u64) -> bool {
+        self.code_watches
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .protected
+            .contains_key(&(address & !(PAGE as u64 - 1)))
+    }
+
+    pub(super) fn is_code_write(&self, trap: Trap) -> bool {
+        let esr = trap.syndrome;
+        // Hypervisor can report a write blocked by hv_vm_protect as a
+        // stage-2 translation fault (DFSC 0x07). The IPA must be one of
+        // the writable RAM pages we explicitly protected.
+        matches!(esr >> 26, 0x24 | 0x25)
+            && esr & 0x40 != 0
+            && matches!(esr & 0x3f, 0x04..=0x07 | 0x0c..=0x0f)
+            && self.is_code_page(trap.physical_address)
+    }
+
+    /// Retries one store with only the faulting pages made writable. The
+    /// processor may hit another protected page during a split transfer.
+    /// Always rearm protections and report bytes, even if the retry faults.
+    pub(super) fn complete_code_write(
+        &self,
+        tracker: &CodeTracker,
+        mut trap: Trap,
+        mut step: impl FnMut() -> Result<Option<Trap>, String>,
+    ) -> Result<(), String> {
+        let _parked = self
+            .native_execution
+            .try_write()
+            .map_err(|_| "HVF code writes require parked vCPUs")?;
+        let mut opened = Vec::new();
+        let result = (|| {
+            loop {
+                let ipa = trap.physical_address & !(PAGE as u64 - 1);
+                if !self.is_code_write(trap) || opened.iter().any(|&(page, _)| page == ipa) {
+                    return Err(format!("HVF code store retry faulted: {trap:?}"));
+                }
+                let permissions = self
+                    .code_watches
+                    .lock()
+                    .map_err(|_| "HVF code watches poisoned")?
+                    .protected[&ipa];
+                Self::protect(ipa, PAGE, permissions)?;
+                opened.push((ipa, permissions));
+                let Some(next) = step()? else {
+                    return Ok(());
+                };
+                trap = next;
+            }
+        })();
+        let mut restored = Ok(());
+        for (ipa, permissions) in opened {
+            let protection = Self::protect(ipa, PAGE, permissions & !2);
+            if protection.is_err() {
+                let mut watches = self
+                    .code_watches
+                    .lock()
+                    .unwrap_or_else(|error| error.into_inner());
+                watches.protected.remove(&ipa);
+                watches.revision = None;
+            }
+            let result = protection.and(self.note_code_write(tracker, ipa, PAGE));
+            if restored.is_ok() {
+                restored = result;
+            }
+        }
+        restored.and(result)
+    }
+
+    pub(super) fn note_code_write(
+        &self,
+        tracker: &CodeTracker,
+        address: u64,
+        size: usize,
+    ) -> Result<(), String> {
+        if tracker.watch_revision() != 0 {
+            for (pointer, n) in self.segments(address, size)? {
+                // The owner reports completed writes while all vCPUs are parked.
+                unsafe { tracker.note_write(pointer as *const u8, n) };
+            }
+        }
         Ok(())
     }
     pub fn zeroed(&self, address: u64, size: usize, permissions: u32) -> Result<(), String> {
@@ -363,15 +513,18 @@ impl Machine {
         self.segments(address, size)?;
         self.written(None)?;
         let mut maps = self.maps.lock().map_err(|_| "HVF maps poisoned")?;
-        unsafe {
-            ffi::check(
-                match permissions {
-                    Some(p) => ffi::hv_vm_protect(address, size, p as u64),
-                    None => ffi::hv_vm_unmap(address, size),
-                },
-                "change mapping",
-            )?;
+        match permissions {
+            Some(p) => Self::protect(address, size, p)?,
+            None => unsafe { ffi::check(ffi::hv_vm_unmap(address, size), "unmap")? },
         }
+        let mut watches = self
+            .code_watches
+            .lock()
+            .map_err(|_| "HVF code watches poisoned")?;
+        watches
+            .protected
+            .retain(|&page, _| page < address || page >= end);
+        watches.revision = None;
         let keys: Vec<_> = maps
             .range(..end)
             .filter(|(_, m)| m.end > address)

@@ -90,10 +90,12 @@ struct CoreInterruptMap {
 /// (`before`), instead of settling its entries in batches.
 fn observes_every_instruction(cpu: &dyn Cpu) -> bool {
     let features = cpu.features();
-    !(cpu.model() != fujimod_emulator_cpu::Model::CortexM4
-        && features.architectural_exits
+    !(features.architectural_exits
         && features.instruction_progress
         && features.tighten_instruction_limit)
+}
+fn mprofile_batches(cpu: &dyn Cpu) -> bool {
+    cpu.model() == Model::CortexM4 && !observes_every_instruction(cpu)
 }
 fn device_workers(policy: ExecutionPolicy, preference: usize) -> usize {
     match policy {
@@ -880,14 +882,14 @@ impl Board {
                         )
                 })
             {
-                // Without an M-profile controller (no alias stores to
-                // detect), the board store hook only shows the processor's
-                // stores to a live logical exclusive reservation and to a
-                // write watch. An all-store hook sends every store of the
-                // processor through the engine's slow path, so it is
-                // installed on demand (`sync_store_hook`).
+                // A tracked batch engine already reports writes through its
+                // backing, including aliases. The board observes its ordinary
+                // stores only for reservations and explicit write watches.
                 board.execution_hooks.push(core);
-                if board.cpus[core].model() != fujimod_emulator_cpu::Model::CortexM4 {
+                let cpu = &*board.cpus[core];
+                if cpu.model() != fujimod_emulator_cpu::Model::CortexM4
+                    || board.physical_memory.all_code_writers_report && mprofile_batches(cpu)
+                {
                     board.store_hooks_on_demand[core] = Some(None);
                 } else {
                     let hook = unsafe {
@@ -1365,7 +1367,9 @@ impl Board {
         self.map_mmio(core, 0xe0000000, 0x100000, 0xe0000000)?;
         let mut state = self.state.borrow_mut();
         state.mprofile[core] = Some(profile);
-        state.code_shadow[core] = Some(Default::default());
+        if !mprofile_batches(&*self.cpus[core]) {
+            state.code_shadow[core] = Some(Default::default());
+        }
         state.blocks[core] = Some(Default::default());
         Ok(())
     }
@@ -1441,6 +1445,7 @@ impl Board {
             }
             self.m4_engine_reads.extend(engine_reads.iter().cloned());
         }
+        published_reads.sort_by_key(|read| read.register_offset);
         let binding = Box::new(Binding {
             state: self.state.clone(),
             callback_service_time: self.state.borrow().callback_service_time.clone(),
@@ -1822,32 +1827,23 @@ impl Board {
                     .reset(&*self.cpus[core])?;
             }
             if s.mprofile[core].is_some() {
-                // A peer's guest stores are invisible to this engine, as are
-                // host and DMA writes between its slices. After any of them,
-                // keep the translations only while the shadow can prove
-                // their bytes. DMA invalidates the affected native blocks directly.
-                // An untracked alias store, decoder change or reset discards them.
-                // This holds under either execution policy: a slice on this
-                // path runs alone (a concurrent window never holds a
-                // processor whose slices come here, and it changes the code
-                // run reason when it ends), and the instruction observer runs before
-                // every instruction of this engine whatever the policy.
+                // Peer slices and untracked writes can change translated bytes.
+                // This path runs alone under either policy. Engines with a
+                // board shadow check code at their instruction/block observer.
+                // The batch engine checks only when a writer cannot report.
+                let cpu = &*self.cpus[core];
                 let peer_ran = !s.code_run.is_running(core);
                 let shadow = s.code_shadow[core].as_mut();
-                let discard = match &shadow {
-                    Some(shadow) => shadow.changed() || peer_ran && shadow.unproven(),
-                    None => peer_ran,
-                };
-                if discard {
-                    self.cpus[core].invalidate_code(None)?;
-                }
                 if let Some(shadow) = shadow {
-                    if discard {
+                    if shadow.changed() || peer_ran && shadow.unproven() {
+                        cpu.invalidate_code(None)?;
                         shadow.discarded();
                     } else if peer_ran {
                         shadow.peer_ran();
                     }
                     shadow.begin_slice();
+                } else if peer_ran && !s.memory.all_code_writers_report {
+                    cpu.revalidate_code()?;
                 }
             }
             s.code_run = RunCode::Running(core);
@@ -1902,7 +1898,7 @@ impl Board {
             // Block execution has no engine counter: the board debits entries.
             let mut limit = budget;
             self.state.borrow_mut().run_entries[core] = 0;
-            let mut result = cpu.run(Run {
+            let request = Run {
                 begin: if cpu.model() == fujimod_emulator_cpu::Model::CortexM4
                     || matches!(
                         cpu.model(),
@@ -1917,7 +1913,13 @@ impl Board {
                 until: None,
                 watchdog_us: 0,
                 instructions: (!blocks).then_some(limit),
-            });
+            };
+            let native_mprofile = mprofile_batches(&**cpu);
+            let mut result = if native_mprofile {
+                self.run_mprofile_batches(core, budget as u64)
+            } else {
+                cpu.run(request)
+            };
             // An observer stopped the run for host bookkeeping: it found code
             // changed behind the engine, or (block execution) it changed the
             // PC. Resume the same slice at once: the stop is not a scheduling
@@ -1975,7 +1977,11 @@ impl Board {
                     s.accounted[core] = 0;
                     s.run_entries[core] = 0;
                     if !blocks {
-                        limit = limit.saturating_sub(consumed as usize);
+                        limit = if native_mprofile {
+                            budget.saturating_sub((s.instructions[core] - entered) as usize)
+                        } else {
+                            limit.saturating_sub(consumed as usize)
+                        };
                         if limit == 0 {
                             result = Ok(fujimod_emulator_cpu::Exit::Stopped);
                             break;
@@ -1983,18 +1989,22 @@ impl Board {
                     }
                 }
                 let resume = scalar(&**cpu, Register::Pc)?;
-                result = cpu.run(Run {
-                    begin: if cpu.model() == fujimod_emulator_cpu::Model::CortexM4
-                        || scalar(&**cpu, Register::Pstate)? & 0x20 != 0
-                    {
-                        resume | 1
-                    } else {
-                        resume
-                    },
-                    until: None,
-                    watchdog_us: 0,
-                    instructions: (!blocks).then_some(limit),
-                });
+                result = if native_mprofile {
+                    self.run_mprofile_batches(core, limit as u64)
+                } else {
+                    cpu.run(Run {
+                        begin: if cpu.model() == fujimod_emulator_cpu::Model::CortexM4
+                            || scalar(&**cpu, Register::Pstate)? & 0x20 != 0
+                        {
+                            resume | 1
+                        } else {
+                            resume
+                        },
+                        until: None,
+                        watchdog_us: 0,
+                        instructions: (!blocks).then_some(limit),
+                    })
+                };
             }
             engine_guard.stop();
             engine_guard.set_instructions(cpu.instruction_progress().unwrap_or(0));
@@ -3093,6 +3103,27 @@ impl State {
             .filter(|slice| slice.core == core)
             .map_or(u64::MAX, |slice| slice.room(self.instructions[core]))
     }
+    /// Entries the driver can admit before the next observation, and the
+    /// scheduler's cap when the pins and processor deadlines are settled.
+    fn admission_room(
+        &self,
+        core: usize,
+        remaining: u64,
+        settled: bool,
+    ) -> Result<(u64, Option<u64>), String> {
+        if !settled {
+            // The next instruction needs another pin push and deadline refresh.
+            return Ok((1, None));
+        }
+        let scheduler_room = self.scheduler_room(core);
+        // Cap at the run window and next generic-timer output change.
+        // The timeline also applies the next device deadline.
+        let until = self.clock_limit.unwrap_or(u64::MAX).min(self.settled.until);
+        let room = self
+            .timeline
+            .processor_budget(core, remaining, Some(until))?;
+        Ok((room.min(scheduler_room), Some(scheduler_room)))
+    }
     fn total_instructions(&self) -> Result<u64, String> {
         self.instructions.iter().try_fold(0u64, |sum, n| {
             sum.checked_add(*n)
@@ -3632,8 +3663,12 @@ impl State {
             if use_publication {
                 let tick = host.now();
                 let offset = address - binding.base;
-                if let Some(word) = binding.published_reads.iter().find_map(|read|
-                    read.published_at(offset, u32::from(size), Some(tick)))
+                let reads = &binding.published_reads;
+                let first = reads.partition_point(|read| read.register_offset < offset);
+                if let Some(word) = reads[first..]
+                    .iter()
+                    .take_while(|read| read.register_offset == offset)
+                    .find_map(|read| read.published_at(offset, u32::from(size), Some(tick)))
                 {
                     bus.finish_published_read(host, address, size)?;
                     binding.published_hits.set(binding.published_hits.get() + 1);
@@ -4529,22 +4564,10 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
         } else {
             scan.unit
         };
-        let scheduler_room = settled.then(|| s.scheduler_room(core));
-        let window_room = phases.span(callback_timing::BlockPhase::WindowRoom, || {
-            if let Some(scheduler_room) = scheduler_room {
-                // Until the next device deadline, the end of the run window,
-                // the next generic-timer output change and the peer's turn.
-                let until = s.clock_limit.unwrap_or(u64::MAX).min(s.settled.until);
-                Ok::<_, String>(
-                    room.min(s.timeline.processor_budget(core, u64::MAX, Some(until))?)
-                        .min(scheduler_room),
-                )
-            } else {
-                // The pin push and deadline refresh below are not yet known to
-                // be a fixed point: the next instruction needs them again.
-                Ok(1)
-            }
-        })?;
+        let (window_room, scheduler_room) = phases
+            .span(callback_timing::BlockPhase::WindowRoom, || {
+                s.admission_room(core, room, settled)
+            })?;
         let limit = unit.min(window_room);
         if limit == 0 {
             // No entry fits before the run window ends or the peer's turn.

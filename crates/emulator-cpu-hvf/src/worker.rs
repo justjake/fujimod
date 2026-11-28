@@ -23,6 +23,7 @@ pub enum Op {
     Interrupt(Interrupt, bool),
     Run(Run, ExecutionPolicy, bool),
     RunToNativeExit,
+    StepCodeWrite,
     Resume(bool),
     /// Resume an ordered synchronous run without waiting for a separate ack.
     RunResume(bool),
@@ -183,6 +184,7 @@ pub enum Value {
     Address(u64),
     Registers(Box<Registers>),
     NativeExit(NativeExit),
+    CodeWriteStep(Option<Trap>),
 }
 pub enum Event {
     Before(u64),
@@ -190,6 +192,11 @@ pub enum Event {
     Trap,
     /// A data abort with its instruction already decoded by the worker.
     Mmio(Trap, MmioAccess),
+    CodeWrite(Trap),
+    CodeWritten {
+        address: u64,
+        size: usize,
+    },
     Done(Result<Exit, ExecutionError>),
 }
 #[derive(Clone)]
@@ -783,6 +790,16 @@ impl Processor {
     }
     #[inline]
     fn run_vcpu(&self, operation: &'static str) -> Result<(), String> {
+        let _native = self
+            .vm
+            .native_execution
+            .read()
+            .map_err(|_| "HVF execution gate poisoned")?;
+        self.run_native(operation)
+    }
+
+    #[inline]
+    fn run_native(&self, operation: &'static str) -> Result<(), String> {
         let Some(counters) = self.shared.execution_counters.as_ref() else {
             return unsafe { ffi::check(ffi::hv_vcpu_run(self.cpu), operation) };
         };
@@ -947,7 +964,7 @@ impl Processor {
         self.translation()?
             .translate(va, access, |a| self.table_word(a))
     }
-    fn exclusive(&self, pc: u64, d: arm64::Exclusive) -> Result<(), String> {
+    fn exclusive(&self, pc: u64, d: arm64::Exclusive) -> Result<Option<Event>, String> {
         let address = if d.base == 31 {
             self.sys(self.sp()?)?
         } else {
@@ -971,6 +988,7 @@ impl Processor {
         }
         self.vm.check_access(pa, size, if d.load { 1 } else { 2 })?;
         let mut bytes = [0; 16];
+        let mut event = None;
         if d.load {
             self.vm
                 .exclusive_load(self.monitor, pa, &mut bytes[..size])?;
@@ -1003,11 +1021,15 @@ impl Processor {
                 std::sync::atomic::fence(Ordering::Release);
             }
             let success = self.vm.exclusive_store(self.monitor, pa, &bytes[..size])?;
+            if success && self.vm.is_code_page(pa) {
+                event = Some(Event::CodeWritten { address: pa, size });
+            }
             if d.status != 31 {
                 self.set_reg(d.status as u32, u64::from(!success))?;
             }
         }
-        self.set_reg(ffi::PC, pc.wrapping_add(4))
+        self.set_reg(ffi::PC, pc.wrapping_add(4))?;
+        Ok(event)
     }
     fn observe_native_write(&self, word: u32, pc: u64) -> Result<(), String> {
         if !self.vm.has_exclusive() {
@@ -1374,7 +1396,9 @@ impl Processor {
 
     /// Report an architectural trap; data aborts carry their decoded access.
     fn trap_event(&self, trap: Trap) -> Event {
-        if matches!(trap.syndrome >> 26, 0x24 | 0x25) {
+        if self.vm.is_code_write(trap) {
+            Event::CodeWrite(trap)
+        } else if matches!(trap.syndrome >> 26, 0x24 | 0x25) {
             Event::Mmio(trap, self.prepare_mmio())
         } else {
             Event::Trap
@@ -1473,8 +1497,12 @@ impl Processor {
             if let Some(d) =
                 arm64::decode_exclusive(word).map_err(ExecutionError::InvalidInstruction)?
             {
-                self.exclusive(pc, d)?;
+                let event = self.exclusive(pc, d)?;
                 self.shared.progress.fetch_add(1, Ordering::Relaxed);
+                if let Some(event) = event {
+                    self.send_event(events, event, "HVF code write owner disconnected")?;
+                    self.paused(commands)?;
+                }
                 continue;
             }
             if word & 0xffff_f0ff == 0xd503_305f {
@@ -1742,7 +1770,10 @@ impl Processor {
                     {
                         continue;
                     }
-                    let event = if matches!(ec, 0x24 | 0x25) {
+                    let code_write = self.vm.is_code_write(trap);
+                    let event = if code_write {
+                        Event::CodeWrite(trap)
+                    } else if matches!(ec, 0x24 | 0x25) {
                         let tick = clock
                             .and_then(|clock| clock.after(progress).ok())
                             .map(|clock| clock.now);
@@ -1766,6 +1797,9 @@ impl Processor {
                     let handled = self.paused(commands)?;
                     if !handled {
                         return Ok(Exit::Trap(trap));
+                    }
+                    if code_write {
+                        progress = self.update_interactive_progress(started, scale)?;
                     }
                 }
                 2 => return Err("masked host virtual timer unexpectedly activated".into()),
@@ -1795,6 +1829,38 @@ impl Processor {
             reason => Err(format!("unknown HVF diagnostic exit reason {reason}")),
         }
     }
+    /// The owner holds the VM execution gate with all peers parked. Arm
+    /// single-step so only the faulting instruction can use the open page.
+    fn step_code_write(&self) -> Result<Option<Trap>, String> {
+        let mdscr = self.sys(ffi::MDSCR)?;
+        let pc = self.reg(ffi::PC)?;
+        self.set_sys(ffi::MDSCR, mdscr | 1)?;
+        let result = (|| {
+            loop {
+                self.set_reg(ffi::PSTATE, self.reg(ffi::PSTATE)? | (1 << 21))?;
+                self.run_native("retry watched store")?;
+                let exit = unsafe { *self.exit };
+                match exit.reason {
+                    // An async barrier may have left a canceled-entry latch.
+                    0 if self.reg(ffi::PC)? == pc => continue,
+                    0 if self.reg(ffi::PC)? == pc.wrapping_add(4) => return Ok(None),
+                    1 if exit.exception.syndrome >> 26 == 0x32 => return Ok(None),
+                    1 => {
+                        return Ok(Some(Trap {
+                            syndrome: exit.exception.syndrome,
+                            virtual_address: exit.exception.virtual_address,
+                            physical_address: exit.exception.physical_address,
+                        }));
+                    }
+                    reason => return Err(format!("unexpected HVF code store retry exit {reason}")),
+                }
+            }
+        })();
+        let restore = self.set_reg(ffi::PSTATE, self.reg(ffi::PSTATE)? & !(1 << 21));
+        self.set_sys(ffi::MDSCR, mdscr)?;
+        restore?;
+        result
+    }
     fn execute(&mut self, op: Op) -> Result<Value, String> {
         match op {
             Op::Read(r) => Ok(Value::Bytes(self.read(r)?)),
@@ -1804,6 +1870,7 @@ impl Processor {
             }
             Op::Translate(a, k) => Ok(Value::Address(self.translate(a, k)?)),
             Op::RunToNativeExit => Ok(Value::NativeExit(self.run_to_native_exit()?)),
+            Op::StepCodeWrite => Ok(Value::CodeWriteStep(self.step_code_write()?)),
             Op::Snapshot => Ok(Value::Registers(Box::new(self.snapshot()?))),
             Op::Restore(s) => {
                 self.restore(*s)?;

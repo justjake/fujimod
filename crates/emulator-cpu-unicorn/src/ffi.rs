@@ -258,6 +258,8 @@ const _: () = {
 pub type InsnFilter = unsafe extern "C" fn(*mut c_void, u64, u32) -> c_int;
 pub type Restart = unsafe extern "C" fn(*mut c_void, u64);
 /// A guest store covered translated bytes: physical first byte and width.
+pub type CodeSpan = unsafe extern "C" fn(*mut c_void, *const u8, usize) -> bool;
+pub type BackingStore = unsafe extern "C" fn(*mut c_void, *const u8, usize, bool);
 pub type CodeStore = unsafe extern "C" fn(*mut c_void, u64, i32);
 macro_rules! api {
     ($($field:ident : unsafe extern "C" fn($($args:tt)*) -> $result:ty),+ $(,)?) => {
@@ -355,6 +357,14 @@ mod linked {
             begin: u64,
             end: u64,
         ) -> Error;
+        pub(crate) fn uc_embedder_set_code_tracking(
+            engine: Engine,
+            watched: Option<CodeSpan>,
+            translated: Option<CodeSpan>,
+            store: Option<BackingStore>,
+            data: *mut c_void,
+        ) -> Error;
+        pub(crate) fn uc_embedder_sync_code_tracking(engine: Engine) -> Error;
         fn uc_embedder_set_code_store(
             engine: Engine,
             callback: Option<CodeStore>,
@@ -405,4 +415,6 @@ mod linked {
     }
 }
 
-pub(super) use linked::uc_embedder_invalidate_backing;
+pub(super) use linked::{
+    uc_embedder_invalidate_backing, uc_embedder_set_code_tracking, uc_embedder_sync_code_tracking,
+};

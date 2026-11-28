@@ -41,6 +41,86 @@ fn main() -> Result<(), String> {
             instructions: Some(n),
         })
     }
+    fn watched_code_stores() -> Result<(), String> {
+        use fujimod_emulator_cpu::{code::CodeTracker, memory::Backing};
+        use std::ptr::NonNull;
+
+        let tracker = CodeTracker::default();
+        let backing = Backing::aligned_zeros(0x8000, 0x4000)?;
+        let vm = Vm::new_with_code_tracker(tracker.clone())?;
+        let cpu = vm.cpu(Model::ArmV8A)?;
+        let pointer = NonNull::new(backing.as_ptr()).unwrap();
+        unsafe { cpu.map_backing(0x20000, 0x8000, 7, pointer)? };
+        cpu.map_zeroed(0x10000, 0x4000, 7)?;
+        code(&cpu, 0x10000, &[0xf8008420, 0xd503207f]); // str x0, [x1], #8; wfi
+        code(&cpu, 0x10010, &[0xa9000820, 0xd503207f]); // stp x0, x2, [x1]; wfi
+
+        let watched = unsafe { backing.as_ptr().add(0x3ff8) };
+        tracker.watch_bytes(watched, &[0; 16]);
+        set(&cpu, Register::X(1), 0x23fe8);
+        set(&cpu, Register::X(0), 1);
+        let exit = run(&cpu, 0x10000, 1).map_err(|e| e.to_string())?;
+        assert!(matches!(exit, Exit::Stopped), "{exit:?}");
+        assert_eq!(tracker.revision(), 0);
+        assert_eq!(get(&cpu, Register::X(1)), 0x23ff0);
+
+        // Add an IPA alias after the first run armed the protections.
+        unsafe { cpu.map_backing(0x40000, 0x8000, 7, pointer)? };
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)?;
+        set(&cpu, Register::X(1), 0x43ff8);
+        set(&cpu, Register::X(2), 2);
+        let token = cpu
+            .start_run(Run {
+                begin: 0x10010,
+                until: None,
+                watchdog_us: 2_000_000,
+                instructions: Some(100_000_000),
+            })
+            .map_err(|e| e.to_string())?;
+        let mut faults = 0;
+        loop {
+            match cpu.poll_run(token).map_err(|e| e.to_string())? {
+                RunStatus::Running => thread::yield_now(),
+                RunStatus::CallbackPending => {
+                    faults += 1;
+                    assert_eq!(get(&cpu, Register::Pc), 0x10010);
+                    cpu.request_pause(token).map_err(|e| e.to_string())?;
+                    cpu.service_pending_callback(token)
+                        .map_err(|e| e.to_string())?;
+                }
+                RunStatus::Complete(result) => {
+                    assert!(matches!(result.map_err(|e| e.to_string())?, Exit::Stopped));
+                    break;
+                }
+            }
+        }
+        assert_eq!(faults, 1);
+        assert_eq!(get(&cpu, Register::Pc), 0x10014);
+        let mut words = Vec::new();
+        assert!(tracker.changed_since(0, |word| words.push(word)));
+        assert_eq!(words, [watched.addr(), watched.addr() + 8]);
+        let mut bytes = [0; 16];
+        cpu.read_memory(0x23ff8, &mut bytes)?;
+        assert_eq!([bytes[0], bytes[8]], [1, 2]);
+
+        // Replayed stores must leave the aliases armed for subsequent runs.
+        let revision = tracker.revision();
+        set(&cpu, Register::X(1), 0x43ff8);
+        assert!(matches!(
+            run(&cpu, 0x10000, 100_000_000).map_err(|e| e.to_string())?,
+            Exit::Hint(Hint::WaitForInterrupt)
+        ));
+        assert_eq!(tracker.revision(), revision);
+        assert_eq!(get(&cpu, Register::X(1)), 0x44000);
+        cpu.protect(0x40000, 0x4000, 5)?;
+        set(&cpu, Register::X(1), 0x43ff8);
+        assert!(matches!(run(&cpu, 0x10000, 100_000_000).map_err(|e| e.to_string())?,
+            Exit::Trap(trap)
+                if trap.physical_address == 0x43ff8));
+        assert_eq!(tracker.revision(), revision);
+        println!("PASS: stage-2 code writes through a backing alias");
+        Ok(())
+    }
     fn architectural_board_checks() -> Result<(), String> {
         use fujimod_emulator::board::aprofile::generic_timer::Clock;
         use fujimod_emulator::board::{
@@ -77,6 +157,7 @@ fn main() -> Result<(), String> {
         let mut concurrent = graph(
             (0..2)
                 .map(|core| Processor {
+                    cpu_backend: Default::default(),
                     model: Model::ArmV8A,
                     released: true,
                     parked_until_sgi: false,
@@ -129,6 +210,7 @@ fn main() -> Result<(), String> {
                     gic.system(0, 0xc230, Some(255))?;
                     gic.system(0, 0xc667, Some(1))?;
                     let mut board = graph(vec![Processor {
+                        cpu_backend: Default::default(),
                         model: Model::ArmV8A,
                         released: true,
                         parked_until_sgi: false,
@@ -219,6 +301,7 @@ fn main() -> Result<(), String> {
                 implementation: None,
             };
             let mut board = graph(vec![Processor {
+                cpu_backend: Default::default(),
                 model: Model::ArmV8A,
                 released: true,
                 parked_until_sgi: false,
@@ -332,6 +415,7 @@ fn main() -> Result<(), String> {
                 let mut board = graph(
                     (0..2)
                         .map(|core| Processor {
+                            cpu_backend: Default::default(),
                             model: Model::ArmV8A,
                             released: true,
                             parked_until_sgi: false,
@@ -370,6 +454,7 @@ fn main() -> Result<(), String> {
         Ok(())
     }
 
+    watched_code_stores()?;
     let vm = Vm::new()?;
     assert!(Vm::new().is_err());
     let cpu = vm.cpu(Model::ArmV8A)?;
@@ -1320,6 +1405,7 @@ fn main() -> Result<(), String> {
         let graph = Graph {
             decoders: vec![],
             processors: vec![Processor {
+                cpu_backend: Default::default(),
                 rprofile: None,
                 mprofile: None,
                 model: Model::ArmV8A,
@@ -1463,6 +1549,7 @@ fn main() -> Result<(), String> {
             decoders: vec![],
             processors: vec![
                 Processor {
+                    cpu_backend: Default::default(),
                     model: Model::ArmV8A,
                     rprofile: None,
                     mprofile: None,
@@ -1477,6 +1564,7 @@ fn main() -> Result<(), String> {
                     ],
                 },
                 Processor {
+                    cpu_backend: Default::default(),
                     model: Model::CortexM4,
                     rprofile: None,
                     mprofile: Some(mprofile::Config {
@@ -1637,6 +1725,7 @@ fn main() -> Result<(), String> {
             decoders: vec![],
             processors: vec![
                 Processor {
+                    cpu_backend: Default::default(),
                     model: Model::ArmV8A,
                     rprofile: None,
                     mprofile: None,
@@ -1653,6 +1742,7 @@ fn main() -> Result<(), String> {
                     ],
                 },
                 Processor {
+                    cpu_backend: Default::default(),
                     model: Model::CortexM4,
                     rprofile: None,
                     mprofile: Some(mprofile::Config {

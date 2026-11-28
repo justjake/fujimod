@@ -6,15 +6,15 @@
 
 mod ffi;
 mod loops;
+mod mprofile;
 mod status;
 
-use fujimod_emulator_cpu::{memory::Backing, *};
+use fujimod_emulator_cpu::{code::CodeTracker, memory::Backing, *};
 use std::any::Any;
 use std::cell::{Cell, RefCell, UnsafeCell};
-use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ffi::c_void;
 use std::ptr::NonNull;
-use std::rc::Rc;
 
 #[derive(Clone, Copy)]
 enum Mapping {
@@ -211,105 +211,6 @@ impl NativePage {
     }
 }
 
-struct WatchedPage {
-    seen: [u64; 64],
-    contents: [u8; 4096],
-}
-
-#[derive(Default)]
-struct WatchedPages {
-    pages: RefCell<HashMap<usize, Box<WatchedPage>>>,
-    revision: Cell<u64>,
-    watch_revision: Cell<u64>,
-    changed: RefCell<VecDeque<usize>>,
-}
-
-#[derive(Clone, Default)]
-pub struct CodeVisibility(Rc<WatchedPages>);
-
-impl CodeVisibility {
-    fn watched(&self, pointer: *const u8) -> bool {
-        self.0
-            .pages
-            .borrow()
-            .contains_key(&(pointer.addr() & !4095))
-    }
-
-    fn overlapping_pages(
-        &self,
-        pointer: *const u8,
-        count: usize,
-        mut visit: impl FnMut(usize) -> bool,
-    ) -> bool {
-        if count == 0 {
-            return false;
-        }
-        let start = pointer.addr();
-        let pages = self.0.pages.borrow();
-        let end = start + count;
-        ((start & !4095)..end).step_by(4096).any(|page| {
-            pages.get(&page).is_some_and(|bytes| {
-                (start.saturating_sub(page)..(end - page).min(4096))
-                    .any(|byte| bytes.seen[byte / 64] & (1 << (byte % 64)) != 0)
-                    && visit(page)
-            })
-        })
-    }
-
-    fn overlaps(&self, pointer: *const u8, count: usize) -> bool {
-        self.overlapping_pages(pointer, count, |_| true)
-    }
-
-    fn note_write(&self, pointer: *const u8, count: usize) {
-        if count == 0 {
-            return;
-        }
-        let start = pointer.addr();
-        let end = start + count;
-        let mut pages = self.0.pages.borrow_mut();
-        let mut latest = None;
-        for page in ((start & !4095)..end).step_by(4096) {
-            let Some(watched) = pages.get_mut(&page) else {
-                continue;
-            };
-            for index in start.saturating_sub(page)..(end - page).min(4096) {
-                if watched.seen[index / 64] & (1 << (index % 64)) == 0 {
-                    continue;
-                }
-                let byte = unsafe { pointer.add(page + index - start).read() };
-                if std::mem::replace(&mut watched.contents[index], byte) == byte {
-                    continue;
-                }
-                let word = (page + index) & !3;
-                if latest == Some(word) {
-                    continue;
-                }
-                latest = Some(word);
-                let mut changed = self.0.changed.borrow_mut();
-                if changed.len() == 4096 {
-                    changed.pop_front();
-                }
-                changed.push_back(word);
-                self.0.revision.set(self.0.revision.get().wrapping_add(1));
-            }
-        }
-    }
-
-    fn changed_since(&self, from: u64, mut visit: impl FnMut(usize)) -> bool {
-        let delta = self.0.revision.get().wrapping_sub(from);
-        let changed = self.0.changed.borrow();
-        if delta > changed.len() as u64 {
-            return false;
-        }
-        changed
-            .iter()
-            .skip(changed.len() - delta as usize)
-            .copied()
-            .for_each(&mut visit);
-        true
-    }
-}
-
 #[derive(Clone)]
 struct BoardExclusive {
     monitors: exclusive::Shared,
@@ -328,18 +229,26 @@ struct NativeReadWindow {
 }
 
 struct CoreShared {
+    thumb_only: bool,
+    thumb_observe_stores: Cell<bool>,
+    thumb_stack_rejected: Cell<bool>,
+    thumb_fast_reads: RefCell<HashMap<u64, Vec<FastMmioRead>>>,
+    thumb_cpacr: Cell<u32>,
+    thumb_stepping: Cell<bool>,
     exclusive: RefCell<Option<BoardExclusive>>,
     observe_exclusive_stores: Cell<bool>,
     #[cfg(test)]
     inlined_exclusives: Cell<u64>,
     mappings: RefCell<BTreeMap<u64, Mapping>>,
-    code_visibility: CodeVisibility,
+    code_tracker: CodeTracker,
     seen_revision: Cell<u64>,
     seen_watch_revision: Cell<u64>,
     memory_flushes: Cell<u64>,
     selective_pages: Cell<u64>,
     compiled_words: RefCell<HashMap<usize, BTreeSet<u32>>>,
     compiled_descriptors: RefCell<HashMap<usize, BTreeSet<u32>>>,
+    unreported_writes: Cell<bool>,
+    thumb_code: RefCell<HashMap<u32, mprofile::CodePage>>,
     control_flushes: Cell<u64>,
     mmu_context: Cell<Option<ffi::DynarmicMemoryControl>>,
     contexts: RefCell<Vec<ffi::DynarmicMemoryControl>>,
@@ -440,7 +349,7 @@ impl CoreShared {
         }
     }
 
-    fn observe_instruction(&self, pc: u32) {
+    fn observe_instruction(&self, pc: u32, bytes: u32) {
         let single = {
             let hooks = self.observers.borrow();
             match hooks.as_slice() {
@@ -457,7 +366,7 @@ impl CoreShared {
             } = hook
                 && contains(range, pc.into())
             {
-                unsafe { callback(pc.into(), 4, data) };
+                unsafe { callback(pc.into(), bytes, data) };
             }
         };
         if let Some(hook) = single {
@@ -544,27 +453,11 @@ impl CoreShared {
     }
 
     fn watch_code_backing(&self, pointer: *const u8) {
-        let page = pointer.addr() & !4095;
-        let mut pages = self.code_visibility.0.pages.borrow_mut();
-        let new = !pages.contains_key(&page);
-        let watched = pages.entry(page).or_insert_with(|| {
-            Box::new(WatchedPage {
-                seen: [0; 64],
-                contents: [0; 4096],
-            })
-        });
-        let byte = pointer.addr() - page;
-        let raw = unsafe { pointer.cast::<[u8; 4]>().read() };
-        for (index, value) in (byte..byte + 4).zip(raw) {
-            watched.seen[index / 64] |= 1 << (index % 64);
-            watched.contents[index] = value;
-        }
-        drop(pages);
-        if !new {
+        let bytes = unsafe { pointer.cast::<[u8; 4]>().read() };
+        let Some(revision) = self.code_tracker.watch_bytes(pointer, &bytes) else {
             return;
-        }
-        let revision = self.code_visibility.0.watch_revision.get().wrapping_add(1);
-        self.code_visibility.0.watch_revision.set(revision);
+        };
+        let page = pointer.addr() & !4095;
         self.seen_watch_revision.set(revision);
         for slot in self.touched_pages.borrow().iter().copied() {
             if self.inline_page(slot << 12).addr() & !4095 == page {
@@ -574,7 +467,7 @@ impl CoreShared {
     }
 
     fn before_run(&self, inline_allowed: bool) {
-        let revision = self.code_visibility.0.watch_revision.get();
+        let revision = self.code_tracker.watch_revision();
         if self.seen_watch_revision.replace(revision) != revision || !inline_allowed {
             self.clear_inline_pages();
         }
@@ -584,11 +477,12 @@ impl CoreShared {
         self.clear_inline_pages();
         self.compiled_words.borrow_mut().clear();
         self.compiled_descriptors.borrow_mut().clear();
+        self.thumb_code.borrow_mut().clear();
         unsafe { ffi::dynarmic_clear_cache(self.inst.get()) };
     }
 
     fn flush_changed_code(&self, read_context: bool) {
-        let revision = self.code_visibility.0.revision.get();
+        let revision = self.code_tracker.revision();
         let mut recycle_contexts = false;
         if read_context {
             let mut control = ffi::DynarmicMemoryControl::default();
@@ -647,7 +541,7 @@ impl CoreShared {
                 let mut pages = BTreeSet::new();
                 let mut compiled = self.compiled_words.borrow_mut();
                 let mut descriptors = self.compiled_descriptors.borrow_mut();
-                let complete = self.code_visibility.changed_since(previous, |word| {
+                let complete = self.code_tracker.changed_since(previous, |word| {
                     if let Some(targets) = compiled.remove(&word) {
                         words.extend(targets);
                     }
@@ -685,6 +579,9 @@ impl CoreShared {
     }
 
     fn watch_compiled_word(&self, pointer: *const u8, address: u32) {
+        if self.unreported_writes.get() {
+            self.watch_thumb_code(address, pointer);
+        }
         self.watch_code_backing(pointer);
         self.compiled_words
             .borrow_mut()
@@ -804,8 +701,10 @@ impl CoreShared {
                 i64::from_le_bytes(value),
             );
             if output.is_some() {
-                unsafe { std::ptr::copy_nonoverlapping(piece.as_ptr(), pointer, count) };
-                self.code_visibility.note_write(pointer, count);
+                unsafe {
+                    std::ptr::copy_nonoverlapping(piece.as_ptr(), pointer, count);
+                    self.code_tracker.note_write(pointer, count);
+                }
                 self.note_guest_store(physical, count);
             } else {
                 unsafe { std::ptr::copy_nonoverlapping(pointer, piece.as_mut_ptr(), count) };
@@ -857,7 +756,8 @@ impl CoreShared {
         if permissions & 1 == 0 || unsafe { ptr.as_ptr().add(offset + within) } != pointer {
             return;
         }
-        let write_allowed = !self.code_visibility.watched(pointer)
+        let write_allowed = !self.thumb_observe_stores.get()
+            && !self.code_tracker.watched(pointer)
             && permissions & 2 != 0
             && (access == Access::Write
                 || self.walk(address, Access::Write).ok().and_then(Result::ok) == Some(physical));
@@ -1181,6 +1081,56 @@ impl CoreShared {
         output: Option<u64>,
         elapsed: Option<u64>,
     ) -> u64 {
+        if self.thumb_only && self.batching.get() {
+            let access = if output.is_some() { Access::Write } else { Access::Read };
+            if !self.thumb_stack_rejected.replace(false)
+                && (output.is_none() || !self.thumb_observe_stores.get())
+                && let Some((page, mapping)) = self.native_page(address, size, access)
+            {
+                match mapping {
+                    NativeAccess::Ram(pointer, _)
+                        if output.is_none() || !self.code_tracker.overlaps(pointer, size) =>
+                    {
+                        if cfg!(target_arch = "aarch64") {
+                            self.install_inline_page(address, pointer, access);
+                        }
+                        if let Some(value) = output {
+                            unsafe {
+                                std::ptr::copy_nonoverlapping(
+                                    value.to_le_bytes().as_ptr(),
+                                    pointer,
+                                    size,
+                                )
+                            };
+                            return 0;
+                        }
+                        let mut value = [0; 8];
+                        unsafe { std::ptr::copy_nonoverlapping(pointer, value.as_mut_ptr(), size) };
+                        return u64::from_le_bytes(value);
+                    }
+                    NativeAccess::Mmio(prepared) if output.is_none() => {
+                        let reads = self.thumb_fast_reads.borrow();
+                        if let Some(reads) = reads.get(&page.mapped_base) {
+                            let first =
+                                reads.partition_point(|read| read.register_offset < prepared.offset);
+                            if let Some(value) = reads[first..]
+                                .iter()
+                                .take_while(|read| read.register_offset == prepared.offset)
+                                .find_map(|read| read.read_at(prepared.offset, size as u32, None))
+                            {
+                                return value;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            // Device accesses and observed stores run once in a single step,
+            // where board callbacks see the entry's exact count and PC.
+            self.replay_memory.set(Some(address));
+            unsafe { ffi::dynarmic_abort_access(self.inst.get()) };
+            return 0;
+        }
         if self.batching.get() {
             let access = if output.is_some() {
                 Access::Write
@@ -1222,7 +1172,7 @@ impl CoreShared {
                 },
             };
             if let Some((pointer, physical, room)) = memory
-                && (output.is_none() || !self.code_visibility.overlaps(pointer, room))
+                && (output.is_none() || !self.code_tracker.overlaps(pointer, room))
             {
                 if room > size {
                     self.transfer.set(Some(GuardedTransfer::Span {
@@ -1329,14 +1279,10 @@ impl CoreShared {
             }
             (Mapping::Backing { ptr, .. }, Some(value)) => {
                 unsafe {
-                    std::ptr::copy_nonoverlapping(
-                        value.to_le_bytes().as_ptr(),
-                        ptr.as_ptr().add(offset),
-                        size,
-                    )
-                };
-                self.code_visibility
-                    .note_write(unsafe { ptr.as_ptr().add(offset) }, size);
+                    let pointer = ptr.as_ptr().add(offset);
+                    std::ptr::copy_nonoverlapping(value.to_le_bytes().as_ptr(), pointer, size);
+                    self.code_tracker.note_write(pointer, size);
+                }
                 self.note_guest_store(physical, size);
                 0
             }
@@ -1374,33 +1320,46 @@ pub struct Core {
     owned: RefCell<BTreeMap<u64, Backing>>,
     banks: RefCell<status::Banks>,
     fpexc: Cell<u32>,
+    mprofile: Cell<mprofile::Registers>,
 }
 
 impl Core {
     pub fn new(model: Model) -> Result<Self, String> {
-        Self::new_with_code_visibility(model, CodeVisibility::default())
+        Self::new_with_code_tracker(model, CodeTracker::default())
     }
 
-    pub fn new_with_code_visibility(
-        model: Model,
-        code_visibility: CodeVisibility,
-    ) -> Result<Self, String> {
-        if model != Model::CortexA7 {
-            return Err("Dynarmic requires a Cortex-A7 processor".into());
+    /// Keep Thumb backing snapshots when peers cannot report code writes.
+    /// Configure before running the core.
+    pub fn enable_unreported_writes(&self) {
+        self.shared.unreported_writes.set(self.model == Model::CortexM4);
+    }
+
+    pub fn new_with_code_tracker(model: Model, code_tracker: CodeTracker) -> Result<Self, String> {
+        if !matches!(model, Model::CortexA7 | Model::CortexM4) {
+            return Err("Dynarmic requires a Cortex-A7 or Cortex-M4 processor".into());
         }
+        let thumb_only = model == Model::CortexM4;
         let shared = Box::new(CoreShared {
+            thumb_only,
+            thumb_observe_stores: Cell::new(false),
+            thumb_stack_rejected: Cell::new(false),
+            thumb_fast_reads: RefCell::default(),
+            thumb_cpacr: Cell::new(0),
+            thumb_stepping: Cell::new(false),
             exclusive: RefCell::new(None),
             observe_exclusive_stores: Cell::new(false),
             #[cfg(test)]
             inlined_exclusives: Cell::new(0),
             mappings: RefCell::new(BTreeMap::new()),
-            code_visibility,
+            code_tracker,
             seen_revision: Cell::new(0),
             seen_watch_revision: Cell::new(0),
             memory_flushes: Cell::new(0),
             selective_pages: Cell::new(0),
             compiled_words: RefCell::new(HashMap::new()),
             compiled_descriptors: RefCell::new(HashMap::new()),
+            unreported_writes: Cell::new(false),
+            thumb_code: RefCell::new(HashMap::new()),
             control_flushes: Cell::new(0),
             mmu_context: Default::default(),
             contexts: Default::default(),
@@ -1441,14 +1400,16 @@ impl Core {
                 std::ptr::null_mut()
             },
             batch_instruction,
+            thumb_batch_instruction: Self::thumb_batch_instruction,
             guard_transfer: Self::guard_transfer,
+            guard_thumb_stack: Self::guard_thumb_stack,
             read_code: Self::read_code,
             read: Self::read,
             timed_read32: Self::timed_read32,
             write: Self::write,
         };
 
-        let inst = unsafe { ffi::dynarmic_create(&cb) };
+        let inst = unsafe { ffi::dynarmic_create(&cb, thumb_only) };
         if inst.is_null() {
             return Err("failed to create Dynarmic JIT instance".into());
         }
@@ -1456,7 +1417,7 @@ impl Core {
         shared
             .direct_pages
             .set(unsafe { ffi::dynarmic_data_pages(inst) });
-        unsafe { ffi::dynarmic_set_cpsr(inst, 0xd3) };
+        unsafe { ffi::dynarmic_set_cpsr(inst, 0xd3 | (u32::from(thumb_only) << 5)) };
 
         Ok(Self {
             inst,
@@ -1477,7 +1438,49 @@ impl Core {
             owned: RefCell::new(BTreeMap::new()),
             banks: RefCell::new(status::Banks::default()),
             fpexc: Cell::new(0),
+            mprofile: Cell::default(),
         })
+    }
+
+    fn reg(&self, r: u32) -> u32 {
+        unsafe { ffi::dynarmic_get_reg(self.inst, r) }
+    }
+
+    fn set_reg(&self, r: u32, value: u32) {
+        unsafe { ffi::dynarmic_set_reg(self.inst, r, value) };
+    }
+
+    fn cpsr(&self) -> u32 {
+        unsafe { ffi::dynarmic_get_cpsr(self.inst) }
+    }
+
+    fn finish_run(status: ffi::DynarmicExitReason) -> Result<Exit, ExecutionError> {
+        match status {
+            ffi::DynarmicExitReason::Timeout | ffi::DynarmicExitReason::Stopped => {
+                Ok(Exit::Stopped)
+            }
+            ffi::DynarmicExitReason::Wfi => {
+                Ok(Exit::Hint(fujimod_emulator_cpu::Hint::WaitForInterrupt))
+            }
+            ffi::DynarmicExitReason::Wfe => {
+                Ok(Exit::Hint(fujimod_emulator_cpu::Hint::WaitForEvent))
+            }
+            ffi::DynarmicExitReason::Sev => Ok(Exit::Hint(fujimod_emulator_cpu::Hint::SendEvent)),
+            ffi::DynarmicExitReason::Svc => Err(ExecutionError::Backend(
+                "Dynarmic cannot enter supervisor exceptions".into(),
+            )),
+            ffi::DynarmicExitReason::Undefined => Err(ExecutionError::InvalidInstruction(
+                "undefined instruction".into(),
+            )),
+            ffi::DynarmicExitReason::NoExecute => Err(ExecutionError::Memory {
+                fault: Fault::FetchUnmapped,
+                message: "execution fault on unmapped code page".into(),
+            }),
+            ffi::DynarmicExitReason::Breakpoint => Ok(Exit::Stopped),
+            ffi::DynarmicExitReason::Error | ffi::DynarmicExitReason::Replay => {
+                Err(ExecutionError::Backend("dynarmic execution error".into()))
+            }
+        }
     }
 
     fn install_mmio(
@@ -1488,6 +1491,7 @@ impl Core {
         project: Option<DeviceReadProjection>,
     ) -> Result<(), String> {
         self.shared.mapping_changed();
+        self.shared.thumb_fast_reads.borrow_mut().remove(&address);
         self.shared.mappings.borrow_mut().insert(
             address,
             Mapping::Mmio {
@@ -1640,6 +1644,7 @@ pub struct SnapshotData {
     fpscr: u32,
     banks: status::Banks,
     fpexc: u32,
+    mprofile: Option<mprofile::Snapshot>,
 }
 
 impl Snapshot for SnapshotData {
@@ -1666,6 +1671,17 @@ impl Cpu for Core {
 
     fn model(&self) -> Model {
         self.model
+    }
+
+    fn set_execution_policy(
+        &self,
+        policy: fujimod_emulator_cpu::ExecutionPolicy,
+    ) -> Result<(), String> {
+        if self.model == Model::CortexM4 || policy == fujimod_emulator_cpu::ExecutionPolicy::Exact {
+            Ok(())
+        } else {
+            Err("Dynarmic Cortex-A7 requires exact execution policy".into())
+        }
     }
 
     fn set_armv7a_affinity(&self, mpidr: u32) -> Result<(), String> {
@@ -1709,7 +1725,7 @@ impl Cpu for Core {
     }
 
     fn supports_projected_device_reads(&self) -> bool {
-        cfg!(target_arch = "aarch64")
+        self.model == Model::CortexA7 && cfg!(target_arch = "aarch64")
     }
 
     fn set_device_read_anchor(&self, anchor: Option<DeviceReadAnchor>) {
@@ -1730,26 +1746,32 @@ impl Cpu for Core {
     }
 
     fn exception_entries(&self) -> Option<armv7a::Entries> {
-        Some(self.exception_entries.get())
+        (self.model == Model::CortexA7).then(|| self.exception_entries.get())
     }
 
     fn read_register(&self, register: Register, out: &mut [u8]) -> Result<usize, String> {
-        let val = match register {
-            Register::Pc => unsafe { ffi::dynarmic_get_reg(self.inst, 15) },
-            Register::Sp => unsafe { ffi::dynarmic_get_reg(self.inst, 13) },
-            Register::Arm32(arm::Register::R(n @ 0..=15)) => unsafe {
-                ffi::dynarmic_get_reg(self.inst, u32::from(n))
-            },
-            Register::Arm32(arm::Register::Cpsr) | Register::Pstate => unsafe {
-                ffi::dynarmic_get_cpsr(self.inst)
-            },
-            Register::Arm32(arm::Register::Spsr) => self.spsr()?,
-            Register::Arm32(arm::Register::Fpscr) => unsafe { ffi::dynarmic_get_fpscr(self.inst) },
-            Register::Arm32(arm::Register::Cpacr) => unsafe {
-                ffi::dynarmic_get_cp15(self.inst, 0, 1, 0, 2)
-            },
-            Register::Arm32(arm::Register::Fpexc) => self.fpexc.get(),
-            _ => return Err(format!("unsupported register {register:?}")),
+        let val = if self.model == Model::CortexM4 {
+            self.read_mprofile_register(register)?
+        } else {
+            match register {
+                Register::Pc => unsafe { ffi::dynarmic_get_reg(self.inst, 15) },
+                Register::Sp => unsafe { ffi::dynarmic_get_reg(self.inst, 13) },
+                Register::Arm32(arm::Register::R(n @ 0..=15)) => unsafe {
+                    ffi::dynarmic_get_reg(self.inst, u32::from(n))
+                },
+                Register::Arm32(arm::Register::Cpsr) | Register::Pstate => unsafe {
+                    ffi::dynarmic_get_cpsr(self.inst)
+                },
+                Register::Arm32(arm::Register::Spsr) => self.spsr()?,
+                Register::Arm32(arm::Register::Fpscr) => unsafe {
+                    ffi::dynarmic_get_fpscr(self.inst)
+                },
+                Register::Arm32(arm::Register::Cpacr) => unsafe {
+                    ffi::dynarmic_get_cp15(self.inst, 0, 1, 0, 2)
+                },
+                Register::Arm32(arm::Register::Fpexc) => self.fpexc.get(),
+                _ => return Err(format!("unsupported register {register:?}")),
+            }
         };
         let bytes = val.to_le_bytes();
         let len = bytes.len().min(out.len());
@@ -1762,6 +1784,9 @@ impl Cpu for Core {
             return Err("register write requires at least 4 bytes".into());
         }
         let val = u32::from_le_bytes(bytes[..4].try_into().unwrap());
+        if self.model == Model::CortexM4 {
+            return self.write_mprofile_register(register, val);
+        }
         match register {
             Register::Pc => unsafe { ffi::dynarmic_set_reg(self.inst, 15, val) },
             Register::Sp => unsafe { ffi::dynarmic_set_reg(self.inst, 13, val) },
@@ -1780,8 +1805,8 @@ impl Cpu for Core {
     }
 
     fn coprocessor(&self, register: arm::Coprocessor, value: Option<u64>) -> Result<u64, String> {
-        if register.cp != 15 || register.wide {
-            return Err("Dynarmic only supports 32-bit CP15 accesses".into());
+        if self.model != Model::CortexA7 || register.cp != 15 || register.wide {
+            return Err("Dynarmic only supports 32-bit CP15 accesses on Cortex-A7".into());
         }
         if let Some(val) = value {
             let word = u32::try_from(val).map_err(|_| "CP15 value exceeds 32 bits")?;
@@ -1908,16 +1933,11 @@ impl Cpu for Core {
                     let offset = (address - base) as usize;
                     if offset + bytes.len() <= *m_bytes {
                         unsafe {
-                            std::ptr::copy_nonoverlapping(
-                                bytes.as_ptr(),
-                                ptr.as_ptr().add(offset),
-                                bytes.len(),
-                            );
+                            let pointer = ptr.as_ptr().add(offset);
+                            std::ptr::copy_nonoverlapping(bytes.as_ptr(), pointer, bytes.len());
                             ffi::dynarmic_invalidate_cache(self.inst, address as u32, bytes.len());
+                            self.shared.code_tracker.note_write(pointer, bytes.len());
                         }
-                        self.shared
-                            .code_visibility
-                            .note_write(unsafe { ptr.as_ptr().add(offset) }, bytes.len());
                         return Ok(());
                     }
                 }
@@ -2003,10 +2023,15 @@ impl Cpu for Core {
         address: u64,
         bytes: usize,
         callbacks: Mmio,
-        _fast_reads: Vec<FastMmioRead>,
+        mut fast_reads: Vec<FastMmioRead>,
         project: DeviceReadProjection,
     ) -> Result<(), String> {
-        self.install_mmio(address, bytes, callbacks, Some(project))
+        self.install_mmio(address, bytes, callbacks, Some(project))?;
+        if self.model == Model::CortexM4 && !fast_reads.is_empty() {
+            fast_reads.sort_by_key(|read| read.register_offset);
+            self.shared.thumb_fast_reads.borrow_mut().insert(address, fast_reads);
+        }
+        Ok(())
     }
 
     fn unmap(&self, address: u64, bytes: usize) -> Result<(), String> {
@@ -2021,6 +2046,7 @@ impl Cpu for Core {
         }
         self.shared.mapping_changed();
         self.shared.mappings.borrow_mut().remove(&address);
+        self.shared.thumb_fast_reads.borrow_mut().remove(&address);
         self.owned.borrow_mut().remove(&address);
         self.invalidate_code(Some((address, address + bytes as u64)))?;
         self.memory_regions
@@ -2039,10 +2065,10 @@ impl Cpu for Core {
         backing: NonNull<u8>,
         bytes: usize,
     ) -> Result<(), String> {
-        self.shared
-            .code_visibility
-            .note_write(backing.as_ptr(), bytes);
-        unsafe { ffi::dynarmic_invalidate_cache(self.inst, physical as u32, bytes) };
+        unsafe {
+            self.shared.code_tracker.note_write(backing.as_ptr(), bytes);
+            ffi::dynarmic_invalidate_cache(self.inst, physical as u32, bytes);
+        }
         Ok(())
     }
 
@@ -2056,12 +2082,25 @@ impl Cpu for Core {
                 );
             }
         } else {
+            self.shared.thumb_code.borrow_mut().clear();
             unsafe { ffi::dynarmic_clear_cache(self.inst) };
         }
         Ok(())
     }
 
+    fn revalidate_code(&self) -> Result<(), String> {
+        if self.model == Model::CortexM4 {
+            self.shared.revalidate_thumb_code();
+            Ok(())
+        } else {
+            self.invalidate_code(None)
+        }
+    }
+
     fn run(&self, request: Run) -> Result<Exit, ExecutionError> {
+        if self.model == Model::CortexM4 {
+            return self.run_thumb(request, false);
+        }
         if self.run_limit.get().is_some() {
             return Err("nested Dynarmic execution is unsupported".into());
         }
@@ -2182,7 +2221,7 @@ impl Cpu for Core {
                 }
             };
             self.shared.stopped.set(false);
-            self.shared.observe_instruction(pc);
+            self.shared.observe_instruction(pc, 4);
             if self.shared.stopped.get() || remaining() == 0 {
                 break ffi::DynarmicExitReason::Stopped;
             }
@@ -2275,32 +2314,14 @@ impl Cpu for Core {
             }
         };
 
-        match status {
-            ffi::DynarmicExitReason::Timeout | ffi::DynarmicExitReason::Stopped => {
-                Ok(Exit::Stopped)
-            }
-            ffi::DynarmicExitReason::Wfi => {
-                Ok(Exit::Hint(fujimod_emulator_cpu::Hint::WaitForInterrupt))
-            }
-            ffi::DynarmicExitReason::Wfe => {
-                Ok(Exit::Hint(fujimod_emulator_cpu::Hint::WaitForEvent))
-            }
-            ffi::DynarmicExitReason::Sev => Ok(Exit::Hint(fujimod_emulator_cpu::Hint::SendEvent)),
-            ffi::DynarmicExitReason::Svc => Err(ExecutionError::Backend(
-                "Dynarmic cannot enter ARMv7-A supervisor exceptions".into(),
-            )),
-            ffi::DynarmicExitReason::Undefined => Err(ExecutionError::InvalidInstruction(
-                "undefined instruction".into(),
-            )),
-            ffi::DynarmicExitReason::NoExecute => Err(ExecutionError::Memory {
-                fault: Fault::FetchUnmapped,
-                message: "execution fault on unmapped code page".into(),
-            }),
-            ffi::DynarmicExitReason::Breakpoint => Ok(Exit::Stopped),
-            ffi::DynarmicExitReason::Error | ffi::DynarmicExitReason::Replay => {
-                Err(ExecutionError::Backend("dynarmic execution error".into()))
-            }
+        Self::finish_run(status)
+    }
+
+    fn run_mprofile_batch(&self, request: Run) -> Result<Exit, ExecutionError> {
+        if self.model != Model::CortexM4 {
+            return Err("M-profile batch requires a Cortex-M4".into());
         }
+        self.run_thumb(request, true)
     }
 
     fn set_loop_window(&self, stable: bool) -> Result<(), String> {
@@ -2309,6 +2330,10 @@ impl Cpu for Core {
     }
 
     fn set_loop_mode(&self, mode: fujimod_emulator_cpu::loops::LoopMode) -> Result<(), String> {
+        if self.model == Model::CortexM4 && mode != fujimod_emulator_cpu::loops::LoopMode::Disabled
+        {
+            return Err("Dynarmic Cortex-M4 has no loop acceleration".into());
+        }
         self.loops.mode.set(mode);
         Ok(())
     }
@@ -2321,7 +2346,7 @@ impl Cpu for Core {
     }
 
     fn instruction_progress(&self) -> Option<u64> {
-        Some(self.last_progress.get())
+        Some(self.last_progress.get() + u64::from(self.shared.thumb_stepping.get()))
     }
 
     fn stop(&self) -> Result<(), String> {
@@ -2331,8 +2356,8 @@ impl Cpu for Core {
     }
 
     fn snapshot(&self, _previous: Option<&dyn Snapshot>) -> Result<Box<dyn Snapshot>, String> {
-        let regs = std::array::from_fn(|i| unsafe { ffi::dynarmic_get_reg(self.inst, i as u32) });
-        let cpsr = unsafe { ffi::dynarmic_get_cpsr(self.inst) };
+        let regs = std::array::from_fn(|i| self.reg(i as u32));
+        let cpsr = self.cpsr();
         let fpscr = unsafe { ffi::dynarmic_get_fpscr(self.inst) };
         Ok(Box::new(SnapshotData {
             owner: self.identity,
@@ -2341,6 +2366,7 @@ impl Cpu for Core {
             fpscr,
             banks: self.banks.borrow().clone(),
             fpexc: self.fpexc.get(),
+            mprofile: (self.model == Model::CortexM4).then(|| self.snapshot_mprofile()),
         }))
     }
 
@@ -2355,11 +2381,14 @@ impl Cpu for Core {
         *self.banks.borrow_mut() = state.banks.clone();
         self.fpexc.set(state.fpexc);
         for (i, &val) in state.regs.iter().enumerate() {
-            unsafe { ffi::dynarmic_set_reg(self.inst, i as u32, val) };
+            self.set_reg(i as u32, val);
         }
         unsafe {
             ffi::dynarmic_set_cpsr(self.inst, state.cpsr);
             ffi::dynarmic_set_fpscr(self.inst, state.fpscr);
+        }
+        if let Some(mprofile) = &state.mprofile {
+            self.restore_mprofile(mprofile);
         }
         Ok(())
     }
@@ -2457,6 +2486,39 @@ impl Cpu for Core {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn thumb_revalidation_covers_both_pages_of_an_instruction_and_their_aliases() {
+        let ram = Backing::aligned_zeros(0x2000, 0x1000).unwrap();
+        let cpu = Core::new(Model::CortexM4).unwrap();
+        for base in [0x1000, 0x4000] {
+            unsafe { cpu.map_backing(base, 0x2000, 7, NonNull::new(ram.as_ptr()).unwrap()) }
+                .unwrap();
+        }
+        cpu.enable_unreported_writes();
+        // movw r0, #1 across a page boundary, then a branch to itself.
+        cpu.write_memory(0x1ffe, &[0x40, 0xf2, 1, 0, 0xfe, 0xe7])
+            .unwrap();
+        let run = |begin, expected| {
+            cpu.run_mprofile_batch(Run {
+                begin,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(2),
+            })
+            .unwrap();
+            assert_eq!(cpu.instruction_progress(), Some(2));
+            assert_eq!(cpu.reg(0), expected);
+        };
+        run(0x1fff, 1);
+        run(0x4fff, 1);
+
+        // A peer backend writes backing directly, without calling note_write.
+        unsafe { ram.as_ptr().add(0x1000).write(9) };
+        cpu.revalidate_code().unwrap();
+        run(0x1fff, 9);
+        run(0x4fff, 9);
+    }
 
     #[test]
     fn test_dynarmic_execution() {
@@ -2581,10 +2643,9 @@ mod tests {
         for allow_native in [false, true] {
             let backing = Backing::aligned_zeros(4096, 4096).unwrap();
             let ptr = NonNull::new(backing.as_ptr()).unwrap();
-            let visibility = CodeVisibility::default();
-            let reader =
-                Core::new_with_code_visibility(Model::CortexA7, visibility.clone()).unwrap();
-            let writer = Core::new_with_code_visibility(Model::CortexA7, visibility).unwrap();
+            let tracker = CodeTracker::default();
+            let reader = Core::new_with_code_tracker(Model::CortexA7, tracker.clone()).unwrap();
+            let writer = Core::new_with_code_tracker(Model::CortexA7, tracker).unwrap();
             unsafe {
                 reader.map_backing(0x1000, 4096, 7, ptr).unwrap();
                 writer.map_backing(0x3000, 4096, 7, ptr).unwrap();
@@ -2628,9 +2689,9 @@ mod tests {
     fn indirect_dispatch_refetches_code_written_through_a_peer_alias() {
         let backing = Backing::aligned_zeros(4096, 4096).unwrap();
         let ptr = NonNull::new(backing.as_ptr()).unwrap();
-        let visibility = CodeVisibility::default();
-        let reader = Core::new_with_code_visibility(Model::CortexA7, visibility.clone()).unwrap();
-        let writer = Core::new_with_code_visibility(Model::CortexA7, visibility).unwrap();
+        let tracker = CodeTracker::default();
+        let reader = Core::new_with_code_tracker(Model::CortexA7, tracker.clone()).unwrap();
+        let writer = Core::new_with_code_tracker(Model::CortexA7, tracker).unwrap();
         unsafe {
             reader.map_backing(0x1000, 4096, 7, ptr).unwrap();
             writer.map_backing(0x3000, 4096, 7, ptr).unwrap();

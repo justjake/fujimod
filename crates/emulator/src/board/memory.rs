@@ -77,6 +77,8 @@ pub struct Memory {
     regions: Vec<(u64, Backing)>,
     mappings: RefCell<Vec<BusMapping>>,
     trackers: Vec<fujimod_emulator_cpu::memory::pages::Tracker>,
+    pub(super) code_tracker: fujimod_emulator_cpu::code::CodeTracker,
+    pub(super) all_code_writers_report: bool,
     pub(super) observation: RefCell<Option<std::rc::Weak<RefCell<super::observation::Records>>>>,
     pub(super) preservation:
         RefCell<Option<std::rc::Weak<RefCell<super::preservation::PreservationRecords>>>>,
@@ -352,8 +354,9 @@ impl Memory {
                             .fault(super::preservation::PreservationFault::UnsupportedAccess),
                     }
                 }
-                for cpu in cpus {
-                    unsafe {
+                unsafe {
+                    self.code_tracker.note_write(pointer.as_ptr(), bytes);
+                    for cpu in cpus {
                         cpu.backing_written(physical, pointer, bytes)?;
                     }
                 }
@@ -404,10 +407,7 @@ impl Memory {
             regions,
             mappings: RefCell::new(mappings),
             trackers,
-            observation: Default::default(),
-            preservation: Default::default(),
-            continuation: Default::default(),
-            write_watch: Default::default(),
+            ..Default::default()
         })
     }
     pub(super) fn clear_preservation(
@@ -480,6 +480,7 @@ impl Memory {
             self.mark(pointer, len)?;
             unsafe {
                 std::ptr::copy_nonoverlapping(bytes.as_ptr().add(offset), pointer.as_ptr(), len);
+                self.code_tracker.note_write(pointer.as_ptr(), len);
                 for cpu in cpus {
                     cpu.backing_written(physical, pointer, len)?;
                 }
@@ -612,6 +613,7 @@ impl Memory {
             self.mark(pointer, len)?;
             unsafe {
                 std::ptr::copy_nonoverlapping(bytes.as_ptr().add(offset), pointer.as_ptr(), len);
+                self.code_tracker.note_write(pointer.as_ptr(), len);
                 for cpu in cpus {
                     cpu.backing_written(physical, pointer, len)?;
                 }

@@ -24,6 +24,7 @@ mod alignment_tests;
 mod architecture;
 #[cfg(test)]
 mod code_store_tests;
+mod code_tracking;
 #[cfg(test)]
 mod dual_architecture_tests;
 mod durable;
@@ -190,6 +191,7 @@ impl Library {
             next_hook: Cell::new(1),
             translation: RefCell::new(None),
             code_store: RefCell::new(None),
+            code_tracking: None,
             thumb_metadata: Rc::new(Cell::new(false)),
             instruction_active: Rc::new(Cell::new(false)),
             callback_error: Rc::new(RefCell::new(None)),
@@ -277,6 +279,7 @@ pub struct Core {
     next_hook: Cell<usize>,
     translation: RefCell<Option<Box<InstalledTranslationHooks>>>,
     code_store: RefCell<Option<Box<InstalledCodeStore>>>,
+    code_tracking: Option<Box<code_tracking::CodeTracking>>,
     thumb_metadata: Rc<Cell<bool>>,
     instruction_active: Rc<Cell<bool>>,
     callback_error: Rc<RefCell<Option<String>>>,
@@ -1373,6 +1376,9 @@ impl Cpu for Core {
                 self.invalidate_code(Some((new, end)))?;
             }
             self.run_until.set(request.until);
+        }
+        if let Some(tracking) = &self.code_tracking {
+            tracking.before_run(self)?;
         }
         self.callback_error.borrow_mut().take();
         self.unmapped.set(None);

@@ -17,6 +17,14 @@ pub enum DynarmicExitReason {
     Replay = 10,
 }
 
+#[repr(C)]
+pub enum ThumbBatchInstruction {
+    Ordinary,
+    Observe,
+    SingleAccess,
+    StackAccess,
+}
+
 // Layout shared with Dynarmic's ARM64 TimedRead32Cache.
 #[repr(C)]
 pub struct DynarmicDirectRead {
@@ -52,7 +60,9 @@ pub struct DynarmicCallbacks {
     pub user_data: *mut c_void,
     pub inline_read32: *mut DynarmicDirectRead,
     pub batch_instruction: extern "C" fn(u32) -> u32,
+    pub thumb_batch_instruction: unsafe extern "C" fn(*mut c_void, u16) -> ThumbBatchInstruction,
     pub guard_transfer: unsafe extern "C" fn(*mut c_void, u32, u32),
+    pub guard_thumb_stack: unsafe extern "C" fn(*mut c_void, u32, u32),
     pub read_code: unsafe extern "C" fn(*mut c_void, u32, *mut u32) -> bool,
     pub read: unsafe extern "C" fn(*mut c_void, u32, u32) -> u64,
     pub timed_read32: unsafe extern "C" fn(*mut c_void, u32, u64) -> u32,
@@ -74,7 +84,10 @@ pub struct DynarmicMemoryControl {
 pub enum DynarmicInstance {}
 
 unsafe extern "C" {
-    pub fn dynarmic_create(callbacks: *const DynarmicCallbacks) -> *mut DynarmicInstance;
+    pub fn dynarmic_create(
+        callbacks: *const DynarmicCallbacks,
+        thumb_only: bool,
+    ) -> *mut DynarmicInstance;
     pub fn dynarmic_destroy(inst: *mut DynarmicInstance);
     pub fn dynarmic_set_translation_context(inst: *mut DynarmicInstance, value: u32);
     pub fn dynarmic_observe_stores(inst: *mut DynarmicInstance, enabled: bool);
@@ -96,6 +109,8 @@ unsafe extern "C" {
     pub fn dynarmic_invalidate_cache(inst: *mut DynarmicInstance, vaddr: u32, length: usize);
     pub fn dynarmic_get_reg(inst: *mut DynarmicInstance, reg: u32) -> u32;
     pub fn dynarmic_set_reg(inst: *mut DynarmicInstance, reg: u32, val: u32);
+    pub fn dynarmic_get_s(inst: *mut DynarmicInstance, reg: u32) -> u32;
+    pub fn dynarmic_set_s(inst: *mut DynarmicInstance, reg: u32, val: u32);
     pub fn dynarmic_get_cpsr(inst: *mut DynarmicInstance) -> u32;
     pub fn dynarmic_set_cpsr(inst: *mut DynarmicInstance, val: u32);
     pub fn dynarmic_get_fpscr(inst: *mut DynarmicInstance) -> u32;

@@ -30,7 +30,7 @@ fn main() {
         "cargo:rustc-link-lib={}",
         if os == "macos" { "c++" } else { "stdc++" }
     );
-    for path in ["CMakeLists.txt", "csrc", "patches", "vendor/dynarmic"] {
+    for path in ["CMakeLists.txt", "csrc", "vendor/dynarmic"] {
         println!("cargo:rerun-if-changed={path}");
     }
 }

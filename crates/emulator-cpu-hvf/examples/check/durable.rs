@@ -12,6 +12,7 @@ use fujimod_emulator_ip_arm::gicv3::Gic;
 fn board() -> Result<Board, String> {
     Graph {
         processors: vec![Processor {
+            cpu_backend: Default::default(),
             model: Model::ArmV8A,
             released: true,
             parked_until_sgi: false,
