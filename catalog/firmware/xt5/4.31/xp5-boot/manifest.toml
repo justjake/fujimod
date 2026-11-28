@@ -78,7 +78,8 @@ size = 0x1a0000
 
 # Boot SRAM, 256 KiB. The SoC profile maps it only for ROM/SD starts, but the application keeps the AE
 # statistics banks here (0xff800000 and 0xff8075a0, 0x75a0 bytes each; planes at 0xff80eb40; counter
-# 0xff82c008). The statistics model writes its frames into this RAM (no imaging-statistics window).
+# 0xff82c008). The statistics model writes its frames into this RAM (the statistics block lies in
+# declared RAM, so it registers no device window).
 [[ram]]
 base = 0xff800000
 size = 0x40000

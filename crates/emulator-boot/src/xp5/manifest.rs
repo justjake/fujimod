@@ -379,6 +379,35 @@ mod tests {
     }
 
     #[test]
+    fn statistics_banks_in_boot_sram_are_ram_backed() {
+        for (firmware, ram) in [
+            ("x100vi-131", true),
+            ("xe5-112", true),
+            ("xh2-530", true),
+            ("xt5-431", true),
+            ("xh2s-730", false),
+            ("xm5-130", false),
+        ] {
+            let windows = BootState::for_firmware(firmware, None)
+                .unwrap()
+                .with_catalog_windows(
+                    &fujimod_catalog_resolution::ResolvedConfiguration::bundled(firmware).unwrap(),
+                )
+                .unwrap()
+                .device;
+            let statistics = windows
+                .iter()
+                .find(|window| window.kind == "imaging-statistics")
+                .unwrap();
+            assert_eq!(
+                statistics.options.get("ram").and_then(toml::Value::as_bool),
+                ram.then_some(true),
+                "{firmware}"
+            );
+        }
+    }
+
+    #[test]
     fn the_retired_dram_table_and_overlapping_dram_are_refused() {
         let manifest = |extra: &str| {
             BootState::parse(&format!(

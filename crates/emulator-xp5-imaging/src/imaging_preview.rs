@@ -396,6 +396,19 @@ impl Device for Preview {
             Self::Rifp(v) => v.next_deadline(now),
         }
     }
+    /// Statistics in guest memory have no window of their own, so the input buffer that
+    /// completes frames into them carries their scene input.
+    fn set_scene(&mut self, scene: &Value) -> Result<bool, String> {
+        match self {
+            Self::Input(input) => match input.statistics() {
+                Some(statistics) if statistics.is_in_memory() => {
+                    statistics.clone().set_scene(scene)
+                }
+                _ => Ok(false),
+            },
+            Self::Rifp(_) => Ok(false),
+        }
+    }
     fn checkpoint(&self) -> Result<Checkpoint, String> {
         match self {
             Self::Input(input) => input.checkpoint(),
@@ -860,6 +873,79 @@ mod tests {
         assert_eq!(host.irqs.last(), Some(&(170, false)));
         assert_eq!(statistics.save()["frames"], 1);
         assert_eq!(preview.next_deadline(host.now), Some(2_000_000));
+    }
+    #[test]
+    fn in_memory_statistics_write_the_scene_into_guest_ram() {
+        let statistics = Statistics::in_memory(
+            super::super::STATISTICS_BASE,
+            super::super::STATISTICS_BANK_SIZE,
+        )
+        .unwrap();
+        let mut preview = Preview::new(
+            false,
+            Io::default(),
+            &toml::from_str("frame_period_us=1000\nsource_luma=128").unwrap(),
+        )
+        .unwrap()
+        .with_statistics(statistics.clone());
+        // The preview carries the scene input of statistics that have no window.
+        assert!(
+            preview
+                .set_scene(&serde_json::json!({
+                    "luma": 900,
+                    "black_level": 0,
+                    "signal_shift": 0,
+                    "samples_per_cell": 1024
+                }))
+                .unwrap()
+        );
+        let mut host = RecordingHost {
+            ram_base: super::super::STATISTICS_BASE,
+            ram: vec![0; 0x4000],
+            ..Default::default()
+        };
+        {
+            let mut cx = Cx::new(&mut host, 2, 0xbeef, 0);
+            for (o, v) in [
+                (0x428, super::super::STATISTICS_BASE),
+                (0x42c, 0),
+                (0x500, 0x100),
+                (4, (1 << 25) | (1 << 9)),
+            ] {
+                preview.write(&mut cx, 0xff974000 + o, 4, v);
+            }
+            assert!(cx.refusal().is_none());
+        }
+        host.now = 999_999;
+        preview.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert!(host.ram.iter().all(|v| *v == 0));
+        host.now = 1_000_000;
+        preview.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert!(
+            host.ram.iter().any(|v| *v != 0),
+            "no statistics reached guest RAM"
+        );
+        assert_eq!(statistics.save()["frames"], 1);
+        assert_eq!(statistics.save()["explicit"], true);
+        assert_eq!(
+            statistics.save()["last_destination"],
+            serde_json::json!(super::super::STATISTICS_BASE)
+        );
+        // Statistics with their own window take their scene there, not through the preview.
+        let mut windowed = Preview::new(
+            false,
+            Io::default(),
+            &toml::from_str("frame_period_us=1000\nsource_luma=128").unwrap(),
+        )
+        .unwrap()
+        .with_statistics(
+            Statistics::new(
+                super::super::STATISTICS_BASE,
+                super::super::STATISTICS_BANK_SIZE,
+            )
+            .unwrap(),
+        );
+        assert!(!windowed.set_scene(&serde_json::json!({})).unwrap());
     }
     #[test]
     fn focus_filters_option_fills_planes_zero_to_three_with_the_focus_filters() {

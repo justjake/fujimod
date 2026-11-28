@@ -593,6 +593,12 @@ impl Statistics {
         })
     }
 
+    /// Whether the banks are guest memory ([`Statistics::in_memory`]): no device window serves
+    /// them, so another device carries their scene input.
+    pub fn is_in_memory(&self) -> bool {
+        self.in_memory
+    }
+
     pub fn new(base: u64, bank_size: usize) -> Result<Self, String> {
         if base & 31 != 0
             || !(0x1c60..=0x100000).contains(&bank_size)
