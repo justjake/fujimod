@@ -2085,12 +2085,10 @@ impl DmaController {
             } else if silence {
                 vec![0; size]
             } else {
-                cx.ram_bytes(src, width)?
-                    .iter()
-                    .copied()
-                    .cycle()
-                    .take(size)
-                    .collect()
+                let mut sample = [0; 8];
+                let sample = &mut sample[..width];
+                cx.ram_read(src, sample)?;
+                sample.repeat(size / width)
             }
         } else {
             cx.ram_bytes(src, size)?
