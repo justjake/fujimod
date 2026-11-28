@@ -3549,6 +3549,37 @@ mod tests {
     }
 
     #[test]
+    fn native_conditional_branch_observes_flags_set_by_its_prefix() {
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+        for (offset, word) in [
+            (0, 0xe350_0000u32), // cmp r0, #0
+            (4, 0x0a00_0000),    // beq 0x100c
+            (8, 0xe3a0_1001),    // mov r1, #1
+            (12, 0xe3a0_1002),   // mov r1, #2
+        ] {
+            cpu.write_memory(0x1000 + offset, &word.to_le_bytes())
+                .unwrap();
+        }
+        for (r0, initial_flags, branch_target) in [(0u32, 0, 0x100c), (1, 1 << 30, 0x1008)] {
+            for (count, pc) in [(1, 0x1004), (2, branch_target), (3, branch_target + 4)] {
+                cpu.set_cpsr(initial_flags | 0xd3).unwrap();
+                cpu.write_register(arm::CORE[0], &r0.to_le_bytes()).unwrap();
+                cpu.set_loop_window(true).unwrap();
+                cpu.run(Run {
+                    begin: 0x1000,
+                    until: None,
+                    watchdog_us: 0,
+                    instructions: Some(count),
+                })
+                .unwrap();
+                assert_eq!(cpu.instruction_progress(), Some(count as u64));
+                assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 15) }, pc);
+            }
+        }
+    }
+
+    #[test]
     fn same_guest_pc_uses_the_current_translation_context() {
         let core = Core::new(Model::CortexA7).unwrap();
         core.map_zeroed(0, 0x102000, 7).unwrap();
