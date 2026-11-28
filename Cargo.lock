@@ -3167,6 +3167,7 @@ dependencies = [
  "aes-kw",
  "ciborium",
  "fujimod-emulator-devices",
+ "fujimod-emulator-ip",
  "fujimod-workspace-hack",
  "hmac 0.13.0",
  "pbkdf2",
@@ -3439,6 +3440,7 @@ dependencies = [
  "fujimod-emulator-ip-arm",
  "fujimod-emulator-ip-dmp",
  "fujimod-emulator-parts-controls",
+ "fujimod-emulator-parts-wifi",
  "fujimod-emulator-session",
  "fujimod-emulator-storage",
  "fujimod-emulator-xp4-display",
@@ -3449,6 +3451,7 @@ dependencies = [
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
 ]
 
 [[package]]

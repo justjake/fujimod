@@ -12,6 +12,7 @@ use fujimod_emulator_devices::parts::micron_nor;
 use fujimod_emulator_devices::{Cx, Device, Record, Value as Field};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
     sync::{Arc, Mutex},
@@ -71,6 +72,28 @@ struct ArrayWrite {
     /// Erased size, or the programmed bytes.
     erase: Option<u64>,
     program: Vec<u8>,
+}
+
+impl ArrayWrite {
+    fn completion(&self, chip_select: u8) -> Record {
+        let size = self.erase.unwrap_or(self.program.len() as u64);
+        let fields = [
+            ("chip_select", Field::int(chip_select)),
+            ("offset", Field::int(self.offset)),
+            ("size", Field::int(size)),
+            ("tick", Field::int(self.due)),
+        ];
+        match self.erase {
+            Some(_) => Record::new("X-Processor Pro flash erase complete", fields),
+            None => Record::new(
+                "X-Processor Pro flash program complete",
+                fields.into_iter().chain([(
+                    "payload_sha256",
+                    Field::Str(format!("{:x}", Sha256::digest(&self.program))),
+                )]),
+            ),
+        }
+    }
 }
 
 /// Passive union of every byte read through the aperture, including DMA reads.
@@ -629,20 +652,7 @@ impl Device for FlashController {
             let (chip_select, write) = self.array_write.take().unwrap();
             self.aperture
                 .apply(write.offset, write.erase, &write.program);
-            let size = write.erase.unwrap_or(write.program.len() as u64);
-            cx.record(Record::new(
-                if write.erase.is_some() {
-                    "X-Processor Pro flash erase complete"
-                } else {
-                    "X-Processor Pro flash program complete"
-                },
-                [
-                    ("chip_select", Field::int(chip_select)),
-                    ("offset", Field::int(write.offset)),
-                    ("size", Field::int(size)),
-                    ("tick", Field::int(write.due)),
-                ],
-            ));
+            cx.record(write.completion(chip_select));
         }
         // Collected page stores are shifted out at once: done and written.
         if self.aperture.take_unreported() {
@@ -993,6 +1003,31 @@ mod tests {
 
     const BASE: u64 = 0xfff14000;
     const WINDOW: u64 = 0xf0000000;
+
+    #[test]
+    fn flash_completion_hashes_the_program_payload() {
+        let write = ArrayWrite {
+            due: 20,
+            offset: 0x100,
+            erase: None,
+            program: vec![0, 255, 136, 18],
+        };
+        let program = write.completion(0);
+        assert_eq!(program.name, "X-Processor Pro flash program complete");
+        assert_eq!(
+            program.fields.last().unwrap().1,
+            Field::str("565fe69b530ea24e0e1ca4f2f28088abb7a06b3273786e133435ee613420db7b")
+        );
+        assert_eq!(program.fields.last().unwrap().0, "payload_sha256");
+        let erase = ArrayWrite {
+            erase: Some(4096),
+            program: vec![],
+            ..write
+        }
+        .completion(0);
+        assert_eq!(erase.name, "X-Processor Pro flash erase complete");
+        assert_eq!(erase.fields.len(), 4);
+    }
 
     fn array_controller(image: Vec<u8>) -> (FlashController, Arc<Aperture>) {
         let aperture = Arc::new(Aperture::new(WINDOW, 0x08000000, image).unwrap());

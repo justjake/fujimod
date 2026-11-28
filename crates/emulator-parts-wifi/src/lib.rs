@@ -1,6 +1,7 @@
 //! One-function SDIO module with enumeration, ROM download and MT5931 HIF.
 //! Device behavior consumes only SDIO transactions.
 pub mod mt5931;
+pub mod sdhci;
 pub mod virtual_network;
 pub mod wpa2;
 use serde::{Deserialize, Serialize};

@@ -220,6 +220,13 @@ pub enum Model {
         #[serde(default)]
         reset_channel: Option<usize>,
     },
+    Sdio {
+        options: sd::Options,
+        module: fujimod_emulator_parts_wifi::Options,
+        irq: u32,
+        #[serde(default)]
+        reset_channel: Option<usize>,
+    },
     Timer {
         base: u64,
         routes: Vec<(usize, usize)>,
@@ -902,6 +909,31 @@ pub fn build(
                             .get(channel)
                             .cloned()
                             .ok_or("Invalid X-Processor Pro SD reset channel")?,
+                    );
+                }
+                devices.register(base, 0x1000, Box::new(model))?
+            }
+            Model::Sdio {
+                options,
+                module,
+                irq,
+                reset_channel,
+            } => {
+                let base = options.base;
+                let mut model = sd::Controller::new_sdio(
+                    options,
+                    fujimod_emulator_parts_wifi::WifiModule::new(module)?,
+                    fujimod_emulator_devices::bus::InterruptLine::Shared(irq),
+                )?;
+                if let Some(channel) = reset_channel {
+                    let (lines, _) = gates
+                        .as_ref()
+                        .ok_or("X-Processor Pro SDIO reset line before its reset gates")?;
+                    model = model.with_reset(
+                        lines
+                            .get(channel)
+                            .cloned()
+                            .ok_or("Invalid X-Processor Pro SDIO reset channel")?,
                     );
                 }
                 devices.register(base, 0x1000, Box::new(model))?

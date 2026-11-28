@@ -9,6 +9,7 @@
 //! line resets the SDHCI bank once per pulse, before the next access.
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_ip::sdhci::host::{self, SdHost};
+use fujimod_emulator_parts_wifi::{WifiModule, sdhci as sdio};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -41,9 +42,33 @@ pub struct Options {
     pub latency: Option<fujimod_emulator_ip::sdhci::latency::Latency>,
 }
 type Saved = (Options, Option<u64>, BTreeMap<u64, u32>, Option<u64>);
+enum Bank {
+    Memory(SdHost),
+    Io(Box<sdio::SdioHost>),
+}
+impl Bank {
+    fn hardware_reset(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
+        match self {
+            Self::Memory(host) => host.hardware_reset(cx),
+            Self::Io(host) => host.hardware_reset(cx),
+        }
+    }
+    fn device(&self) -> &dyn Device {
+        match self {
+            Self::Memory(host) => host,
+            Self::Io(host) => host.as_ref(),
+        }
+    }
+    fn device_mut(&mut self) -> &mut dyn Device {
+        match self {
+            Self::Memory(host) => host,
+            Self::Io(host) => host.as_mut(),
+        }
+    }
+}
 pub struct Controller {
     options: Options,
-    host: SdHost,
+    host: Bank,
     reset_due: Option<u64>,
     vendor: BTreeMap<u64, u32>,
     reset: Option<(crate::resets::ResetPulses, u64)>,
@@ -90,13 +115,38 @@ impl Controller {
         } else {
             SdHost::new_polled(host_options, card, contacts)?
         };
-        Ok(Self {
+        Ok(Self::with_host(options, Bank::Memory(host)))
+    }
+    pub fn new_sdio(
+        options: Options,
+        module: WifiModule,
+        irq: fujimod_emulator_devices::bus::InterruptLine,
+    ) -> Result<Self, String> {
+        if options.register_offset != 0x100 || options.reset_ticks == 0 {
+            return Err("Invalid X-Processor Pro SDIO register wiring".into());
+        }
+        let host = sdio::SdioHost::new(
+            options.base,
+            "xpp-sdio-host",
+            sdio::Options {
+                transfer_ticks: options.transfer_ticks,
+                clock_ticks: options.clock_ticks,
+                rca: options.rca,
+                ram_bytes: options.ram_bytes,
+            },
+            sdio::Wiring { module, irq },
+        )?
+        .with_buffered_io();
+        Ok(Self::with_host(options, Bank::Io(Box::new(host))))
+    }
+    fn with_host(options: Options, host: Bank) -> Self {
+        Self {
             options,
             host,
             reset_due: None,
             vendor: BTreeMap::new(),
             reset: None,
-        })
+        }
     }
     /// Connect a hardware reset line; pulses before this call are ignored.
     pub fn with_reset(mut self, line: crate::resets::ResetPulses) -> Self {
@@ -139,7 +189,10 @@ impl Controller {
             }
             .into());
         }
-        if address == self.options.base && size == 4 {
+        let io = matches!(self.host, Bank::Io(_));
+        // Channel 2 is reset with a halfword read-modify-write at 0xc684a4
+        // and 0xc684c0 in the X-T20 2.11 SDIO initializer.
+        if address == self.options.base && (size == 4 || io && size == 2) {
             if let Some(v) = value {
                 if v != 1 {
                     return Err("Unsupported SD wrapper reset command".into());
@@ -149,7 +202,10 @@ impl Controller {
                         .checked_add(self.options.reset_ticks)
                         .ok_or("SD reset deadline overflow")?,
                 );
-                self.host.write(cx, self.options.base + 0x2f, 1, 1);
+                match &mut self.host {
+                    Bank::Memory(host) => host.write(cx, self.options.base + 0x2f, 1, 1),
+                    Bank::Io(host) => host.hardware_reset(cx)?,
+                }
                 cx.schedule(self.reset_due.unwrap(), 0);
             }
             return Ok(u64::from(self.reset_due.is_some()));
@@ -168,37 +224,48 @@ impl Controller {
             return Err("SD register access during wrapper reset".into());
         }
         let address = self.options.base + offset;
+        let host = self.host.device_mut();
         if size == 4 && offset == 0x28 {
             if value.is_some_and(|v| v >> 16 != 0) {
                 return Err("SD block-gap/wakeup control is unsupported".into());
             }
+            if io {
+                if let Some(v) = value {
+                    host.write(cx, address, 2, v);
+                    return Ok(0);
+                }
+                return Ok(host.read(cx, address, 2));
+            }
             if let Some(v) = value {
-                self.host.write(cx, address, 1, v & 255);
-                self.host.write(cx, address + 1, 1, (v >> 8) & 255);
+                host.write(cx, address, 1, v & 255);
+                host.write(cx, address + 1, 1, (v >> 8) & 255);
                 return Ok(0);
             }
-            return Ok(self.host.read(cx, address, 1) | self.host.read(cx, address + 1, 1) << 8);
+            return Ok(host.read(cx, address, 1) | host.read(cx, address + 1, 1) << 8);
         }
-        let atomic_word = matches!(offset, 0 | 8 | 12 | 0x20 | 0x24);
+        let atomic_word = matches!(offset, 0 | 12 | 0x20 | 0x24) || offset == 8 && !io;
         if size == 4 && !atomic_word {
             if let Some(v) = value {
-                self.host.write(cx, address, 2, v & 0xffff);
-                self.host.write(cx, address + 2, 2, v >> 16);
+                host.write(cx, address, 2, v & 0xffff);
+                host.write(cx, address + 2, 2, v >> 16);
                 Ok(0)
             } else {
-                Ok(self.host.read(cx, address, 2) | self.host.read(cx, address + 2, 2) << 16)
+                Ok(host.read(cx, address, 2) | host.read(cx, address + 2, 2) << 16)
             }
         } else if let Some(v) = value {
-            self.host.write(cx, address, size, v);
+            host.write(cx, address, size, v);
             Ok(0)
         } else {
-            Ok(self.host.read(cx, address, size))
+            Ok(host.read(cx, address, size))
         }
     }
 }
 impl Device for Controller {
     fn name(&self) -> &'static str {
-        "xpp-sd"
+        match self.host {
+            Bank::Memory(_) => "xpp-sd",
+            Bank::Io(_) => "xpp-sdio",
+        }
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         match self.transfer(cx, address, size, None) {
@@ -218,7 +285,7 @@ impl Device for Controller {
         if self.reset_due.is_some_and(|t| t <= cx.now()) {
             self.reset_due = None;
         }
-        self.host.advance(cx);
+        self.host.device_mut().advance(cx);
     }
     fn event(&mut self, cx: &mut Cx<'_>, _: u64) {
         self.advance(cx);
@@ -226,19 +293,19 @@ impl Device for Controller {
     fn next_deadline(&self, now: u64) -> Option<u64> {
         self.reset_due
             .into_iter()
-            .chain(self.host.next_deadline(now))
+            .chain(self.host.device().next_deadline(now))
             .min()
     }
     fn save(&self) -> Value {
-        json!({"reset_due":self.reset_due,"vendor":self.vendor,"reset_seen":self.reset.as_ref().map(|r| r.1),"host":self.host.save()})
+        json!({"reset_due":self.reset_due,"vendor":self.vendor,"reset_seen":self.reset.as_ref().map(|r| r.1),"host":self.host.device().save()})
     }
     fn card_slot(&self) -> Option<&(dyn fujimod_emulator_devices::capability::CardSlot + 'static)> {
-        self.host.card_slot()
+        self.host.device().card_slot()
     }
     fn card_slot_mut(
         &mut self,
     ) -> Option<&mut (dyn fujimod_emulator_devices::capability::CardSlot + 'static)> {
-        self.host.card_slot_mut()
+        self.host.device_mut().card_slot_mut()
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         // The SD host owns the exact card, FIFO, pending command and clocks.
@@ -251,7 +318,7 @@ impl Device for Controller {
                 self.reset.as_ref().map(|r| r.1),
             ),
         )?
-        .with_children(vec![self.host.checkpoint()?]))
+        .with_children(vec![self.host.device().checkpoint()?]))
     }
     fn validate_checkpoint(
         &self,
@@ -271,14 +338,16 @@ impl Device for Controller {
         if saved.children().len() != 1 {
             return Err("SD wrapper checkpoint child count differs".into());
         }
-        self.host.validate_checkpoint(&saved.children()[0])
+        self.host.device().validate_checkpoint(&saved.children()[0])
     }
     fn restore_checkpoint(
         &mut self,
         saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
     ) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
-        self.host.restore_checkpoint(&saved.children()[0])?;
+        self.host
+            .device_mut()
+            .restore_checkpoint(&saved.children()[0])?;
         let (_, due, vendor, seen): Saved = saved.decode(self.name())?;
         self.reset_due = due;
         self.vendor = vendor;
@@ -302,18 +371,96 @@ impl Device for Controller {
                 self.reset.as_ref().map(|r| r.1),
             ),
         )?;
-        Ok(json!({"wrapper":wrapper.state(),"host":self.host.fingerprint()?}))
+        Ok(json!({"wrapper":wrapper.state(),"host":self.host.device().fingerprint()?}))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fujimod_emulator_devices::bus::InterruptLine;
     use fujimod_emulator_devices::parts::{
         card_contacts::Contacts,
         sd_card::{Card, Options as CardOptions},
     };
     use fujimod_emulator_devices::test_host::{TestHost, advance, read, write};
+
+    #[test]
+    fn channel_two_routes_sdio_enumeration_and_acknowledges_interrupts() {
+        use fujimod_emulator_devices::test_host::ram::{Effect, Ram};
+        use fujimod_emulator_parts_wifi::{Options as ModuleOptions, Protocol};
+
+        let base = 0xfff94000;
+        let bank = base + 0x100;
+        let mut device = Controller::new_sdio(
+            Options {
+                base,
+                register_offset: 0x100,
+                transfer_ticks: 10,
+                clock_ticks: 2,
+                reset_ticks: 3,
+                rca: 0x1234,
+                ram_bytes: 0x10000,
+                high_speed: false,
+                ram_banks: vec![],
+                latency: None,
+            },
+            WifiModule::new(ModuleOptions {
+                protocol: Protocol::Enumeration,
+                firmware_bytes: 0,
+                mt5931: None,
+            })
+            .unwrap(),
+            InterruptLine::Shared(85),
+        )
+        .unwrap();
+        assert!(device.card_slot().is_none());
+        let mut host = Ram::new(0x10000);
+        let mut cx = host.cx();
+        device.write(&mut cx, base, 2, 1);
+        assert_eq!(device.read(&mut cx, base, 2), 1);
+        assert_eq!(cx.refusal(), None);
+        host.now = 3;
+        device.advance(&mut host.cx());
+        let write = |d: &mut Controller, h: &mut Ram, offset, width, value| {
+            let mut cx = h.cx();
+            d.write(&mut cx, bank + offset, width, value);
+            assert_eq!(cx.refusal(), None, "register {offset:#x}");
+        };
+        write(&mut device, &mut host, 0x2c, 2, 5);
+        host.now += 2;
+        device.advance(&mut host.cx());
+        write(&mut device, &mut host, 0x28, 2, 0xf00);
+        write(&mut device, &mut host, 0x2e, 2, 14);
+        write(&mut device, &mut host, 0x34, 4, 1);
+        write(&mut device, &mut host, 0x38, 4, 1);
+
+        for (transfer, command, argument, response) in [
+            (0, 0x0502, 0, 0x1020_0000),
+            (0, 0x0502, 0x0020_0000, 0x9020_0000),
+            (0, 0x031a, 0, 0x1234_0000),
+            (0, 0x071b, 0x1234_0000, 0x900),
+            (0x10, 0x341a, 0, 0x22),
+        ] {
+            write(&mut device, &mut host, 8, 4, argument);
+            write(&mut device, &mut host, 12, 2, transfer);
+            write(&mut device, &mut host, 14, 2, command);
+            let mut cx = host.cx();
+            assert_eq!(device.read(&mut cx, bank + 0x24, 4) & 1, 1);
+            assert_eq!(device.read(&mut cx, bank + 0x30, 2), 0);
+            assert_eq!(cx.refusal(), None);
+            host.now += 10;
+            device.advance(&mut host.cx());
+            assert_eq!(host.effects.last(), Some(&Effect::Irq(85, true)));
+            let mut cx = host.cx();
+            assert_eq!(device.read(&mut cx, bank + 0x24, 4) & 1, 0);
+            assert_eq!(device.read(&mut cx, bank + 0x10, 4), response);
+            assert_eq!(cx.refusal(), None);
+            write(&mut device, &mut host, 0x30, 2, 1);
+            assert_eq!(host.effects.last(), Some(&Effect::Irq(85, false)));
+        }
+    }
+
     #[test]
     fn relocated_word_bank_initializes_card_and_reads_a_complete_pio_sector() {
         for bank in [0x100, 0x200] {

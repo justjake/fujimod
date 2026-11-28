@@ -138,6 +138,8 @@ fn sdio_host(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
         let options: crate::sdio::Options = decode(options)?;
         let module: fujimod_emulator_parts_wifi::Options = decode(module)?;
         Box::new(sdio::SdioHost::new(
+            sdio::BASE,
+            "exr2-sdio",
             options,
             sdio::Wiring {
                 module: WifiModule::new(module)?,
