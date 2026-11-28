@@ -318,6 +318,28 @@ mod tests {
     }
 
     #[test]
+    fn xh2s_boot_attaches_the_x_mount_lens_to_ssp0() {
+        let state = BootState::for_firmware("xh2s-730", None)
+            .unwrap()
+            .with_catalog_windows(
+                &fujimod_catalog_resolution::ResolvedConfiguration::bundled("xh2s-730").unwrap(),
+            )
+            .unwrap();
+        let lens = state
+            .device
+            .iter()
+            .find(|window| window.base == 0xff91_0000)
+            .expect("X-H2S lens bus");
+        assert_eq!(lens.kind, "pl022");
+        assert_eq!(lens.options["receive_request"].as_integer(), Some(0));
+        assert_eq!(lens.options["transmit_request"].as_integer(), Some(1));
+        let wire = &lens.options["wire"];
+        assert_eq!(wire["kind"].as_str(), Some("x-mount-lens"));
+        assert_eq!(wire["lens"].as_str(), Some("xf18-55"));
+        assert_eq!(wire["ready_high_line"].as_integer(), Some(115));
+    }
+
+    #[test]
     fn dram_override_refuses_what_the_run_could_not_honor() {
         let dram = |limit, bus_drain| Dram { limit, bus_drain };
         assert!(dram(0x8000_0000, 0x8000_0000).validate(false).is_ok());
