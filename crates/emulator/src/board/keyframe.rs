@@ -89,6 +89,9 @@ impl State {
         if self.active_slice.is_some() || self.parallel.is_some() || self.memory_access {
             return Err("keyframe requires a stopped board".into());
         }
+        if self.memory.models_data_cache() {
+            return Err("keyframes do not support modeled data-cache state".into());
+        }
         Ok(())
     }
     fn checkpoint_state(&self) -> Saved {

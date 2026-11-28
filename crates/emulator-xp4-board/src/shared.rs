@@ -91,6 +91,7 @@ pub fn build(
             }
         };
     let cache_sizes = definition.cache_sizes;
+    let coherence = definition.coherent_ranges.take();
     let dials = definition
         .countdown_dials
         .iter()
@@ -198,7 +199,7 @@ pub fn build(
         },
     };
     let mut board = graph.build(
-        factory::Options::new(engine),
+        factory::Options::new(engine).with_coherent_ranges(coherence),
         Bus::from_graph(mode, devices)?,
         Some(interrupts),
     )?;

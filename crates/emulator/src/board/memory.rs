@@ -1,6 +1,7 @@
 //! Physical bus decoding and backing, independent of CPU-private mappings.
 mod checkpoint;
 use fujimod_emulator_cpu::{Cpu, exclusive, memory::Backing};
+use fujimod_emulator_cpu_unicorn::aprofile::CoherenceDomain;
 use std::{
     cell::{Ref, RefCell},
     ptr::NonNull,
@@ -77,6 +78,7 @@ pub struct Memory {
     regions: Vec<(u64, Backing)>,
     mappings: RefCell<Vec<BusMapping>>,
     trackers: Vec<fujimod_emulator_cpu::memory::pages::Tracker>,
+    coherence: Option<CoherenceDomain>,
     pub(super) observation: RefCell<Option<std::rc::Weak<RefCell<super::observation::Records>>>>,
     pub(super) preservation:
         RefCell<Option<std::rc::Weak<RefCell<super::preservation::PreservationRecords>>>>,
@@ -404,11 +406,39 @@ impl Memory {
             regions,
             mappings: RefCell::new(mappings),
             trackers,
+            coherence: None,
             observation: Default::default(),
             preservation: Default::default(),
             continuation: Default::default(),
             write_watch: Default::default(),
         })
+    }
+    pub(super) fn with_coherence(mut self, coherence: Option<CoherenceDomain>) -> Self {
+        self.coherence = coherence;
+        self
+    }
+    pub(super) fn models_data_cache(&self) -> bool {
+        self.coherence.is_some()
+    }
+    fn restore_processor_view(&self) -> Result<(), String> {
+        if let Some(coherence) = &self.coherence {
+            coherence.restore_processor_view(|address, bytes| {
+                let mut offset = 0;
+                for (_, pointer, len) in self.backing_chunks(address, bytes.len())? {
+                    // Undo a temporary load overlay without recording a guest write.
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            bytes.as_ptr().add(offset),
+                            pointer.as_ptr(),
+                            len,
+                        );
+                    }
+                    offset += len;
+                }
+                Ok(())
+            })?;
+        }
+        Ok(())
     }
     pub(super) fn clear_preservation(
         &self,
@@ -537,13 +567,18 @@ impl Memory {
     fn read(&self, address: u64, bytes: &mut [u8], access: Access) -> Result<(), String> {
         let mut offset = 0;
         for chunk in self.chunks(address, bytes.len(), access)? {
-            let (_, pointer, len) = chunk?;
+            let (physical, pointer, len) = chunk?;
             unsafe {
                 std::ptr::copy_nonoverlapping(
                     pointer.as_ptr(),
                     bytes.as_mut_ptr().add(offset),
                     len,
                 );
+            }
+            if matches!(access, Access::Read)
+                && let Some(coherence) = &self.coherence
+            {
+                coherence.device_read(physical, &mut bytes[offset..offset + len]);
             }
             offset += len;
         }
@@ -582,6 +617,7 @@ impl Memory {
         }
     }
     pub(super) fn read_dma(&self, address: u64, bytes: &mut [u8]) -> Result<(), String> {
+        self.restore_processor_view()?;
         self.read(address, bytes, Access::Read)?;
         self.observe_transfer("model-bus-read", address, bytes.len());
         Ok(())
@@ -611,6 +647,13 @@ impl Memory {
             on_range(physical, len);
             self.mark(pointer, len)?;
             unsafe {
+                if matches!(access, Access::Write)
+                    && let Some(coherence) = &self.coherence
+                {
+                    // The decoded transfer has exclusive access to this backing during DMA.
+                    let before = std::slice::from_raw_parts(pointer.as_ptr(), len);
+                    coherence.device_write(physical, &bytes[offset..offset + len], before);
+                }
                 std::ptr::copy_nonoverlapping(bytes.as_ptr().add(offset), pointer.as_ptr(), len);
                 for cpu in cpus {
                     cpu.backing_written(physical, pointer, len)?;
@@ -648,6 +691,7 @@ impl Memory {
         bytes: &[u8],
         on_range: impl FnMut(u64, usize),
     ) -> Result<(), String> {
+        self.restore_processor_view()?;
         self.observe_preservation_write(
             super::preservation::PreservationBusSource::ModelBusWrite,
             address,
