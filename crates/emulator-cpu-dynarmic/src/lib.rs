@@ -2509,6 +2509,14 @@ impl Cpu for Core {
                 && (word >> 28 == 15 || arm::condition_passes(word >> 28, cpsr))
                 && !self.vfp_accessible()
             {
+                if self.shared.rprofile.is_some() && armv7a::enter_disabled_vfp(self)? {
+                    self.shared.clear_reservation()?;
+                    let mut entries = self.exception_entries.get();
+                    entries.undefined += 1;
+                    self.exception_entries.set(entries);
+                    self.last_progress.set(self.last_progress.get() + 1);
+                    return Ok(Exit::Stopped);
+                }
                 return Err(ExecutionError::InvalidInstruction(format!(
                     "VFP or Advanced SIMD disabled at {pc:#010x}"
                 )));

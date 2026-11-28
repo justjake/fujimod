@@ -695,4 +695,53 @@ mod tests {
             0xa000
         );
     }
+
+    #[test]
+    fn the_guest_undefined_handler_can_enable_vfp_and_retry() {
+        let cpu = Core::new(Model::CortexR5F).unwrap();
+        cpu.map_zeroed(0, 0x4000, 7).unwrap();
+        let write_code = |address, words: &[u32]| {
+            for (index, word) in words.iter().enumerate() {
+                cpu.write_memory(address + index as u64 * 4, &word.to_le_bytes())
+                    .unwrap();
+            }
+        };
+        // VPUSH, observe the stack, VPOP, WFI. The handler enables CP10/11
+        // and FPEXC before returning to the faulting instruction.
+        write_code(0x1000, &[0xed2d8b04, 0xe1a0a00d, 0xecbd8b04, 0xe320f003]);
+        write_code(
+            4,
+            &[
+                0xe14f4000, 0xe1a0500e, 0xe3a0360f, 0xee013f50, 0xe3a03101, 0xeee83a10, 0xe2888001,
+                0xe25ef004,
+            ],
+        );
+        cpu.write_register(arm::CORE[13], &0x3000u32.to_le_bytes())
+            .unwrap();
+        let reg = |index| unsafe { ffi::dynarmic_get_reg(cpu.inst, index) };
+        let mut begin = 0x1000;
+        let mut entered = 0;
+        for _ in 0..16 {
+            cpu.set_loop_window(true).unwrap();
+            let exit = cpu
+                .run(Run {
+                    begin,
+                    until: None,
+                    watchdog_us: 0,
+                    instructions: Some(100),
+                })
+                .unwrap();
+            entered += cpu.instruction_progress().unwrap();
+            begin = u64::from(reg(15));
+            if matches!(exit, Exit::Hint(_)) {
+                break;
+            }
+        }
+        assert_eq!(
+            [reg(5), reg(8), reg(10), reg(13), reg(15)],
+            [0x1004, 1, 0x2ff0, 0x3000, 0x1010]
+        );
+        assert_eq!(cpu.exception_entries().unwrap().undefined, 1);
+        assert_eq!(entered, 13);
+    }
 }
