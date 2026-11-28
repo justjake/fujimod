@@ -643,6 +643,10 @@ pub struct ThumbBlockRecoveryAccounting {
     pub thumb_page_bitmap: [u64; 16],
     pub thumb_handler_mode: u64,
 }
+
+/// Flag in the published Thumb recovery exception status. The owner can
+/// settle a terminal grant after the run returns.
+pub const THUMB_GRANT_ENDS_RUN: u32 = 1 << 31;
 const _: () = {
     assert!(std::mem::size_of::<BlockAccounting>() == 48);
     assert!(std::mem::size_of::<ThumbBlockAccounting>() == 56);
@@ -1091,6 +1095,8 @@ pub trait Cpu {
     /// Optional controller-owned IPSR for translated Thumb recovery mode.
     /// The CPU owns this slot. Its stopped or serialized owner may write zero
     /// to use engine state, or the active exception number plus one.
+    /// Set [`THUMB_GRANT_ENDS_RUN`] when the grant consumes the full run
+    /// budget and the backend may stop before the next block observer.
     fn thumb_exception_status(&self) -> Option<NonNull<u32>> {
         None
     }

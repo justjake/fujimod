@@ -4561,6 +4561,7 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
                 window_room - entries,
                 active_exception,
                 blocks.code_stores_notified,
+                window_room == room,
             );
         }
         Ok::<(), String>(())

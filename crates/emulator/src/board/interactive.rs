@@ -367,9 +367,13 @@ impl Board {
                     .is_some()
             {
                 let blocks = state.blocks[core].as_mut().unwrap();
-                blocks
-                    .inline
-                    .arm(pc, room, active_exception, blocks.code_stores_notified);
+                blocks.inline.arm(
+                    pc,
+                    room,
+                    active_exception,
+                    blocks.code_stores_notified,
+                    true,
+                );
             }
         }
         Ok((blocks, Some(thumb_slice)))

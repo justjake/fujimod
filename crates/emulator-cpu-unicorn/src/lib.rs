@@ -3428,6 +3428,66 @@ mod tests {
     }
 
     #[test]
+    fn spent_armed_thumb_grant_stops_before_the_next_block_observer() {
+        struct Observer<'a> {
+            cpu: &'a Core,
+            callbacks: Cell<u32>,
+        }
+        unsafe fn count_and_stop(_: Block, data: *mut c_void) {
+            let observer = unsafe { &*data.cast::<Observer<'_>>() };
+            observer.callbacks.set(observer.callbacks.get() + 1);
+            observer.cpu.stop().unwrap();
+        }
+
+        let cpu = library().open(Model::CortexM4, 1 << 20).unwrap();
+        cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+        // adds r0,#1; b back
+        cpu.write_memory(0x1000, &[0x01, 0x30, 0xfd, 0xe7]).unwrap();
+        let observer = Observer {
+            cpu: &cpu,
+            callbacks: Cell::new(0),
+        };
+        unsafe {
+            cpu.translation_hooks(Some(TranslationHooks {
+                classify: fujimod_emulator_cpu::TranslationClassifier::Owner(thumb_memory_execute),
+                restart: thumb_restart,
+                data: std::ptr::null_mut(),
+            }))
+            .unwrap();
+            cpu.install_hook(Hook::Block {
+                callback: count_and_stop,
+                data: (&observer as *const Observer<'_>).cast_mut().cast(),
+                range: HookRange::All,
+            })
+            .unwrap();
+        }
+        let mut accounting = cpu.thumb_recovery_accounting().unwrap();
+        let mut active_exception = cpu.thumb_exception_status().unwrap();
+        let terminal = fujimod_emulator_cpu::THUMB_GRANT_ENDS_RUN;
+        for (published_status, expected_callbacks) in [(0, 1), (1, 2), (terminal | 1, 2)] {
+            let record = unsafe { accounting.as_mut() };
+            record.thumb_accounting.accounting.enabled = 4;
+            record.thumb_accounting.accounting.budget = 2;
+            record.thumb_page_bitmap[0] = 1 << 4;
+            unsafe { *active_exception.as_mut() = published_status };
+            let exit = cpu.run(Run {
+                begin: 0x1001,
+                until: None,
+                watchdog_us: 0,
+                instructions: None,
+            }).unwrap();
+            assert!(matches!(exit, Exit::Stopped));
+            assert_eq!(observer.callbacks.get(), expected_callbacks);
+            assert_eq!(reg(&cpu, Register::Pc), 0x1000);
+            let record = unsafe { accounting.as_ref() };
+            assert_eq!(record.thumb_accounting.accounting.budget, 0);
+            assert_eq!(record.last_block_start, 0x1000);
+            assert_eq!(record.last_block_icount, 2);
+        }
+        assert_eq!(reg(&cpu, arm::CORE[0]), 3);
+    }
+
+    #[test]
     fn shared_guest_clock_tick_drives_clocked_fast_mmio_reads() {
         use std::sync::Arc;
         use std::sync::atomic::{AtomicUsize, Ordering};

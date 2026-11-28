@@ -1,7 +1,7 @@
 //! An ordered M-profile run lends its remaining instruction budget to the
 //! translated block guard. Every callback first takes back the unused entries.
 use super::code_shadow;
-use fujimod_emulator_cpu::{Cpu, ThumbBlockAccounting, ThumbBlockRecoveryAccounting};
+use fujimod_emulator_cpu::{Cpu, THUMB_GRANT_ENDS_RUN, ThumbBlockAccounting, ThumbBlockRecoveryAccounting};
 use std::ptr::NonNull;
 
 #[derive(Default)]
@@ -77,13 +77,15 @@ impl Window {
         remaining: u64,
         active_exception: u16,
         watches_translated_bytes: bool,
+        ends_run: bool,
     ) {
         if let Some(mut recovery) = self.recovery {
             self.granted = remaining.min(i64::MAX as u64) as i64;
             let record = unsafe { recovery.as_mut() };
             record.thumb_handler_mode = u64::from(active_exception != 0);
             if let Some(mut status) = self.exception_status {
-                unsafe { *status.as_mut() = u32::from(active_exception) + 1 };
+                let flags = if ends_run { THUMB_GRANT_ENDS_RUN } else { 0 };
+                unsafe { *status.as_mut() = (u32::from(active_exception) + 1) | flags };
             }
             record.thumb_accounting.thumb_page = pc & !0x3ff;
             let page = pc >> 10;
@@ -205,7 +207,7 @@ mod tests {
 
         // Arm 1 KiB pages including boundary bits 0, 63, 64, and 1023.
         for pc in [0x0000_0004u64, 0x0000_fc10, 0x0001_0004, 0x000f_fffe] {
-            window.arm(pc, 100, 0, false);
+            window.arm(pc, 100, 0, false, false);
         }
         assert_eq!(raw.thumb_page_bitmap[0], (1u64 << 0) | (1u64 << 63));
         assert_eq!(raw.thumb_page_bitmap[1], 1u64 << 0);
@@ -217,7 +219,7 @@ mod tests {
         assert_eq!(raw.thumb_accounting.accounting.budget, 100);
 
         // Addresses at or above 1 MiB update thumb_page (1 KiB aligned) without touching the bitmap.
-        window.arm(0x0010_04bc, 50, 11, false);
+        window.arm(0x0010_04bc, 50, 11, false, false);
         assert_eq!(raw.thumb_handler_mode, 1);
         assert_eq!(raw.thumb_accounting.thumb_page, 0x0010_0400);
         assert_eq!(raw.thumb_page_bitmap[0], (1u64 << 0) | (1u64 << 63));
@@ -241,8 +243,8 @@ mod tests {
             entries: 0,
         };
 
-        window.arm(0x000f_f811, 100, 0, true);
-        window.arm(0x0000_0100, 99, 0, true);
+        window.arm(0x000f_f811, 100, 0, true, false);
+        window.arm(0x0000_0100, 99, 0, true, false);
         assert_eq!(raw.thumb_page_bitmap[0], 0xf);
         assert_eq!(raw.thumb_page_bitmap[15], 0xf << 60);
         assert!(raw.thumb_page_bitmap[1..15].iter().all(|&word| word == 0));
