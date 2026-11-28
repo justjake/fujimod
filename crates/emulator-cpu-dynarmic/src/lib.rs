@@ -115,6 +115,10 @@ extern "C" fn batch_instruction(word: u32) -> u32 {
                 9 // A branch that may close a shift-counting loop.
             } else if loops::is_word_fill_branch(word) {
                 10 // A branch that may close a counted RAM fill.
+            } else if loops::is_division_scale_branch(word) {
+                11 // A branch that may close a divisor scaling loop.
+            } else if loops::is_division_restore_branch(word) {
+                12 // A branch that may close a restoring division loop.
             } else if word >> 28 != 10 {
                 1
             } else if body & 0x0180_0000 == 0x0080_0000 {
@@ -3747,6 +3751,107 @@ mod tests {
         assert_eq!(cpu.instruction_progress(), Some(2));
         assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 0) }, 5);
         assert_eq!(unsafe { ffi::dynarmic_get_cpsr(cpu.inst) } >> 28, 6);
+    }
+
+    #[test]
+    fn native_division_loops_match_single_step_at_each_boundary() {
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+        let scale: [u32; 6] = [
+            0xe355_0040, // cmp r5, #64
+            0x3155_0004, // cmpcc r5, r4
+            0x31a0_5105, // movcc r5, r5, lsl #2
+            0x31a0_6106, // movcc r6, r6, lsl #2
+            0x3aff_fffa, // bcc to scale loop head
+            0xeaff_fffe, // b .
+        ];
+        let mut restore = [0u32; 17];
+        for (digit, operations) in restore[..12].as_chunks_mut::<3>().0.iter_mut().enumerate() {
+            let shift = if digit == 0 {
+                0
+            } else {
+                0x20 | (digit as u32) << 7
+            };
+            *operations = [
+                0xe154_0005 | shift, // cmp r4, r5, shifted
+                0x2044_4005 | shift, // subcs r4, r4, r5, shifted
+                0x2187_7006 | shift, // orrcs r7, r7, r6, shifted
+            ];
+        }
+        restore[12..].copy_from_slice(&[
+            0xe354_0000, // cmp r4, #0
+            0x11b0_6226, // movnes r6, r6, lsr #4
+            0x11a0_5225, // movne r5, r5, lsr #4
+            0x1aff_ffef, // bne to restore loop head
+            0xeaff_fffe, // b .
+        ]);
+        let run = |batch, registers: [u32; 4], budget| {
+            for (register, value) in (4..8).zip(registers) {
+                cpu.write_register(arm::CORE[register], &value.to_le_bytes())
+                    .unwrap();
+            }
+            cpu.set_cpsr(0xf800_00d3).unwrap();
+            cpu.set_loop_window(batch).unwrap();
+            cpu.run(Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(budget),
+            })
+            .unwrap();
+            assert_eq!(cpu.instruction_progress(), Some(budget as u64));
+            unsafe {
+                (
+                    [4, 5, 6, 7, 15].map(|reg| ffi::dynarmic_get_reg(cpu.inst, reg)),
+                    ffi::dynarmic_get_cpsr(cpu.inst),
+                )
+            }
+        };
+        for (program, inputs, first_advance) in [
+            (
+                scale.as_slice(),
+                [
+                    [121, 3, 1, 0],
+                    [55, 0, 8, 5],
+                    [3, 9, 0, 1],
+                    [u32::MAX, 4, u32::MAX, 3],
+                ],
+                10,
+            ),
+            (
+                restore.as_slice(),
+                [
+                    [523, 1568, 224, 2],
+                    [1234, 5, 0, 3],
+                    [896, 896, u32::MAX, 0],
+                    [u32::MAX, 0, 8, 9],
+                ],
+                32,
+            ),
+        ] {
+            for (index, word) in program.iter().enumerate() {
+                cpu.write_memory(0x1000 + index as u64 * 4, &word.to_le_bytes())
+                    .unwrap();
+            }
+            use fujimod_emulator_cpu::loops::LoopMode;
+            cpu.set_loop_mode(LoopMode::Accelerate).unwrap();
+            let skipped = cpu.loops.skipped.get();
+            run(true, inputs[0], first_advance);
+            assert_eq!(
+                cpu.loops.skipped.get() - skipped,
+                (first_advance / 2) as u64
+            );
+            for registers in inputs {
+                for budget in 1..=100 {
+                    let reference = run(false, registers, budget);
+                    assert_eq!(
+                        run(true, registers, budget),
+                        reference,
+                        "{registers:?}, budget {budget}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

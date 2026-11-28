@@ -11,10 +11,12 @@ use crate::arm;
 mod a32;
 mod fill;
 mod register;
+mod restoring;
 mod t32;
 
 pub use fill::{WordFillAdvance, WordFillLoop};
 pub use register::{RegisterLoop, ShiftCountLoop};
+pub use restoring::{DivisionRestoreLoop, DivisionScaleLoop};
 
 /// The instruction set a loop branch was fetched in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

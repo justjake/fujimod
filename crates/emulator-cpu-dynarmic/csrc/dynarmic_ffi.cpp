@@ -234,16 +234,22 @@ bool UserCallbacksImpl::PreCodeReadHook(bool thumb, VAddr pc, IREmitter& ir) {
     uint32_t kind = word ? callbacks.batch_instruction(*word) : 0;
     if (kind >= 4 && kind <= 6 && (instance->jit->Cpsr() & 31) == 0x10) kind = 0;
     if (kind == 8) kind = instance->vfp_enabled ? 1 : 0;
-    if (kind == 9 || kind == 10) {
+    if (kind >= 9 && kind <= 12) {
         // This affects dispatch only. The runtime proof checks the current
         // instruction bytes again before advancing the loop.
-        const uint32_t span = kind == 9 ? 12 : 8;
+        constexpr std::array<uint32_t, 4> body_lengths{3, 2, 4, 15};
+        const uint32_t length = body_lengths[kind - 9];
+        const uint32_t span = length * 4;
         kind = 1;
         if (pc >= span) {
-            const auto first = ReadCheckedCode(pc - span);
-            const auto second = ReadCheckedCode(pc - span + 4);
-            const auto third = span == 12 ? ReadCheckedCode(pc - 4) : std::optional<std::uint32_t>{0};
-            if (first && second && third && callbacks.is_counted_loop(*word, *first, *second, *third)) {
+            std::array<uint32_t, 15> body;
+            uint32_t read = 0;
+            for (; read < length; ++read) {
+                const auto instruction = ReadCheckedCode(pc - span + read * 4);
+                if (!instruction) break;
+                body[read] = *instruction;
+            }
+            if (read == length && callbacks.is_counted_loop(*word, body.data(), length)) {
                 kind = 7;
             }
         }
