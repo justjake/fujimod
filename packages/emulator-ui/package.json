@@ -59,12 +59,12 @@
     "format:check": "vp fmt --check"
   },
   "devDependencies": {
-    "@solidjs/vite-plugin": "3.0.0-next.50",
-    "eslint-plugin-solid": "0.18.1",
+    "@solidjs/vite-plugin": "3.0.1",
+    "eslint-plugin-solid": "0.20.1",
     "fujimod": "workspace:*",
-    "jsdom": "30.1.3",
+    "jsdom": "31.0.1",
     "vite": "npm:@voidzero-dev/vite-plus-core@1.3.0",
-    "vite-plus": "1.3.0"
+    "vite-plus": "1.8.0"
   },
   "peerDependencies": {
     "@solidjs/web": "2.0.0-rc.20",
