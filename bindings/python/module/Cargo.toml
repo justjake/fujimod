@@ -16,6 +16,7 @@ doctest = false
 
 [features]
 default = ["emulator"]
+dynarmic = ["emulator", "fujimod-emulator/dynarmic"]
 emulator = [
   "dep:fujimod-emulator-exr2-board",
   "dep:fujimod-python-base",

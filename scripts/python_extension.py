@@ -11,6 +11,7 @@ source-path file an editable install writes.
     uv run --locked python scripts/python_extension.py
 """
 
+import argparse
 import json
 import os
 import shutil
@@ -34,7 +35,7 @@ if missing:
 """
 
 
-def build() -> Path:
+def build(*, dynarmic: bool) -> Path:
     """Build the extension library and return its path."""
     built = subprocess.run(
         [
@@ -46,6 +47,7 @@ def build() -> Path:
             "bindings/python/module/Cargo.toml",
             "--lib",
             "--message-format=json-render-diagnostics",
+            *(["--features", "dynarmic"] if dynarmic else []),
         ],
         cwd=ROOT,
         check=True,
@@ -65,7 +67,9 @@ def build() -> Path:
 
 
 def main() -> None:
-    library = build()
+    parser = argparse.ArgumentParser(description="Build and install the native Python extension.")
+    parser.add_argument("--dynarmic", action="store_true", help="include the Dynarmic CPU backend")
+    library = build(dynarmic=parser.parse_args().dynarmic)
     candidate = PACKAGE / f"._native.new-{os.getpid()}.abi3.so"
     try:
         shutil.copyfile(library, candidate)

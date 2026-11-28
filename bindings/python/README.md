@@ -19,6 +19,12 @@ It compiles `fujimod._native` with Cargo's release profile, checks that it
 loads, replaces `python/fujimod/_native.abi3.so` and puts `python/` on the
 environment's path. Rerun it after Rust changes.
 
+On ARM64 or x86-64 macOS and Linux, pass `--dynarmic` to include the Dynarmic
+CPU backend. Initialize the recursive submodules and install CMake, Ninja,
+and Boost headers before building. Cortex-A7 configurations can select the
+backend with `preset.factory_options.cpu_backend` set to `dynarmic` and use
+the exact execution policy.
+
 ## Native execution
 
 The native extension also exposes `fujimod.emulator`. For a resolved graph, build a
