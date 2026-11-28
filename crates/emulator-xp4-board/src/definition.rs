@@ -28,6 +28,9 @@ pub struct StandaloneDma {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Definition {
+    /// Physically addressed RAM ranges where device access observes data-cache maintenance.
+    #[serde(default)]
+    pub coherent_ranges: Option<fujimod_emulator_cpu_unicorn::aprofile::CoherenceOptions>,
     #[serde(default)]
     pub discovery_tx_receiver: Option<DiscoveryTxReceiver>,
     /// Explicit byte I2C controllers and their declared external peers.

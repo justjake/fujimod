@@ -24,7 +24,8 @@ use super::*;
 use crate::memory::HashMap;
 
 /// Line size and physical `[begin, end)` ranges of device-visible memory.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CoherenceOptions {
     pub line_bytes: u32,
     pub ranges: Vec<(u64, u64)>,
@@ -47,6 +48,42 @@ impl CoherenceDomain {
             ranges: options.ranges.clone(),
             restore: Vec::new(),
         }))))
+    }
+
+    /// Restore processor-view bytes after a load temporarily substituted stale bytes.
+    pub fn restore_processor_view(
+        &self,
+        mut write: impl FnMut(u64, &[u8]) -> Result<(), String>,
+    ) -> Result<(), String> {
+        let mut shared = self.0.borrow_mut();
+        for patch in &shared.restore {
+            write(patch.address, &patch.bytes)?;
+        }
+        shared.restore.clear();
+        Ok(())
+    }
+
+    /// Replace dirty processor-view bytes with the bytes a bus master reads.
+    pub fn device_read(&self, physical: u64, bytes: &mut [u8]) {
+        let shared = self.0.borrow();
+        if shared.overlaps(physical, bytes.len()) {
+            shared.model.device_read(physical, bytes);
+        }
+    }
+
+    /// Record a bus master's write before updating the shared backing.
+    pub fn device_write(&self, physical: u64, bytes: &[u8], before: &[u8]) {
+        let mut shared = self.0.borrow_mut();
+        if shared.overlaps(physical, bytes.len()) {
+            shared.model.device_write(physical, bytes, before);
+        }
+    }
+}
+
+impl Shared {
+    fn overlaps(&self, address: u64, size: usize) -> bool {
+        let end = address.saturating_add(size as u64);
+        self.ranges.iter().any(|&(lo, hi)| address < hi && lo < end)
     }
 }
 
@@ -130,6 +167,14 @@ impl Execution {
     fn flush_restore(&self, shared: &mut Shared) -> Result<(), String> {
         let pending = std::mem::take(&mut shared.restore);
         self.put_back(&pending)
+    }
+
+    pub(super) fn restore_processor_view(&self) -> Result<(), String> {
+        if let Some(core) = self.coherence.borrow().as_ref() {
+            core.domain
+                .restore_processor_view(|address, bytes| self.cpu.write_memory(address, bytes))?;
+        }
+        Ok(())
     }
 
     fn cp15(&self, crn: u32, opc2: u32) -> Result<u32, String> {
@@ -308,14 +353,11 @@ impl Core {
     /// What a bus master reading `buffer.len()` bytes at `address` sees.
     pub fn coherent_device_read(&self, address: u64, buffer: &mut [u8]) -> Result<(), String> {
         let e = &self.execution;
-        let guard = e.coherence.borrow();
-        let mut shared = guard.as_ref().map(|c| c.domain.0.borrow_mut());
-        if let Some(shared) = shared.as_mut() {
-            e.flush_restore(shared)?;
-        }
+        e.restore_processor_view()?;
         e.cpu.read_memory(address, buffer)?;
-        if let Some(shared) = shared.as_ref() {
-            shared.model.device_read(address, buffer);
+        let guard = e.coherence.borrow();
+        if let Some(core) = guard.as_ref() {
+            core.domain.device_read(address, buffer);
         }
         Ok(())
     }
@@ -323,13 +365,12 @@ impl Core {
     /// A bus master writing `bytes` at `address`.
     pub fn coherent_device_write(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
         let e = &self.execution;
+        e.restore_processor_view()?;
         let guard = e.coherence.borrow();
         if let Some(core) = guard.as_ref() {
-            let mut shared = core.domain.0.borrow_mut();
-            e.flush_restore(&mut shared)?;
             let mut before = vec![0; bytes.len()];
             e.cpu.read_memory(address, &mut before)?;
-            shared.model.device_write(address, bytes, &before);
+            core.domain.device_write(address, bytes, &before);
         }
         e.cpu.write_memory(address, bytes)
     }

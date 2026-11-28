@@ -2,6 +2,7 @@
 
 mod byte_i2c;
 mod card_media;
+mod coherent_scanout;
 mod decompressor;
 mod ff61_controller;
 mod functional_system_control;

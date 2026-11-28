@@ -3,6 +3,7 @@ use super::{Board, InterruptMap, bus::Bus, set};
 use fujimod_catalog_configuration::{RunCpuBackend, RunEngine};
 use fujimod_emulator_cpu::{Cpu, Model, Register, memory::Backing, timeline::Ratio};
 use fujimod_emulator_cpu_unicorn::Library;
+use fujimod_emulator_cpu_unicorn::aprofile::{CoherenceDomain, CoherenceOptions};
 use std::ptr::NonNull;
 
 #[derive(serde::Deserialize)]
@@ -79,6 +80,7 @@ pub struct Options {
     translation_cache_size_bytes: Option<u32>,
     epoch: Option<(u64, Vec<u64>)>,
     ram_fill: Option<u8>,
+    coherence: Option<CoherenceOptions>,
 }
 
 impl Options {
@@ -88,12 +90,19 @@ impl Options {
             translation_cache_size_bytes: None,
             epoch: None,
             ram_fill: None,
+            coherence: None,
         }
     }
 
     /// Initialize declared physical memory before boot images are loaded.
     pub fn with_ram_fill(mut self, byte: u8) -> Self {
         self.ram_fill = Some(byte);
+        self
+    }
+
+    /// Model writeback and invalidation over the declared device-visible RAM.
+    pub fn with_coherent_ranges(mut self, coherence: Option<CoherenceOptions>) -> Self {
+        self.coherence = coherence;
         self
     }
 
@@ -231,6 +240,7 @@ impl Engines {
         options: &Options,
         translation_cache_size_bytes: u32,
         memory: &fujimod_emulator_cpu_unicorn::memory::Memory,
+        coherence: Option<&CoherenceDomain>,
     ) -> Result<Box<dyn Cpu>, String> {
         let model = processor.model;
         if processor.cpu_backend == RunCpuBackend::Dynarmic {
@@ -274,10 +284,11 @@ impl Engines {
         if model == Model::ArmV8A
             || model == Model::CortexA7 && std::env::var_os("FUJIMOD_A7_PER_INSTRUCTION").is_none()
         {
-            return Ok(Box::new(fujimod_emulator_cpu_unicorn::aprofile::Core::new(
-                raw,
-                memory.clone(),
-            )?));
+            let core = fujimod_emulator_cpu_unicorn::aprofile::Core::new(raw, memory.clone())?;
+            if let Some(domain) = coherence {
+                core.set_coherence(Some(domain))?;
+            }
+            return Ok(Box::new(core));
         }
         if let Some(config) = processor.rprofile.clone() {
             Ok(Box::new(
@@ -305,6 +316,39 @@ fn dynarmic_unavailable() -> String {
 }
 
 impl Graph {
+    fn coherence_domain(&self, options: &Options) -> Result<Option<CoherenceDomain>, String> {
+        let Some(config) = &options.coherence else {
+            return Ok(None);
+        };
+        if std::env::var_os("FUJIMOD_A7_PER_INSTRUCTION").is_some()
+            || self
+                .processors
+                .iter()
+                .any(|p| p.model != Model::CortexA7 || !p.uses_unicorn(options.engine))
+        {
+            return Err("coherent ranges require counted Unicorn Cortex-A7 processors".into());
+        }
+        let domain = CoherenceDomain::new(config)?;
+        for &(begin, end) in &config.ranges {
+            for core in 0..self.processors.len() {
+                let mut views = self.mappings.iter().filter(|map| map.core == core);
+                if views.clone().any(|map| {
+                    map.address != map.physical
+                        && begin < map.physical + map.size as u64
+                        && map.physical < end
+                }) || !views.any(|map| {
+                    map.address == map.physical
+                        && map.address <= begin
+                        && end <= map.address + map.size as u64
+                        && map.permissions & 3 == 3
+                }) {
+                    return Err("coherent ranges require identity-mapped writable RAM".into());
+                }
+            }
+        }
+        Ok(Some(domain))
+    }
+
     pub(super) fn validate_memory_map(
         &self,
         a: &MemoryMap,
@@ -500,6 +544,7 @@ impl Graph {
     ) -> Result<Board, String> {
         self.validate()?;
         let peripheral_pages = self.peripheral_pages()?;
+        let coherence = self.coherence_domain(&options)?;
         // Validate maps before creating a process-wide native VM.
         let ram = super::memory::Memory::new(
             self.ram
@@ -514,7 +559,8 @@ impl Graph {
                 })
                 .collect::<Result<Vec<_>, String>>()?,
             self.dma_mappings.clone(),
-        )?;
+        )?
+        .with_coherence(coherence.clone());
         let unicorn_processors = self
             .processors
             .iter()
@@ -529,7 +575,15 @@ impl Graph {
         let cpus = self
             .processors
             .iter()
-            .map(|p| engines.cpu(p, &options, translation_cache_size_bytes, &memory))
+            .map(|p| {
+                engines.cpu(
+                    p,
+                    &options,
+                    translation_cache_size_bytes,
+                    &memory,
+                    coherence.as_ref(),
+                )
+            })
             .collect::<Result<Vec<_>, _>>()?;
         for (core, cpu) in cpus.iter().enumerate() {
             for a in self.mappings.iter().filter(|a| a.core == core) {

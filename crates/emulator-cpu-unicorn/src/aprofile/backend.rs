@@ -280,6 +280,9 @@ impl Cpu for Core {
             };
             e.active.set(false);
             e.memory.end();
+            if e.is_coherent() {
+                e.restore_processor_view()?;
+            }
             settlement?;
             if let Some(error) = e.failure.borrow_mut().take() {
                 return Err(error.into());
