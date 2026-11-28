@@ -1087,6 +1087,7 @@ class BodyConnection(TypedDict, total=False):
 
 class BodyHardware(TypedDict, total=False):
     bus_drain: NotRequired[list[BusDrain]]
+    card_slots: NotRequired[list[CardSlotWiring]]
     gpio_feedback: NotRequired[list[GpioFeedback]]
     keypad_samples: NotRequired[dict[str, int]]
     lens_mount: NotRequired[LensMount | None]
@@ -1250,6 +1251,11 @@ class CardSlotAssembly(TypedDict, total=False):
     detect_connection_id: Required[str]
     part_id: Required[str]
     write_protect_connection_id: Required[str]
+
+
+class CardSlotWiring(TypedDict, total=False):
+    controller_id: Required[str]
+    detect_connection_id: Required[str]
 
 
 class ClockDomain(TypedDict, total=False):
@@ -6326,6 +6332,8 @@ class SerialAttachment(TypedDict, total=False):
     connection_id: Required[str]
     controller_id: Required[str]
     part_id: Required[str]
+    programming_flash_bytes: NotRequired[int | None]
+    programming_mode_connection_id: NotRequired[str | None]
     select_connection_id: NotRequired[str | None]
 
 

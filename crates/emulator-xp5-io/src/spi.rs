@@ -21,7 +21,7 @@ pub struct Select {
     pub active_high: bool,
 }
 impl Select {
-    fn active(self, pins: &fujimod_emulator_devices::xp5::pins::Pins) -> bool {
+    pub fn active(self, pins: &fujimod_emulator_devices::xp5::pins::Pins) -> bool {
         (pins.output_level(self.port, self.pin) != 0) == self.active_high
     }
 }

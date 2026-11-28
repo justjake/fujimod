@@ -4639,6 +4639,13 @@
           },
           "type": "array"
         },
+        "card_slots": {
+          "description": "Removable-card slots wired to SoC card hosts and their contacts.",
+          "items": {
+            "$ref": "#/$defs/CardSlotWiring"
+          },
+          "type": "array"
+        },
         "gpio_feedback": {
           "description": "Connections between GPIO output and input pads.",
           "items": {
@@ -5536,6 +5543,25 @@
         "connection_id",
         "detect_connection_id",
         "write_protect_connection_id"
+      ],
+      "type": "object"
+    },
+    "CardSlotWiring": {
+      "additionalProperties": false,
+      "description": "A removable-card slot on one SoC card host: the contacts the host's slot drives.",
+      "properties": {
+        "controller_id": {
+          "description": "SoC card-host block the slot belongs to.",
+          "type": "string"
+        },
+        "detect_connection_id": {
+          "description": "Connection whose one GPIO pad is at its active level while a card is inserted.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "controller_id",
+        "detect_connection_id"
       ],
       "type": "object"
     },
@@ -29294,6 +29320,22 @@
         "part_id": {
           "description": "Installed part identity.",
           "type": "string"
+        },
+        "programming_flash_bytes": {
+          "description": "Size in bytes of the endpoint's own flash that programming mode erases and writes;\ndeclared exactly when `programming_mode_connection_id` is.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "programming_mode_connection_id": {
+          "description": "Connection whose one GPIO pad, at its active level, switches the endpoint from its\nregister protocol to programming its own flash, when the endpoint has that mode.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "select_connection_id": {
           "description": "Connection selecting the endpoint, when declared.",

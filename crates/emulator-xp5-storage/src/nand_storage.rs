@@ -26,6 +26,8 @@ pub struct NandSession {
 pub struct NandStorage {
     die: Nand,
     pub session: NandSession,
+    /// Main-area pages to refresh in a linear aperture shadow.
+    dirty: std::collections::BTreeSet<u64>,
 }
 
 impl NandStorage {
@@ -47,7 +49,13 @@ impl NandStorage {
         Ok(Self {
             die,
             session: NandSession::default(),
+            dirty: Default::default(),
         })
+    }
+
+    /// Indices of the main-area pages changed since the previous call.
+    pub fn take_dirty_pages(&mut self) -> Vec<u64> {
+        std::mem::take(&mut self.dirty).into_iter().collect()
     }
 
     /// Declared initial main-area bytes, placed over the base image before the guest has
@@ -60,6 +68,10 @@ impl NandStorage {
             }],
             std::collections::BTreeMap::new(),
         )?;
+        if !bytes.is_empty() {
+            self.dirty
+                .extend(offset / PAGE as u64..=(offset + bytes.len() as u64 - 1) / PAGE as u64);
+        }
         Ok(())
     }
 
@@ -81,6 +93,7 @@ impl NandStorage {
             return Err("serial NAND program without WEL".into());
         }
         self.die.program(row, bytes, spare)?;
+        self.dirty.insert(u64::from(row));
         self.session.write_enable = false;
         Ok(())
     }
@@ -117,6 +130,8 @@ impl NandStorage {
             return Err("serial NAND erase without WEL".into());
         }
         self.die.erase(first_row)?;
+        self.dirty
+            .extend((first_row..first_row + PAGES_PER_BLOCK).map(u64::from));
         self.session.write_enable = false;
         Ok(())
     }
@@ -130,6 +145,20 @@ mod tests {
 
     fn storage(base: Vec<u8>) -> NandShared {
         Arc::new(Mutex::new(NandStorage::new(base).unwrap()))
+    }
+
+    #[test]
+    fn aperture_shadow_refreshes_seeded_programmed_and_erased_pages() {
+        let mut storage = NandStorage::new(vec![0xff; 2 * PAGE]).unwrap();
+        storage.seed_bytes(PAGE as u64, &[0xaa]).unwrap();
+        assert_eq!(storage.take_dirty_pages(), [1]);
+        assert!(storage.take_dirty_pages().is_empty());
+        storage.session.write_enable = true;
+        storage.program_page(0, &[0; PAGE], &[0xff; SPARE]).unwrap();
+        assert_eq!(storage.take_dirty_pages(), [0]);
+        storage.session.write_enable = true;
+        storage.erase_block(0).unwrap();
+        assert_eq!(storage.take_dirty_pages().len(), PAGES_PER_BLOCK as usize);
     }
 
     #[test]

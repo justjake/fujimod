@@ -115,8 +115,18 @@ pub(super) fn open_startup(
         if second_card_image.is_some() || !second_card_files.is_empty() {
             return Err("a card in SD slot 2 needs the loader start".into());
         }
+        let mut setup_handoff = false;
         let start = match (rom_path, start) {
             (None, RunStart::Setup) => {
+                setup_handoff = true;
+                loader.extend(loader_card::LoaderCard::load(
+                    loader_card::SLOT,
+                    sd_image.as_deref(),
+                    &card_files,
+                )?);
+                for card in &loader {
+                    card.apply(&mut state)?;
+                }
                 let handoff = rom_start::SetupHandoff::for_firmware(&firmware_id)
                     .ok_or("this firmware declares no setup-stage start")??;
                 rom_start::RomStart::from_setup_handoff(handoff)?
@@ -131,7 +141,7 @@ pub(super) fn open_startup(
             (None, _) => return Err("ROM startup requires --boot-rom".into()),
         };
         Some(match &sd_image {
-            Some(image) => {
+            Some(image) if !setup_handoff => {
                 let start = start.with_card_image(image)?;
                 if let Some(card) = &start.card_image {
                     for line in &card.layout {
@@ -141,7 +151,7 @@ pub(super) fn open_startup(
                 }
                 start
             }
-            None => start,
+            _ => start,
         })
     } else {
         if rom_path.is_some() {

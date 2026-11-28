@@ -7,6 +7,7 @@ pub mod i2c;
 pub mod lsm6ds;
 pub mod lsm6ds_i2c;
 pub mod power_controller;
+pub mod power_controller_programmer;
 pub mod rl78_programmer;
 pub mod serial;
 pub mod serial_calibration;

@@ -282,10 +282,12 @@ fn shadow_flash_aperture(
             storage.take_dirty_pages();
             bytes
         }
-        Some(flash_storage::Medium::Nand(storage)) => storage
-            .lock()
-            .map_err(|_| "flash storage lock poisoned")?
-            .read(0, FLASH_APERTURE_SIZE)?,
+        Some(flash_storage::Medium::Nand(storage)) => {
+            let mut storage = storage.lock().map_err(|_| "flash storage lock poisoned")?;
+            let bytes = storage.read(0, FLASH_APERTURE_SIZE)?;
+            storage.take_dirty_pages();
+            bytes
+        }
         None => return Err("ROM start needs the flash image to back the aperture".into()),
     };
     session.board.write_physical(FLASH_APERTURE_BASE, &bytes)
@@ -300,14 +302,23 @@ fn sync_flash_aperture(
     storage: &flash_storage::Medium,
     board: &board::Board,
 ) -> Result<(), String> {
-    let flash_storage::Medium::Nor(storage) = storage else {
-        return Err("ROM start needs the NOR flash image to back the aperture".into());
-    };
-    let mut storage = storage.lock().map_err(|_| "flash storage lock poisoned")?;
-    for page in storage.take_dirty_pages() {
-        let offset = page * 4096;
-        let bytes = storage.read(offset, 4096)?;
-        board.write_physical(FLASH_APERTURE_BASE + offset, &bytes)?;
+    match storage {
+        flash_storage::Medium::Nor(storage) => {
+            let mut storage = storage.lock().map_err(|_| "flash storage lock poisoned")?;
+            for page in storage.take_dirty_pages() {
+                let offset = page * 4096;
+                let bytes = storage.read(offset, 4096)?;
+                board.write_physical(FLASH_APERTURE_BASE + offset, &bytes)?;
+            }
+        }
+        flash_storage::Medium::Nand(storage) => {
+            let mut storage = storage.lock().map_err(|_| "flash storage lock poisoned")?;
+            for page in storage.take_dirty_pages() {
+                let offset = page * 4096;
+                let bytes = storage.read(offset, 4096)?;
+                board.write_physical(FLASH_APERTURE_BASE + offset, &bytes)?;
+            }
+        }
     }
     Ok(())
 }
@@ -653,6 +664,33 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
         .max_dirty_sectors
         .max((file_sectors + 8192).min(1 << 21));
     Ok(state)
+}
+
+/// The card files and raw card images the run's SD slots hold: a ROM start's own card in the
+/// first slot together with every loader card inserted for the same run, so a stock setup
+/// hand-off sees the caller's card files.
+fn card_media<'a>(
+    rom: Option<&'a RomStart>,
+    loader_cards: &'a [super::loader_card::LoaderCard],
+) -> (
+    BTreeMap<String, Vec<u8>>,
+    Vec<(u64, &'a fujimod_emulator_devices::parts::sd_card::Card)>,
+) {
+    let mut assets = rom.map(RomStart::assets).unwrap_or_default();
+    for card in loader_cards {
+        assets.extend(card.assets.clone());
+    }
+    let images = rom
+        .and_then(|rom| rom.card_image.as_ref())
+        .map(|image| (super::loader_card::SLOT, &image.card))
+        .into_iter()
+        .chain(
+            loader_cards
+                .iter()
+                .filter_map(|card| Some((card.slot, card.card.as_ref()?))),
+        )
+        .collect();
+    (assets, images)
 }
 
 /// Open a caller-described XP5 input set through FujiMod's shared XP5 board, optionally resetting
@@ -1132,32 +1170,15 @@ pub(crate) fn open_from(
     let mut windows = state.device.clone();
     xp5_boot::apply_run_scene(resolved, &mut windows, run_scene, ticks_per_second)?;
     let outputs = crate::output::Outputs::default();
+    let (card_assets, card_images) = card_media(rom, loader_cards);
     let (windows, resources) = devices_and_resources(
         state,
         firmware,
         run_directory,
         &outputs,
         windows,
-        &rom.map(RomStart::assets).unwrap_or_else(|| {
-            loader_cards
-                .iter()
-                .flat_map(|card| card.assets.clone())
-                .collect()
-        }),
-        &rom.map_or_else(
-            || {
-                loader_cards
-                    .iter()
-                    .filter_map(|card| Some((card.slot, card.card.as_ref()?)))
-                    .collect()
-            },
-            |rom| {
-                rom.card_image
-                    .iter()
-                    .map(|image| (super::loader_card::SLOT, &image.card))
-                    .collect::<Vec<_>>()
-            },
-        ),
+        &card_assets,
+        &card_images,
         &reference.soc,
         reference
             .soc
@@ -1360,17 +1381,13 @@ pub(crate) fn open_from(
             synchronize: Box::new(move |board| sync_flash_aperture(&storage, board)),
         });
     }
-    let serial_nand = matches!(storage, Some(flash_storage::Medium::Nand(_)));
     if rom.is_some() && !setup_without_flash {
         shadow_flash_aperture(storage.as_ref(), &mut session)?;
         let storage = storage.ok_or("early startup flash backing is absent")?;
-        // Serial NAND refuses program and erase, so its shadow never changes.
-        if !serial_nand {
-            session.window_action = Some(fujimod_emulator_session::WindowAction {
-                interval: std::num::NonZeroU64::new((ticks_per_second / 1_000).max(1)).unwrap(),
-                synchronize: Box::new(move |board| sync_flash_aperture(&storage, board)),
-            });
-        }
+        session.window_action = Some(fujimod_emulator_session::WindowAction {
+            interval: std::num::NonZeroU64::new((ticks_per_second / 1_000).max(1)).unwrap(),
+            synchronize: Box::new(move |board| sync_flash_aperture(&storage, board)),
+        });
     }
     Ok(Opened {
         session,
@@ -1516,5 +1533,75 @@ mod tests {
         assert!(plan_aperture(0xfb1a_0000, 0x1000, &[(0xfb1a_2000, 0x2000)]).is_err());
         assert!(plan_aperture(u64::MAX - 0x10, 0x100, &[]).is_err());
         assert!(plan_aperture(0xfb5a_0000, 0, &[]).is_err());
+    }
+
+    #[test]
+    fn setup_handoff_preserves_loader_card_files_and_slot_irq() {
+        let mut state: BootState = toml::from_str(
+            r#"
+firmware = "xe5-112"
+ram = []
+[[device]]
+base = 0xff9b0000
+size = 0x1e0
+kind = "sdhci"
+[device.options.controller]
+base = 0xff9b0000
+protocol = "sdhc"
+transfer_ticks = 1000
+clock_ticks = 1000
+rca = 1
+ram_bytes = 0x80000000
+[[sd]]
+base = 0xff9b0000
+present = false
+protected = false
+files = []
+[sd.format]
+sectors = 0x3b9e000
+max_dirty_sectors = 65536
+partition_start = 8192
+sectors_per_cluster = 64
+label = "NO NAME"
+"#,
+        )
+        .unwrap();
+        let handoff = rom_start::SetupHandoff::for_firmware("xe5-112")
+            .unwrap()
+            .unwrap();
+        let rom = RomStart::from_setup_handoff(handoff).unwrap();
+        let without_card = rom_boot_state(&state, &rom).unwrap();
+        assert!(!without_card.sd[0].present);
+        assert!(!without_card.device[0].options.contains_key("irq"));
+
+        let directory = std::env::temp_dir().join(format!("setup-card-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let file = directory.join("FWUP0036.DAT");
+        std::fs::write(&file, b"update").unwrap();
+        let card = super::super::loader_card::LoaderCard::load(
+            super::super::loader_card::SLOT,
+            None,
+            &[("FWUP0036.DAT".into(), file)],
+        )
+        .unwrap()
+        .unwrap();
+        card.apply(&mut state).unwrap();
+        let with_card = rom_boot_state(&state, &rom).unwrap();
+        assert!(with_card.sd[0].present);
+        assert_eq!(
+            with_card.sd[0].files,
+            [("FWUP0036.DAT".to_string(), "FWUP0036.DAT".to_string())]
+        );
+        assert!(with_card.sd[0].format.max_dirty_sectors >= 1 << 21);
+        assert_eq!(with_card.device[0].options["irq"].as_integer(), Some(262));
+        // The setup start's own card media and the caller's card files reach the SD slot together.
+        let (assets, images) = card_media(Some(&rom), std::slice::from_ref(&card));
+        let mut expected = rom.assets();
+        expected.insert("FWUP0036.DAT".into(), b"update".to_vec());
+        assert_eq!(assets, expected);
+        assert!(images.is_empty());
+        let (assets, _) = card_media(Some(&rom), &[]);
+        assert_eq!(assets, rom.assets());
+        std::fs::remove_dir_all(&directory).ok();
     }
 }

@@ -6,6 +6,7 @@ use fujimod_emulator_devices::{
     bus::InterruptLine,
     graph::{DeviceGraph, DeviceWindow, Mapping},
     parts::{card_contacts::Contacts, sd_card::Card},
+    xp5::pins::SharedPins,
 };
 use fujimod_emulator_ip::sdhci::{
     host::{Options, SdHost, Wiring},
@@ -70,17 +71,25 @@ pub fn resolve(
     }
     Ok(media)
 }
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+struct DetectGpio {
+    port: usize,
+    pin: usize,
+    active_high: bool,
+}
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Host {
     controller: Options,
     irq: Option<u32>,
+    detect_gpio: Option<DetectGpio>,
 }
 pub(super) fn register(
     graph: &mut DeviceGraph,
     window: &DeviceWindow,
     media: &mut BTreeMap<u64, Media>,
-    pins: &fujimod_emulator_devices::xp5::pins::SharedPins,
+    pins: &SharedPins,
 ) -> Result<(), String> {
     let host: Host = toml::Value::Table(window.options.clone())
         .try_into()
@@ -98,6 +107,16 @@ pub(super) fn register(
     let address_high = host.controller.address_high;
     let supply = host.controller.supply.is_some();
     let contacts = slot.contacts.clone();
+    if let Some(detect) = host.detect_gpio {
+        if detect.port >= 20 || detect.pin >= 16 {
+            return Err("SD card-detect GPIO is outside the declared pin range".into());
+        }
+        pins.lock().unwrap().set_input(
+            detect.port,
+            detect.pin,
+            contacts.present() == detect.active_high,
+        );
+    }
     let device = if let Some(irq) = host.irq {
         SdHost::new(
             host.controller,
@@ -199,12 +218,13 @@ mod tests {
             [0x12, 0x34]
         );
         let mut graph = DeviceGraph::new();
+        let pins = fujimod_emulator_devices::xp5::pins::Pins::shared();
         let window=DeviceWindow {base:0xffd00000,size:0x1000,kind:"sdhci".into(),options:toml::from_str("[controller]\nbase=4291821568\nprotocol='sdhc'\ntransfer_ticks=4\nclock_ticks=2\nrca=1\nram_bytes=4294967296").unwrap()};
-        register(&mut graph, &window, &mut media, &Pins::shared()).unwrap();
+        register(&mut graph, &window, &mut media, &pins).unwrap();
         assert!(require_hosts(&media).is_ok());
         assert!(graph.at(0xffd00000).is_ok());
         assert!(
-            register(&mut graph, &window, &mut media, &Pins::shared())
+            register(&mut graph, &window, &mut media, &pins)
                 .unwrap_err()
                 .contains("card media")
         );
@@ -242,7 +262,8 @@ mod tests {
         assert!(graph.at(0xffd02224).is_ok());
         assert!(require_hosts(&media).unwrap_err().contains("no SD host"));
         let host = DeviceWindow {base:0xffd00000,size:0x1e0,kind:"sdhci".into(),options:toml::from_str("[controller]\nbase=4291821568\nprotocol='sdhc'\ntransfer_ticks=4\nclock_ticks=2\nrca=1\nram_bytes=4294967296\ndram_alias=false\naddress_high=0xff90e7d8").unwrap()};
-        register(&mut graph, &host, &mut media, &Pins::shared()).unwrap();
+        let pins = Pins::shared();
+        register(&mut graph, &host, &mut media, &pins).unwrap();
         require_hosts(&media).unwrap();
         // The host also owns its DMA address-high word in the system control block.
         assert_eq!(graph.at(0xff90e7d8).unwrap(), graph.at(0xffd00000).unwrap());
@@ -259,5 +280,53 @@ mod tests {
                 .unwrap_err()
                 .contains("card media")
         );
+    }
+    #[test]
+    fn card_detect_gpio_follows_slot_presence_and_polarity() {
+        let assets = BTreeMap::from([("setup".into(), vec![0x12, 0x34])]);
+        let host = |detect: &str| {
+            DeviceWindow {
+            base: 0xffd00000,
+            size: 0x1e0,
+            kind: "sdhci".into(),
+            options: toml::from_str(&format!(
+                "{detect}\n[controller]\nbase=4291821568\nprotocol='sdhc'\ntransfer_ticks=4\nclock_ticks=2\nrca=1\nram_bytes=4294967296"
+            ))
+            .unwrap(),
+        }
+        };
+        let pins = fujimod_emulator_devices::xp5::pins::Pins::shared();
+        let mut present_media = resolve(vec![input()], &assets).unwrap();
+        register(
+            &mut DeviceGraph::new(),
+            &host("detect_gpio = { port = 11, pin = 12, active_high = false }"),
+            &mut present_media,
+            &pins,
+        )
+        .unwrap();
+        assert_eq!(pins.lock().unwrap().level(11, 12), 0);
+
+        let pins = fujimod_emulator_devices::xp5::pins::Pins::shared();
+        let mut empty = input();
+        empty.present = false;
+        let mut absent_media = resolve(vec![empty], &assets).unwrap();
+        register(
+            &mut DeviceGraph::new(),
+            &host("detect_gpio = { port = 11, pin = 12, active_high = false }"),
+            &mut absent_media,
+            &pins,
+        )
+        .unwrap();
+        assert_eq!(pins.lock().unwrap().level(11, 12), 1);
+
+        let mut bad_media = resolve(vec![input()], &assets).unwrap();
+        let err = register(
+            &mut DeviceGraph::new(),
+            &host("detect_gpio = { port = 20, pin = 0, active_high = false }"),
+            &mut bad_media,
+            &pins,
+        )
+        .unwrap_err();
+        assert!(err.contains("outside the declared pin range"), "{err}");
     }
 }

@@ -15,7 +15,9 @@
         "part_id": "power-controller",
         "controller_id": "spi8",
         "connection_id": "power-controller-spi8-bus",
-        "select_connection_id": "power-controller-spi8-select"
+        "select_connection_id": "power-controller-spi8-select",
+        "programming_mode_connection_id": "power-controller-programming-mode",
+        "programming_flash_bytes": 65536
       },
       {
         "part_id": "serial-command-16-read",
@@ -91,6 +93,12 @@
         ],
         "basis": "The stock firmware drains the bus with a discarded read of the first address past its DRAM map (the supplied Linux device tree's 366 MiB Linux carveout at 0x40000000 plus the AMP, rpmsg and ISGC shared arenas ending at 0x67F00000)."
       }
+    ],
+    "card_slots": [
+      {
+        "controller_id": "sd-host-0",
+        "detect_connection_id": "sd-card-detect"
+      }
     ]
   },
   "ram_regions": [
@@ -135,6 +143,31 @@
           "active_level": true
         }
       ]
+    },
+    {
+      "id": "power-controller-programming-mode",
+      "kind": "power-control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 8,
+          "pin": 1,
+          "active_level": true
+        }
+      ],
+      "evidence": {
+        "kind": "located",
+        "firmware_ids": [
+          "xe5-112"
+        ],
+        "addresses": [
+          {
+            "firmware_id": "xe5-112",
+            "address": 21978800,
+            "space": "code"
+          }
+        ]
+      }
     },
     {
       "id": "serial-command-16-read-spi4-bus",
@@ -363,6 +396,31 @@
           "active_level": true
         }
       ]
+    },
+    {
+      "id": "sd-card-detect",
+      "kind": "sd-card",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 11,
+          "pin": 12,
+          "active_level": false
+        }
+      ],
+      "evidence": {
+        "kind": "located",
+        "firmware_ids": [
+          "xe5-112"
+        ],
+        "addresses": [
+          {
+            "firmware_id": "xe5-112",
+            "address": 21781640,
+            "space": "code"
+          }
+        ]
+      }
     }
   ],
   "parts": [
