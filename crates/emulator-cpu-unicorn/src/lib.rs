@@ -1982,6 +1982,19 @@ pub(crate) unsafe extern "C" fn code_store(data: *mut c_void, address: u64, size
         (context.callback)(context.data, address, size.max(0) as usize);
     }
 }
+/// The same trampoline as an ordinary Rust function pointer, for a backend
+/// that forwards the observer across a thread boundary.
+pub(crate) unsafe fn code_store_trampoline(
+    data: *mut c_void,
+    address: u64,
+    size: usize,
+) {
+    // `data` is a `CodeStoreContext` this backend owns for the life of the
+    // observer (`observe_code_stores`), the same layout `InstalledCodeStore`
+    // has: the callback first, then the owner's user pointer.
+    let context = unsafe { &*data.cast::<InstalledCodeStore>() };
+    unsafe { (context.callback)(context.data, address, size) }
+}
 unsafe extern "C" fn restart(data: *mut c_void, pc: u64) {
     let context = unsafe { &*data.cast::<InstalledTranslationHooks>() };
     let hooks = &context.hooks;

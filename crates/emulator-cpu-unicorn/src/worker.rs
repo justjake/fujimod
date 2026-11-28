@@ -17,7 +17,7 @@ use std::marker::PhantomData;
 use std::ptr::NonNull;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self, JoinHandle};
 #[path = "rprofile/worker/durable.rs"]
@@ -51,8 +51,8 @@ pub struct CpuWorker {
     thumb_accounting: Option<NonNull<ThumbBlockAccounting>>,
     thumb_recovery: Option<NonNull<ThumbBlockRecoveryAccounting>>,
     translation_callback: Cell<Option<usize>>,
-    /// Context of the installed code-store observer, kept while it is installed.
-    code_store: RefCell<Option<Box<InstalledCodeStore>>>,
+    /// Context of the installed code-store observer, kept while it is
+    /// installed: the engine holds its address until the observer is removed.
     memory: SharedMemory,
     pause_requested: Arc<AtomicU32>,
     callbacks: RefCell<BTreeMap<usize, CallbackEntry>>,
@@ -88,26 +88,19 @@ struct RemoteHook {
     callback: usize,
 }
 
-/// A callback context pointer carried to the engine thread. The worker owns
-/// the boxed context for as long as the observer is installed, as the engine's
-/// hook contract requires.
+/// The code-store observer as the engine thread needs it: the callback and the
+/// owner's user pointer, which is all `crate::code_store` reads.
 #[derive(Clone, Copy)]
-struct CodeStoreContext(*mut c_void);
-unsafe impl Send for CodeStoreContext {}
-
-/// One installed code-store observer forwarded to the engine thread.
-struct InstalledCodeStore {
+struct CodeStoreContext {
     callback: unsafe fn(*mut c_void, u64, usize),
     data: *mut c_void,
 }
+unsafe impl Send for CodeStoreContext {}
+
 enum CallbackEntry {
     Mmio(Mmio),
     Hook(Hook),
     Translation(TranslationHooks),
-    CodeStore {
-        callback: unsafe fn(*mut c_void, u64, usize),
-        data: *mut c_void,
-    },
 }
 
 struct RemoteSnapshot {
@@ -141,6 +134,18 @@ pub fn spawn(config: Config) -> Result<CpuWorker, String> {
     )
 }
 
+#[cfg(test)]
+pub fn spawn_armv7a(
+    translation_cache_size_bytes: u32,
+    memory: SharedMemory,
+) -> Result<CpuWorker, String> {
+    spawn_engine(
+        EngineConfig::Armv7a,
+        translation_cache_size_bytes,
+        memory,
+    )
+}
+
 pub fn spawn_aprofile(
     translation_cache_size_bytes: u32,
     memory: SharedMemory,
@@ -163,11 +168,17 @@ pub fn spawn_mprofile(
 
 enum EngineConfig {
     Rprofile(core::Options),
+    /// An A32 core without block accounting, for tests that need a 32-bit
+    /// worker with only the code-store observer installed.
+    #[cfg(test)]
+    Armv7a,
     Aprofile,
     Mprofile { owner_accounting: bool },
 }
 
 enum Engine {
+    #[cfg(test)]
+    Raw(crate::Core),
     Rprofile(core::Core),
     Aprofile(aprofile::Core),
     Mprofile {
@@ -179,6 +190,8 @@ enum Engine {
 impl Engine {
     fn cpu(&self) -> &dyn Cpu {
         match self {
+            #[cfg(test)]
+            Self::Raw(cpu) => cpu,
             Self::Rprofile(cpu) => cpu,
             Self::Aprofile(cpu) => cpu,
             Self::Mprofile { raw, .. } => raw,
@@ -187,6 +200,8 @@ impl Engine {
 
     fn callback_parked(&self, parked: bool) -> Result<(), String> {
         match self {
+            #[cfg(test)]
+            Self::Raw(_) => Ok(()),
             Self::Rprofile(cpu) => cpu.owner_callback_parked(parked),
             Self::Aprofile(cpu) => cpu.owner_callback_parked(parked),
             Self::Mprofile { .. } => Ok(()),
@@ -231,6 +246,8 @@ fn spawn_engine(
 ) -> Result<CpuWorker, String> {
     let model = match &config {
         EngineConfig::Rprofile(_) => Model::CortexR5F,
+        #[cfg(test)]
+        EngineConfig::Armv7a => Model::CortexA7,
         EngineConfig::Aprofile => Model::ArmV8A,
         EngineConfig::Mprofile { .. } => Model::CortexM4,
     };
@@ -293,7 +310,6 @@ fn spawn_engine(
                     .and_then(|p| NonNull::new(p as *mut _)),
                 thumb_recovery: ready.thumb_recovery.and_then(|p| NonNull::new(p as *mut _)),
                 translation_callback: Cell::new(None),
-            code_store: RefCell::new(None),
                 callbacks: RefCell::new(BTreeMap::new()),
                 hooks: RefCell::new(BTreeMap::new()),
                 next_callback: Cell::new(1),
@@ -380,10 +396,6 @@ enum CallbackCall {
         word: u32,
     },
     Restart(u64),
-    CodeStore {
-        address: u64,
-        size: usize,
-    },
     Memory {
         access: Access,
         address: u64,
@@ -411,8 +423,7 @@ enum WorkerCallbackCounter {
     Fault,
     Classify,
     Restart,
-
-    CodeStore,}
+}
 
 impl WorkerCallbackCounter {
     const COUNT: usize = Self::Restart as usize + 1;
@@ -439,7 +450,6 @@ impl WorkerCallbackCounter {
             CallbackCall::Synchronization => Self::Synchronization,
             CallbackCall::Classify { .. } => Self::Classify,
             CallbackCall::Restart(_) => Self::Restart,
-            CallbackCall::CodeStore { .. } => Self::CodeStore,
             CallbackCall::Memory { .. } => Self::Memory,
             CallbackCall::Fault { .. } => Self::Fault,
         }
@@ -457,7 +467,6 @@ impl WorkerCallbackCounter {
             Self::Fault => "worker_callback_fault",
             Self::Classify => "worker_callback_classify",
             Self::Restart => "worker_callback_restart",
-            Self::CodeStore => "worker_callback_code_store",
         }
     }
 }
@@ -752,8 +761,9 @@ struct WorkerLoop {
     core: Cell<*const Engine>,
     pause_requested: Arc<AtomicU32>,
     translation_callback: Cell<Option<usize>>,
-    /// Context of the installed code-store observer, kept while it is installed.
-    code_store: RefCell<Option<Box<InstalledCodeStore>>>,
+    /// Context of the installed code-store observer, kept while it is
+    /// installed: the engine holds its address until the observer is removed.
+    code_store: RefCell<Option<Box<CodeStoreContext>>>,
     virtual_hooks: RefCell<std::collections::BTreeSet<usize>>,
     snapshots: RefCell<HashMap<u64, Box<dyn Snapshot>>>,
     callback_contexts: RefCell<BTreeMap<usize, Box<CallbackContext>>>,
@@ -1062,6 +1072,8 @@ fn serve(
     let engine = (|| -> Result<Engine, String> {
         let raw = Library::linked()?.open(model, cache_bytes)?;
         Ok(match config {
+            #[cfg(test)]
+            EngineConfig::Armv7a => Engine::Raw(raw),
             EngineConfig::Rprofile(options) => Engine::Rprofile(core::Core::new_parallel_worker(
                 raw,
                 options,
@@ -1478,14 +1490,26 @@ fn dispatch(context: &WorkerLoop, engine: &Engine, operation: Operation) -> Resu
             Value::Unit
         }
         Operation::CodeStore(installed) => {
-            match installed {
-                Some(context) => unsafe {
-                    cpu.observe_code_stores(Some(|data: *mut c_void, address: u64, size: usize| {
-                        unsafe { crate::code_store(data, address, size as i32) }
-                    }), context.0)?;
-                },
-                None => unsafe { cpu.observe_code_stores(None, std::ptr::null_mut())? },
-            }
+            // The engine keeps the user pointer until the observer is removed,
+            // so the boxed context lives in the loop for exactly that long.
+            let mut held = context.code_store.borrow_mut();
+            // Box first so the pointer handed to the engine is the boxed
+            // context, not a stack copy that dies with this call.
+            *held = installed.map(|context| {
+                Box::new(CodeStoreContext {
+                    callback: context.callback,
+                    data: context.data,
+                })
+            });
+            let (trampoline, user) = match held.as_mut() {
+                Some(context) => (
+                    Some(crate::code_store_trampoline as unsafe fn(*mut c_void, u64, usize)),
+                    (&mut **context as *mut CodeStoreContext).cast::<c_void>(),
+                ),
+                None => (None, std::ptr::null_mut()),
+            };
+            unsafe { cpu.observe_code_stores(trampoline, user)? };
+            drop(held);
             Value::Unit
         }
         Operation::RetryBlock(instructions) => {
@@ -1548,10 +1572,6 @@ impl CpuWorker {
                 CallbackEntry::Mmio(mmio) => CallbackEntry::Mmio(*mmio),
                 CallbackEntry::Hook(hook) => CallbackEntry::Hook(*hook),
                 CallbackEntry::Translation(hooks) => CallbackEntry::Translation(*hooks),
-                CallbackEntry::CodeStore { callback, data } => CallbackEntry::CodeStore {
-                    callback: *callback,
-                    data: *data,
-                },
             });
         let Some(entry) = entry else {
             return CallbackResult::Error;
@@ -1656,13 +1676,6 @@ impl CpuWorker {
                 }
                 (CallbackEntry::Translation(hooks), CallbackCall::Restart(pc)) => {
                     (hooks.restart)(hooks.data, pc);
-                    CallbackResult::Unit
-                }
-                (
-                    CallbackEntry::CodeStore { callback, data },
-                    CallbackCall::CodeStore { address, size },
-                ) => {
-                    callback(data, address, size);
                     CallbackResult::Unit
                 }
                 _ => CallbackResult::Error,
@@ -2403,22 +2416,15 @@ impl Cpu for CpuWorker {
         callback: Option<unsafe fn(*mut c_void, u64, usize)>,
         data: *mut c_void,
     ) -> Result<(), String> {
-        // The engine holds the pointer until the observer is removed, so the
-        // worker keeps the context alive for exactly that long.
-        let installed = callback.map(|callback| {
-            *self.code_store.borrow_mut() = Some(Box::new(InstalledCodeStore { callback, data }));
-            let context = self
-                .code_store
-                .borrow_mut()
-                .as_mut()
-                .map(|c| (&mut **c as *mut InstalledCodeStore).cast::<c_void>());
-            context.unwrap()
-        });
-        let result = self.unit(Operation::CodeStore(installed.map(CodeStoreContext)));
-        if installed.is_none() {
-            *self.code_store.borrow_mut() = None;
-        }
-        result
+        // The engine calls back through `crate::code_store`, which reads the
+        // callback and its user pointer from `InstalledCodeStore` on the engine
+        // thread and then calls that callback. Only those two fields cross the
+        // boundary, so the worker sends them directly instead of holding a box
+        // of this crate's own type; that box would be a different type on the
+        // engine side and `crate::code_store` would read it wrongly.
+        self.unit(Operation::CodeStore(callback.map(|callback| {
+            CodeStoreContext { callback, data }
+        })))
     }
     fn retry_block(&self, instructions: u32) -> Result<(), String> {
         self.unit(Operation::RetryBlock(instructions))?;
@@ -2552,6 +2558,76 @@ mod architecture_tests {
             cpu.observe_code_stores(None, std::ptr::null_mut()).unwrap();
         }
         assert_eq!(counter.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn a_code_store_through_a_worker_reaches_the_installed_observer() {
+        // The board installs this observer so a store covering translated bytes
+        // is reported on its own. On a worker the engine calls back on the
+        // engine thread, so the callback and its user pointer must both cross
+        // the boundary; a pointer to the wrong struct there would deliver a
+        // wrong callback with a wrong context.
+        //
+        // The guest rewrites its own code page: `str r1,[r2]` writes the two
+        // bytes at 0x2004, which are translated instructions.
+        let cpu = spawn_armv7a(1 << 20, SharedMemory::default()).unwrap();
+        assert_eq!(cpu.model(), Model::CortexA7);
+        cpu.map_zeroed(0, 0x8000, 7).unwrap();
+        cpu.write_register(arm::CPSR, &0xd3u32.to_le_bytes())
+            .unwrap();
+        // 0x2000: ldr r1,[pc,#8]; ldr r2,[pc,#8]; str r1,[r2]; b .
+        let code: [u32; 6] = [0xe59f_1008, 0xe59f_2008, 0xe582_1000, 0xeaff_fffe, 0, 0x2004];
+        let bytes: Vec<u8> = code.iter().flat_map(|w| w.to_le_bytes()).collect();
+        cpu.write_memory(0x2000, &bytes).unwrap();
+
+        struct Counters {
+            seen: AtomicU32,
+            address: AtomicU64,
+        }
+        unsafe fn record(data: *mut c_void, address: u64, _: usize) {
+            // SAFETY: the test installs a pointer to the `Counters` below and
+            // keeps it alive while the observer is installed.
+            let counters = unsafe { &*data.cast::<Counters>() };
+            counters.address.store(address, Ordering::Release);
+            counters.seen.store(1, Ordering::Release);
+        }
+        let counters = Box::new(Counters {
+            seen: AtomicU32::new(0),
+            address: AtomicU64::new(0),
+        });
+        let data = (&*counters as *const Counters).cast_mut().cast();
+        unsafe { cpu.observe_code_stores(Some(record), data).unwrap() };
+
+        let run = cpu
+            .start_run(Run {
+                begin: 0x2000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(1_000_000),
+            })
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(20);
+        loop {
+            if counters.seen.load(Ordering::Acquire) != 0 {
+                break;
+            }
+            assert!(Instant::now() < deadline, "no code-store notification");
+            match cpu.poll_run(run).unwrap() {
+                RunStatus::Running => std::thread::yield_now(),
+                RunStatus::CallbackPending => cpu.service_pending_callback(run).unwrap(),
+                RunStatus::Complete(result) => {
+                    panic!("worker run ended before any code store: {result:?}")
+                }
+            }
+        }
+        // The store writes 0x2004, so the report names that address and the
+        // owner passed its own user pointer through to the callback.
+        assert_eq!(counters.address.load(Ordering::Acquire), 0x2004);
+        // Remove the observer and stop the engine before the counters go out of
+        // scope: the worker may deliver one more notification as it shuts down.
+        unsafe { cpu.observe_code_stores(None, std::ptr::null_mut()).unwrap() };
+        let _ = cpu.request_pause(run);
+        drop(cpu);
     }
 
     #[test]
