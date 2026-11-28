@@ -45,15 +45,17 @@ impl AsyncSession {
     /// Back up the whole flash with a staged `flash-reader.json` artifact and
     /// the image staged beside it, if any. The flash and bulk facts come from
     /// the bundled catalog. The image is written to a new file at `output`;
-    /// returns its size and SHA-256. A failed check raises RuntimeError and
-    /// USB failures raise UsbError.
+    /// returns its size, its SHA-256, the page offsets an uncorrectable NAND
+    /// read covered and their granularity in bytes. A nonempty offset list
+    /// marks those pages of the image as unreliable. A failed check raises
+    /// RuntimeError and USB failures raise UsbError.
     #[pyo3(signature = (artifact, output, image=Vec::new()))]
     async fn backup_flash(
         &self,
         artifact: String,
         output: String,
         image: Vec<u8>,
-    ) -> PyResult<(u64, String)> {
+    ) -> PyResult<(u64, String, Vec<u64>, u32)> {
         let (artifact, flash, bulk) = staged(&artifact, &image)?;
         let mut file = OpenOptions::new()
             .write(true)
@@ -88,7 +90,12 @@ impl AsyncSession {
                     )
                     .await
                     {
-                        Ok(backup) => Ok(Ok((backup.size, backup.sha256))),
+                        Ok(backup) => Ok(Ok((
+                            backup.size,
+                            backup.sha256,
+                            backup.uncorrectable_page_offsets,
+                            backup.uncorrectable_granularity_bytes,
+                        ))),
                         Err(BulkError::Usb(error)) => Err(error),
                         Err(other) => Ok(Err(other.to_string())),
                     }
