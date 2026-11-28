@@ -1002,7 +1002,7 @@ impl CoreShared {
         Some((cached, prepared))
     }
 
-    fn fetch_for_replay(&self, address: u32) -> Result<Result<u32, u32>, String> {
+    fn fetch_with_cached_page(&self, address: u32) -> Result<Result<u32, u32>, String> {
         if let Some(NativeAccess::Ram(pointer, _)) = self.native_access(address, 4, Access::Fetch) {
             Ok(Ok(u32::from_le_bytes(unsafe {
                 pointer.cast::<[u8; 4]>().read()
@@ -2121,7 +2121,7 @@ impl Cpu for Core {
                     let pc = unsafe { ffi::dynarmic_get_reg(self.inst, 15) };
                     let instruction = self
                         .shared
-                        .fetch_for_replay(pc)?
+                        .fetch_with_cached_page(pc)?
                         .map_err(|_| "Unable to fetch native memory instruction for replay")?;
                     if let Some((base, value)) = self.shared.replay_base.take() {
                         unsafe { ffi::dynarmic_set_reg(self.inst, base, value) };
@@ -2158,13 +2158,15 @@ impl Cpu for Core {
                 )
                 .into());
             }
-            let word = match self
-                .shared
-                .fetch(pc)
-                .map_err(|message| ExecutionError::Memory {
-                    fault: Fault::FetchUnmapped,
-                    message,
-                })? {
+            let fetched = if allow_batch {
+                self.shared.fetch_with_cached_page(pc)
+            } else {
+                self.shared.fetch(pc)
+            };
+            let word = match fetched.map_err(|message| ExecutionError::Memory {
+                fault: Fault::FetchUnmapped,
+                message,
+            })? {
                 Ok(word) => word,
                 Err(status) => {
                     armv7a::abort::enter_reported(self, pc, status, Access::Fetch)?;
@@ -2179,7 +2181,7 @@ impl Cpu for Core {
             if stable
                 && word & 0x0f80_0000 == 0x0a80_0000
                 && request.until.is_none()
-                && self.advance_loop(pc, cpsr, word, remaining())?
+                && self.advance_loop(pc, cpsr, word, remaining(), allow_batch)?
             {
                 continue;
             }
