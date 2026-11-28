@@ -407,6 +407,15 @@ impl Renderer {
         if blend && !image && flat[3] == 0 && self.reg(0x604) & GRADIENT != GRADIENT {
             return Ok(());
         }
+        if image && src.stride < src.width as u64 * 4 {
+            // Image paint reads 4-byte pixels; a narrower source row is another pixel format.
+            return Err(format!(
+                "unmodeled image paint source format {:#x} ({} pixels in a {}-byte row)",
+                self.reg(0x220 + 6),
+                src.width,
+                src.stride
+            ));
+        }
         let gradient = (!image).then(|| self.gradient()).flatten();
         let mut src_row = vec![0u8; if image { src.stride as usize } else { 0 }];
         for &(row, x0, x1) in spans {
@@ -518,6 +527,41 @@ mod tests {
             assert!(host.ram[bottom + 4..bottom + 16].iter().all(|b| *b == 0x80));
             assert!(host.ram[SURFACE..bottom].iter().all(|b| *b == 0x80));
         }
+    }
+
+    #[test]
+    fn image_paint_refuses_a_source_row_too_narrow_for_four_byte_pixels() {
+        let mut renderer = Renderer::default();
+        renderer
+            .seed(&[
+                (0x200, SURFACE as u32),
+                (0x204, 16),
+                (0x205, 3 | 3 << 16),
+                (0x220, 0x3000),
+                // Four pixels in an 8-byte row: a two-byte format.
+                (0x224, 8),
+                (0x225, 3 | 3 << 16),
+                (0x226, 0x5),
+                (0x550, 1f32.to_bits()),
+                (0x554, 1f32.to_bits()),
+                (0x558, 1f32.to_bits()),
+                (0x604, IMAGE),
+            ])
+            .unwrap();
+        let mut host = TestHost::new();
+        let words = [
+            0x0400_0000,
+            0,
+            0x0412_0001,
+            0,
+            4 | 4 << 16,
+            0x0410_0000,
+            0xe,
+            0xf000_0000,
+        ];
+        let mut cx = host.cx();
+        let error = renderer.execute(&mut cx, &words).unwrap_err();
+        assert!(error.contains("source format 0x5"), "{error}");
     }
 
     #[test]
