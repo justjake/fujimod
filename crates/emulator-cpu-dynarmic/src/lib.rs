@@ -77,7 +77,9 @@ extern "C" fn batch_instruction(word: u32) -> u32 {
     let unconditional = word >> 28 == 14;
     match (body >> 25) & 7 {
         5 => {
-            if word >> 28 != 10 {
+            if word == 0x1aff_fffd {
+                7 // A two-instruction BNE loop, subject to the runtime proof.
+            } else if word >> 28 != 10 {
                 1
             } else if body & 0x0180_0000 == 0x0080_0000 {
                 7
@@ -3486,5 +3488,45 @@ mod tests {
             assert_eq!(no_skips, 0);
             assert_eq!(skips, if condition { 97 } else { 0 });
         }
+    }
+
+    #[test]
+    fn a_two_instruction_countdown_exits_at_the_same_instruction() {
+        use fujimod_emulator_cpu::loops::LoopMode;
+
+        let run = |mode| {
+            let cpu = Core::new(Model::CortexA7).unwrap();
+            cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+            for (address, word) in [
+                (0x1000, 0xe250_0001u32), // subs r0, r0, #1
+                (0x1004, 0x1aff_fffd),    // bne 0x1000
+                (0x1008, 0xe3a0_1005),    // mov r1, #5
+            ] {
+                cpu.write_memory(address, &word.to_le_bytes()).unwrap();
+            }
+            cpu.write_register(arm::CORE[0], &100u32.to_le_bytes())
+                .unwrap();
+            cpu.set_armv7a_owner_exclusives(true).unwrap();
+            cpu.set_loop_mode(mode).unwrap();
+            cpu.set_loop_window(true).unwrap();
+            cpu.run(Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(201),
+            })
+            .unwrap();
+            assert_eq!(cpu.instruction_progress(), Some(201));
+            assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 0) }, 0);
+            assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 1) }, 5);
+            (
+                cpu.snapshot(None).unwrap().export().unwrap(),
+                cpu.loops.skipped.get(),
+            )
+        };
+        let (plain, _) = run(LoopMode::Disabled);
+        let (fast, skipped) = run(LoopMode::Accelerate);
+        assert_eq!(plain, fast);
+        assert!(skipped > 100);
     }
 }

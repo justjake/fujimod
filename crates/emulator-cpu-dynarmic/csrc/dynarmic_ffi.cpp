@@ -267,7 +267,7 @@ bool UserCallbacksImpl::PreCodeReadHook(bool thumb, VAddr pc, IREmitter& ir) {
         // Fall-through retires the branch in the JIT. A taken back edge
         // exits with no ticks so the caller can try to accelerate the loop.
         ir.current_location = ir.current_location.AdvancePC(4);
-        ir.block.SetCondition(Dynarmic::IR::Cond::GE);
+        ir.block.SetCondition(static_cast<Dynarmic::IR::Cond>(*word >> 28));
         ir.block.SetConditionFailedLocation(ir.current_location);
         ir.block.ConditionFailedCycleCount() = 1;
     } else if (kind != 0) {
