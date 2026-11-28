@@ -451,6 +451,20 @@ pub trait Device: Send + std::any::Any {
     fn read_without_advance(&self, _address: u64, _size: u8, _now: u64) -> Option<u64> {
         None
     }
+    /// Complete an access while the board holds an ordered grant with no
+    /// due events. Success applies the ordinary register effect, including
+    /// published register values, but leaves deadlines, peer-visible
+    /// signals, and other devices unchanged. Declining leaves all state
+    /// untouched so the board can dispatch the original access.
+    fn try_local_access(
+        &mut self,
+        _address: u64,
+        _size: u8,
+        _value: Option<u64>,
+        _now: u64,
+    ) -> Option<u64> {
+        None
+    }
     /// A read of `size` bytes at `address` (absolute, so one model can own
     /// several windows).
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64;

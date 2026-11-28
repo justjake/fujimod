@@ -77,6 +77,7 @@ impl Board {
             "interactive_host_duration_ns": self.interactive_host_duration_ns.get(),
             "settled_mmio_reuses": state.settled.mmio_reuses,
             "private_interrupt_reuses": state.settled.private_interrupt_reuses,
+            "local_mmio_accesses": state.settled.local_mmio_accesses,
             "bounded_cohort_segments": self.bounded_segments,
             "local_grant_completions": self.local_grant_completions,
             "cohort_pause_barriers": self.cohort_pause_barriers,

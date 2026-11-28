@@ -379,6 +379,8 @@ struct Settled {
     mmio_reuses: u64,
     private_interrupt_reuses: u64,
     private_interrupt_access: bool,
+    local_mmio: bool,
+    local_mmio_accesses: u64,
 }
 impl Settled {
     fn new() -> Self {
@@ -398,6 +400,8 @@ impl Settled {
             private_interrupt_reuses: 0,
             private_interrupt_access: std::env::var_os("FUJIMOD_PRIVATE_INTERRUPT_ACCESS")
                 .is_some_and(|value| value == "1"),
+            local_mmio: std::env::var_os("FUJIMOD_LOCAL_MMIO").is_some_and(|value| value == "1"),
+            local_mmio_accesses: 0,
         }
     }
     #[inline]
@@ -3617,27 +3621,43 @@ impl State {
             && self.code_run.is_running(core)
             && !self.release_state_changed)
             .then_some(self.settled);
-        self.memory_access = value.is_some();
         self.timeline.synchronize(core)?;
+        let now = self.timeline.now();
+        let local = if self.settled.local_mmio
+            && self.execution_policy == ExecutionPolicy::Interactive
+            && self.parallel.is_none()
+            && self.timeline.next_event().is_none_or(|event| event.at > now)
+            && !self.bus.needs_frontier_pcs()
+            && !continuation::fired(&self.continuation)
+        {
+            self.bus.try_local_access(address, size, value, now)
+        } else {
+            None
+        };
+        self.memory_access = value.is_some();
         let use_publication = value.is_none()
             && !binding.published_reads.is_empty()
             && self.execution_policy == ExecutionPolicy::Interactive
             && self.bus.loop_window();
-        let result = self.with_host(cpus, |bus, host| {
-            if use_publication {
-                let tick = host.now();
-                let offset = address - binding.base;
-                if let Some(word) = binding.published_reads.iter().find_map(|read|
-                    read.published_at(offset, u32::from(size), Some(tick)))
-                {
-                    bus.finish_published_read(host, address, size)?;
-                    binding.published_hits.set(binding.published_hits.get() + 1);
-                    return Ok((word, host.affects_execution));
+        let result = if let Some(word) = local {
+            Ok((word, false))
+        } else {
+            self.with_host(cpus, |bus, host| {
+                if use_publication {
+                    let tick = host.now();
+                    let offset = address - binding.base;
+                    if let Some(word) = binding.published_reads.iter().find_map(|read| {
+                        read.published_at(offset, u32::from(size), Some(tick))
+                    }) {
+                        bus.finish_published_read(host, address, size)?;
+                        binding.published_hits.set(binding.published_hits.get() + 1);
+                        return Ok((word, host.affects_execution));
+                    }
                 }
-            }
-            let word = bus.access(host, core, pc, address, size, value)?;
-            Ok((word, host.affects_execution))
-        });
+                let word = bus.access(host, core, pc, address, size, value)?;
+                Ok((word, host.affects_execution))
+            })
+        };
         self.memory_access = false;
         if let Some(sample) = sample {
             sample.end_dispatch();
@@ -3667,6 +3687,7 @@ impl State {
             self.push_pins(cpus)?;
             self.settle_after_pin_push(core)?;
         }
+        self.settled.local_mmio_accesses += u64::from(local.is_some());
         if value.is_none() {
             self.poll_round(&*cpus[core], core, pc & !1, address, size, result, poll)?;
             self.poll_round_a64(&*cpus[core], core, pc, address, size, result, poll64)?;

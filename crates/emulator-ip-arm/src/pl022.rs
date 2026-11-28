@@ -109,11 +109,14 @@ impl Engine {
         Ok(())
     }
     fn request_levels(state: &State) -> [bool; 4] {
+        Self::fifo_request_levels(state.dma, state.rx.len(), state.tx.len())
+    }
+    fn fifo_request_levels(dma: u8, rx: usize, tx: usize) -> [bool; 4] {
         [
-            state.dma & 1 != 0 && !state.rx.is_empty(),
-            state.dma & 1 != 0 && state.rx.len() >= DEPTH / 2,
-            state.dma & 2 != 0 && state.tx.len() < DEPTH,
-            state.dma & 2 != 0 && state.tx.len() <= DEPTH / 2,
+            dma & 1 != 0 && rx != 0,
+            dma & 1 != 0 && rx >= DEPTH / 2,
+            dma & 2 != 0 && tx < DEPTH,
+            dma & 2 != 0 && tx <= DEPTH / 2,
         ]
     }
     fn requests(&mut self, now: u64) {
@@ -159,8 +162,10 @@ impl Engine {
     fn ris(&self) -> u8 {
         u8::from(self.state.overrun)
             | (u8::from(self.state.timeout) << 1)
-            | (u8::from(self.state.rx.len() >= DEPTH / 2) << 2)
-            | (u8::from(self.state.tx.len() <= DEPTH / 2) << 3)
+            | Self::fifo_interrupts(self.state.rx.len(), self.state.tx.len())
+    }
+    fn fifo_interrupts(rx: usize, tx: usize) -> u8 {
+        (u8::from(rx >= DEPTH / 2) << 2) | (u8::from(tx <= DEPTH / 2) << 3)
     }
     fn irq(&self) -> bool {
         self.ris() & self.state.mask != 0
@@ -440,6 +445,53 @@ impl Controller {
 impl Device for Controller {
     fn name(&self) -> &'static str {
         "pl022"
+    }
+    fn try_local_access(
+        &mut self,
+        address: u64,
+        size: u8,
+        value: Option<u64>,
+        now: u64,
+    ) -> Option<u64> {
+        if self.offset(address, size)? != 8 {
+            return None;
+        }
+        let mut e = self.engine.lock().ok()?;
+        let state = &e.state;
+        if e.next(now).is_some_and(|at| at <= now) {
+            return None;
+        }
+        // Delegating the register access cannot arrange or cancel a clock
+        // edge, or change a DMA request or interrupt.
+        let (rx, tx) = if value.is_some() {
+            if state.pending.is_none() && state.enable & 2 != 0 {
+                return None;
+            }
+            (state.rx.len(), state.tx.len() + 1)
+        } else {
+            let rx = state.rx.len().checked_sub(1)?;
+            if rx == 0 && e.timeout_at().is_some() {
+                return None;
+            }
+            (rx, state.tx.len())
+        };
+        let ris = u8::from(state.overrun)
+            | (u8::from(state.timeout && rx != 0) << 1)
+            | Engine::fifo_interrupts(rx, tx);
+        if tx > DEPTH
+            || (ris & state.mask != 0) != state.irq_published
+            || Engine::fifo_request_levels(state.dma, rx, tx) != Engine::request_levels(state)
+        {
+            return None;
+        }
+        let result = if let Some(value) = value {
+            e.transmit(now, value as u16).ok()?;
+            0
+        } else {
+            u64::from(e.receive(now).ok()?)
+        };
+        e.publish_registers();
+        Some(result)
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         let Some(offset) = self.offset(address, size) else {

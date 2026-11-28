@@ -752,6 +752,23 @@ impl Bus {
         }
         result
     }
+    pub(super) fn try_local_access(
+        &mut self,
+        address: u64,
+        size: u8,
+        value: Option<u64>,
+        now: u64,
+    ) -> Option<u64> {
+        if !self.loop_window() || !matches!(size, 1 | 2 | 4 | 8) {
+            return None;
+        }
+        let id = self.window_at(address, size)?;
+        let mask = u64::MAX >> (64 - u32::from(size) * 8);
+        self.windows[id]
+            .device
+            .try_local_access(address, size, value.map(|v| v & mask), now)
+            .map(|v| v & mask)
+    }
     /// The register supplied the value at the settled bus tick. Its ordinary
     /// access would still wake dependent devices and refresh their deadlines.
     pub(super) fn finish_published_read(

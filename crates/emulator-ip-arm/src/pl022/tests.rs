@@ -90,6 +90,52 @@ fn fifo_bytes_and_request_edges_follow_serial_clocks() {
     assert_eq!(read(&mut c, &mut h, 0xc), 3);
 }
 #[test]
+fn local_fifo_access_preserves_serial_edges_and_leaves_dma_to_dispatch() {
+    fn run(local: bool) -> (serde_json::Value, Vec<(u32, bool)>) {
+        let mut h = RecordingHost::default();
+        let mut c = controller();
+        configure(&mut c, &mut h, true);
+        write(&mut c, &mut h, 0x24, 0);
+        write(&mut c, &mut h, 0x14, 8);
+        write(&mut c, &mut h, 8, 0x12);
+        h.now = 500;
+        if local {
+            assert_eq!(c.try_local_access(BASE + 8, 2, Some(0x34), h.now), Some(0));
+        } else {
+            write(&mut c, &mut h, 8, 0x34);
+        }
+        assert_eq!(c.next_deadline(h.now), Some(1000));
+        let before = c.save();
+        assert_eq!(c.try_local_access(BASE + 8, 2, None, 1000), None);
+        assert_eq!(c.save(), before);
+        tick(&mut c, &mut h, 1000);
+        if local {
+            assert_eq!(c.try_local_access(BASE + 8, 2, None, h.now), Some(0x12));
+        } else {
+            assert_eq!(read(&mut c, &mut h, 8), 0x12);
+        }
+        assert_eq!(c.next_deadline(h.now), Some(2000));
+        write(&mut c, &mut h, 0x24, 3);
+        if local {
+            assert_eq!(c.try_local_access(BASE + 8, 2, Some(0x56), h.now), Some(0));
+        } else {
+            write(&mut c, &mut h, 8, 0x56);
+        }
+        tick(&mut c, &mut h, 2000);
+        let port = c.port();
+        let mut port = port.lock().unwrap();
+        assert_eq!(port.request(Direction::Receive, false), Some(2000));
+        let before = c.save();
+        assert_eq!(c.try_local_access(BASE + 8, 2, None, h.now), None);
+        assert_eq!(c.save(), before);
+        assert_eq!(port.receive(2000, 1).unwrap(), 0x34);
+        assert_eq!(port.request(Direction::Receive, false), None);
+        (c.save(), h.irqs)
+    }
+    assert_eq!(run(true), run(false));
+}
+
+#[test]
 fn interrupt_masks_timeout_clear_and_host_inspection_are_distinct() {
     let mut h = RecordingHost::default();
     let mut c = controller();
