@@ -65,6 +65,11 @@ impl CodeTracker {
         self.0.watch_revision.get()
     }
 
+    /// Visit the host addresses of all watched 4 KiB backing pages.
+    pub fn watched_pages(&self, visit: impl FnMut(usize)) {
+        self.0.pages.borrow().keys().copied().for_each(visit);
+    }
+
     /// Changes when a write alters watched bytes.
     pub fn revision(&self) -> u64 {
         self.0.revision.get()

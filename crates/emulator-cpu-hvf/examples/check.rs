@@ -41,6 +41,86 @@ fn main() -> Result<(), String> {
             instructions: Some(n),
         })
     }
+    fn watched_code_stores() -> Result<(), String> {
+        use fujimod_emulator_cpu::{code::CodeTracker, memory::Backing};
+        use std::ptr::NonNull;
+
+        let tracker = CodeTracker::default();
+        let backing = Backing::aligned_zeros(0x8000, 0x4000)?;
+        let vm = Vm::new_with_code_tracker(tracker.clone())?;
+        let cpu = vm.cpu(Model::ArmV8A)?;
+        let pointer = NonNull::new(backing.as_ptr()).unwrap();
+        unsafe { cpu.map_backing(0x20000, 0x8000, 7, pointer)? };
+        cpu.map_zeroed(0x10000, 0x4000, 7)?;
+        code(&cpu, 0x10000, &[0xf8008420, 0xd503207f]); // str x0, [x1], #8; wfi
+        code(&cpu, 0x10010, &[0xa9000820, 0xd503207f]); // stp x0, x2, [x1]; wfi
+
+        let watched = unsafe { backing.as_ptr().add(0x3ff8) };
+        tracker.watch_bytes(watched, &[0; 16]);
+        set(&cpu, Register::X(1), 0x23fe8);
+        set(&cpu, Register::X(0), 1);
+        run(&cpu, 0x10000, 1).map_err(|e| e.to_string())?;
+        assert_eq!(tracker.revision(), 0);
+        assert_eq!(get(&cpu, Register::X(1)), 0x23ff0);
+
+        // Add an IPA alias after the first run armed the protections.
+        unsafe { cpu.map_backing(0x40000, 0x8000, 7, pointer)? };
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)?;
+        set(&cpu, Register::X(1), 0x43ff8);
+        set(&cpu, Register::X(2), 2);
+        let token = cpu
+            .start_run(Run {
+                begin: 0x10010,
+                until: None,
+                watchdog_us: 2_000_000,
+                instructions: Some(100_000_000),
+            })
+            .map_err(|e| e.to_string())?;
+        let mut faults = 0;
+        loop {
+            match cpu.poll_run(token).map_err(|e| e.to_string())? {
+                RunStatus::Running => thread::yield_now(),
+                RunStatus::CallbackPending => {
+                    faults += 1;
+                    assert_eq!(get(&cpu, Register::Pc), 0x10010);
+                    cpu.request_pause(token).map_err(|e| e.to_string())?;
+                    cpu.service_pending_callback(token)
+                        .map_err(|e| e.to_string())?;
+                }
+                RunStatus::Complete(result) => {
+                    assert!(matches!(result.map_err(|e| e.to_string())?, Exit::Stopped));
+                    break;
+                }
+            }
+        }
+        assert_eq!(faults, 1);
+        assert_eq!(get(&cpu, Register::Pc), 0x10014);
+        let mut words = Vec::new();
+        assert!(tracker.changed_since(0, |word| words.push(word)));
+        assert_eq!(words, [watched.addr(), watched.addr() + 8]);
+        let mut bytes = [0; 16];
+        cpu.read_memory(0x23ff8, &mut bytes)?;
+        assert_eq!([bytes[0], bytes[8]], [1, 2]);
+
+        // Replayed stores must leave the aliases armed for subsequent runs.
+        let revision = tracker.revision();
+        set(&cpu, Register::X(1), 0x43ff8);
+        assert!(matches!(
+            run(&cpu, 0x10000, 100_000_000).map_err(|e| e.to_string())?,
+            Exit::Hint(Hint::WaitForInterrupt)
+        ));
+        assert_eq!(tracker.revision(), revision);
+        assert_eq!(get(&cpu, Register::X(1)), 0x44000);
+        cpu.protect(0x40000, 0x4000, 5)?;
+        set(&cpu, Register::Pc, 0x10000);
+        set(&cpu, Register::X(1), 0x43ff8);
+        assert!(matches!(cpu.run_to_native_exit(2_000_000)?,
+            fujimod_emulator_cpu_hvf::NativeExit::Exception(trap)
+                if trap.physical_address == 0x43ff8));
+        assert_eq!(tracker.revision(), revision);
+        println!("PASS: stage-2 code writes through a backing alias");
+        Ok(())
+    }
     fn architectural_board_checks() -> Result<(), String> {
         use fujimod_emulator::board::aprofile::generic_timer::Clock;
         use fujimod_emulator::board::{
@@ -1257,6 +1337,7 @@ fn main() -> Result<(), String> {
     assert!(peer.read_memory(0x20000, &mut codeword).is_err());
     drop(peer);
     drop(vm);
+    watched_code_stores()?;
     // Run the same device deadline/GIC path through the common factory. A
     // virtual timer asserts SPI32 at tick7, with no host clock involved.
     for quantum in [1, 100] {

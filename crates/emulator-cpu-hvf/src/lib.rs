@@ -12,7 +12,7 @@ mod ffi;
 mod machine;
 mod worker;
 
-use fujimod_emulator_cpu::*;
+use fujimod_emulator_cpu::{code::CodeTracker, *};
 use machine::Machine;
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
@@ -29,20 +29,23 @@ use worker::{Event, MmioAccess, MmioUpdates, Op, Value};
 #[derive(Clone)]
 pub struct Vm {
     machine: Arc<Machine>,
-    _owner: PhantomData<Rc<()>>,
+    code_tracker: CodeTracker,
 }
 impl Vm {
     pub fn new() -> Result<Self, String> {
+        Self::new_with_code_tracker(CodeTracker::default())
+    }
+    pub fn new_with_code_tracker(code_tracker: CodeTracker) -> Result<Self, String> {
         Ok(Self {
             machine: Machine::create()?,
-            _owner: PhantomData,
+            code_tracker,
         })
     }
     pub fn cpu(&self, model: Model) -> Result<Core, String> {
         if model != Model::ArmV8A {
             return Err("HVF executes AArch64 ArmV8A processors only".into());
         }
-        Core::create(self.machine.clone())
+        Core::create(self.machine.clone(), self.code_tracker.clone())
     }
 }
 /// A native exit from an isolated diagnostic, before framework emulation.
@@ -78,6 +81,7 @@ pub struct Core {
     events: mpsc::Receiver<Event>,
     replies: mpsc::Receiver<Result<Value, String>>,
     machine: Arc<Machine>,
+    code_tracker: CodeTracker,
     shared: Arc<worker::Shared>,
     identity: Identity,
     native_cpu: u64,
@@ -117,7 +121,7 @@ impl Snapshot for State {
     }
 }
 impl Core {
-    fn create(machine: Arc<Machine>) -> Result<Self, String> {
+    fn create(machine: Arc<Machine>, code_tracker: CodeTracker) -> Result<Self, String> {
         // The owner issues one command at a time. A run consumes its start
         // command before asking the owner to service a callback.
         let (commands, rx) = mpsc::sync_channel(1);
@@ -151,6 +155,7 @@ impl Core {
                     events,
                     replies,
                     machine,
+                    code_tracker,
                     shared,
                     identity: Identity::allocate(),
                     native_cpu,
@@ -200,6 +205,7 @@ impl Core {
                 "native diagnostics need an idle interactive CPU, no hooks, and a watchdog".into(),
             );
         }
+        self.machine.sync_code_watches(&self.code_tracker)?;
         self.shared.stop.store(false, Ordering::Release);
         let _watchdog = Watchdog::new(self.native_cpu, watchdog_us, self.shared.clone());
         match self.rpc(Op::RunToNativeExit)? {
@@ -436,6 +442,36 @@ impl Core {
         updates.push((Register::Pc, access.pc.wrapping_add(4)));
         Ok(MmioOutcome::Complete(updates))
     }
+    fn callback_outcome(
+        &self,
+        event: Event,
+        complete_after_pause: bool,
+    ) -> Result<MmioOutcome, ExecutionError> {
+        match event {
+            Event::Before(pc) => {
+                self.before(pc);
+                Ok(MmioOutcome::Resume(true))
+            }
+            Event::Trap => Ok(MmioOutcome::Resume(false)),
+            Event::Mmio(trap, access) => self.mmio_trap(trap, &access, complete_after_pause),
+            Event::CodeWrite(trap) => {
+                self.machine
+                    .complete_code_write(&self.code_tracker, trap, || {
+                        match self.rpc(Op::StepCodeWrite)? {
+                            Value::CodeWriteStep(next) => Ok(next),
+                            _ => unreachable!(),
+                        }
+                    })?;
+                Ok(MmioOutcome::Resume(true))
+            }
+            Event::CodeWritten { address, size } => {
+                self.machine
+                    .note_code_write(&self.code_tracker, address, size)?;
+                Ok(MmioOutcome::Resume(true))
+            }
+            Event::Done(_) => unreachable!("completion events cannot become callbacks"),
+        }
+    }
     /// Answer a parked callback: resume, or retire the MMIO access in the
     /// same worker round trip.
     fn resume(&self, outcome: MmioOutcome) -> Result<(), ExecutionError> {
@@ -665,7 +701,9 @@ impl Cpu for Core {
         Ok(())
     }
     fn write_memory(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
-        self.machine.write(address, bytes)
+        self.machine.write(address, bytes)?;
+        self.machine
+            .note_code_write(&self.code_tracker, address, bytes.len())
     }
     fn memory_written(&self, address: u64, bytes: usize) -> Result<(), String> {
         self.machine.written(Some((address, bytes)))
@@ -798,6 +836,7 @@ impl Cpu for Core {
                 "interactive execution cannot observe instructions".into(),
             ));
         }
+        self.machine.sync_code_watches(&self.code_tracker)?;
         self.shared.stop.store(false, Ordering::Release);
         self.shared.deadline.store(false, Ordering::Release);
         let _watchdog = Watchdog::new(self.native_cpu, request.watchdog_us, self.shared.clone());
@@ -812,34 +851,19 @@ impl Cpu for Core {
                 ExecutionError::Backend("HVF worker disconnected during run".into())
             })?;
             self.parked.set(true);
-            let result = match event {
-                Event::Before(pc) => {
-                    self.before(pc);
-                    self.send_run_response(Op::RunResume(true))
-                        .map_err(ExecutionError::Backend)
-                }
-                Event::Trap => self
-                    .send_run_response(Op::RunResume(false))
-                    .map_err(ExecutionError::Backend),
-                Event::Mmio(trap, access) => {
-                    let outcome = self.mmio_trap(trap, &access, false).unwrap_or_else(|e| {
-                        error = Some(e);
-                        MmioOutcome::Resume(false)
-                    });
-                    match outcome {
-                        MmioOutcome::Resume(handled) => self
-                            .send_run_response(Op::RunResume(handled))
-                            .map_err(ExecutionError::Backend),
-                        MmioOutcome::Complete(updates) => self
-                            .send_run_response(Op::RunCompleteMmio(updates))
-                            .map_err(ExecutionError::Backend),
-                    }
-                }
-                Event::Done(result) => return error.map_or(result, Err),
-            };
-            if let Err(err) = result {
-                error.get_or_insert(err);
+            if let Event::Done(result) = event {
+                return error.map_or(result, Err);
             }
+            let outcome = self.callback_outcome(event, false).unwrap_or_else(|err| {
+                error.get_or_insert(err);
+                MmioOutcome::Resume(false)
+            });
+            let response = match outcome {
+                MmioOutcome::Resume(handled) => Op::RunResume(handled),
+                MmioOutcome::Complete(updates) => Op::RunCompleteMmio(updates),
+            };
+            self.send_run_response(response)
+                .map_err(ExecutionError::Backend)?;
         }
     }
     fn start_run(&self, request: Run) -> Result<RunToken, ExecutionError> {
@@ -858,6 +882,10 @@ impl Cpu for Core {
             return Err(ExecutionError::Backend(
                 "interactive execution cannot observe instructions".into(),
             ));
+        }
+        if let Err(error) = self.machine.sync_code_watches(&self.code_tracker) {
+            self.running.set(false);
+            return Err(error.into());
         }
 
         let sequence = self.next_run.get();
@@ -898,11 +926,6 @@ impl Cpu for Core {
             return Ok(RunStatus::Complete(result.clone()));
         }
         match self.events.try_recv() {
-            Ok(event @ (Event::Before(_) | Event::Trap | Event::Mmio(..))) => {
-                state.pending_callback = Some(event);
-                self.parked.set(true);
-                Ok(RunStatus::CallbackPending)
-            }
             Ok(Event::Done(result)) => {
                 self.parked.set(true);
                 let result = state.callback_error.take().map_or(result, Err);
@@ -910,6 +933,11 @@ impl Cpu for Core {
                 state.watchdog.take();
                 self.running.set(false);
                 Ok(RunStatus::Complete(result))
+            }
+            Ok(event) => {
+                state.pending_callback = Some(event);
+                self.parked.set(true);
+                Ok(RunStatus::CallbackPending)
             }
             Err(mpsc::TryRecvError::Empty) => Ok(RunStatus::Running),
             Err(mpsc::TryRecvError::Disconnected) => {
@@ -940,23 +968,15 @@ impl Cpu for Core {
             .ok_or_else(|| {
                 ExecutionError::Backend("HVF run has no parked callback to service".into())
             })?;
-        let outcome = match event {
-            Event::Before(pc) => {
-                self.before(pc);
-                MmioOutcome::Resume(true)
+        let outcome = match self.callback_outcome(event, true) {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                self.validate_active_run(run)?
+                    .as_mut()
+                    .unwrap()
+                    .callback_error = Some(error);
+                MmioOutcome::Resume(false)
             }
-            Event::Trap => MmioOutcome::Resume(false),
-            Event::Mmio(trap, access) => match self.mmio_trap(trap, &access, true) {
-                Ok(outcome) => outcome,
-                Err(error) => {
-                    self.validate_active_run(run)?
-                        .as_mut()
-                        .unwrap()
-                        .callback_error = Some(error);
-                    MmioOutcome::Resume(false)
-                }
-            },
-            Event::Done(_) => unreachable!("completion events cannot become callbacks"),
         };
         self.resume(outcome)
     }

@@ -229,7 +229,7 @@ fn unicorn_workers(graph: &Graph, options: &Options) -> bool {
     }
 }
 impl Engines {
-    fn new(graph: &Graph, options: &Options) -> Result<Self, String> {
+    fn new(graph: &Graph, options: &Options, _ram: &super::memory::Memory) -> Result<Self, String> {
         validate_engine(
             options.engine,
             graph.processors.iter().map(|processor| processor.model),
@@ -249,7 +249,9 @@ impl Engines {
         };
         #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
         let hypervisor = if need_hvf {
-            Some(fujimod_emulator_cpu_hvf::Vm::new()?)
+            Some(fujimod_emulator_cpu_hvf::Vm::new_with_code_tracker(
+                _ram.code_tracker.clone(),
+            )?)
         } else {
             None
         };
@@ -590,8 +592,8 @@ impl Graph {
             Some(bytes) => bytes,
             None => translation_cache_size_bytes(unicorn_processors)?,
         };
-        let engines = Engines::new(&self, &options)?;
-        ram.all_code_writers_report = options.engine == RunEngine::Unicorn;
+        let engines = Engines::new(&self, &options, &ram)?;
+        ram.all_code_writers_report = true;
         #[cfg(not(target_os = "emscripten"))]
         {
             // Worker cohorts retain their existing code coherence. They
