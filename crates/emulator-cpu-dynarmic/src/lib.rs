@@ -1095,27 +1095,21 @@ impl CoreShared {
         {
             return;
         }
-        let Ok(Ok(physical)) = self.walk_native_page(address, Access::Read, |p, _| {
-            self.watch_code_backing(p.cast())
-        }) else {
-            return;
-        };
-        let Some((
-            Mapping::Backing {
-                ptr, permissions, ..
-            },
-            offset,
-        )) = self.mapping(physical & !4095, 4096)
+        let page_address = address & !4095;
+        let Some((checked, NativeAccess::Ram(backing_page, _))) =
+            self.native_page(page_address, 4096, Access::Read)
         else {
             return;
         };
-        let backing_page = unsafe { ptr.as_ptr().add(offset) };
-        if permissions & 1 == 0
-            || backing_page.addr() & 4095 != 0
-            || unsafe { backing_page.add(within) } != pointer
-        {
+        if backing_page.addr() & 4095 != 0 || unsafe { backing_page.add(within) } != pointer {
             return;
         }
+        for (descriptor, _) in checked.descriptors.into_iter().flatten() {
+            self.watch_code_backing(descriptor.cast());
+        }
+        let Mapping::Backing { permissions, .. } = checked.mapping else {
+            unreachable!("a checked RAM page must have backing permissions");
+        };
         // The first store after rearming must mark the backing before any
         // generated store can bypass the callback. A read only installs a
         // writable page when there are no backing observers.
@@ -1124,10 +1118,8 @@ impl CoreShared {
             && permissions & 2 != 0
             && (self.rprofile.is_none() && access == Access::Write
                 || self
-                    .walk_native_page(address, Access::Write, |_, _| {})
-                    .ok()
-                    .and_then(Result::ok)
-                    == Some(physical));
+                    .native_page(page_address, 4096, Access::Write)
+                    .is_some_and(|(page, _)| page.physical_page == checked.physical_page));
         // Only the ARM64 emitter checks the write-protection tag on stores.
         if !cfg!(target_arch = "aarch64") && (!write_allowed || self.observe_exclusive_stores.get())
         {
@@ -1135,7 +1127,7 @@ impl CoreShared {
         }
         // The JIT adds the full guest address to this bias. Both page
         // starts are aligned, leaving the low bit for write protection.
-        let bias = backing_page.wrapping_sub((address & !4095) as usize);
+        let bias = backing_page.wrapping_sub(page_address as usize);
         if bias.is_null() {
             return; // The JIT reserves zero for a missing page.
         }
