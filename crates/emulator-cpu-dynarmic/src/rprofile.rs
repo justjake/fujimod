@@ -280,6 +280,11 @@ impl Mpu {
             )
         };
         check(address)?;
+        // Every PMSAv7 region and subregion boundary is at least 32-byte
+        // aligned. One permission check covers a span within that granule.
+        if begin / 32 == last / 32 {
+            return Ok(());
+        }
         if sctlr & 1 != 0 {
             for boundary in self.regions.iter().flat_map(|region| region.boundaries()) {
                 if begin < boundary && boundary < last {
@@ -287,10 +292,7 @@ impl Mpu {
                 }
             }
         }
-        if address != last_address {
-            check(last_address)?;
-        }
-        Ok(())
+        check(last_address)
     }
 }
 
@@ -420,6 +422,25 @@ mod tests {
             secure: 0,
             wide: false,
         }
+    }
+
+    #[test]
+    fn protection_checks_crossing_the_smallest_region() {
+        let mut mpu = Mpu::default();
+        mpu.regions[0] = armv7r::Region {
+            base: 0,
+            size: 0x3f,
+            attributes: 3 << 8,
+        };
+        mpu.regions[1] = armv7r::Region {
+            base: 0x1020,
+            size: 9,
+            attributes: 0,
+        };
+        assert_eq!(mpu.check(1, 0x13, 0x101c, 4, Access::Fetch), Ok(()));
+        assert_eq!(mpu.check(1, 0x13, 0x101f, 2, Access::Read), Err(0x0d));
+        assert_eq!(mpu.check(1, 0x13, 0x101f, 34, Access::Read), Err(0x0d));
+        assert_eq!(mpu.check(1, 0x13, 0x1040, 4, Access::Fetch), Ok(()));
     }
 
     #[test]
