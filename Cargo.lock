@@ -3832,6 +3832,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-camera-mount",
  "fujimod-catalog",
+ "fujimod-catalog-bulk",
  "fujimod-catalog-firmware-identity",
  "fujimod-catalog-restart",
  "fujimod-catalog-workflows",
