@@ -818,7 +818,7 @@ impl Cpu for Core {
                     self.send_run_response(Op::RunResume(true))
                         .map_err(ExecutionError::Backend)
                 }
-                Event::Trap => self
+                Event::Trap(_) => self
                     .send_run_response(Op::RunResume(false))
                     .map_err(ExecutionError::Backend),
                 Event::Mmio(trap, access) => {
@@ -898,7 +898,7 @@ impl Cpu for Core {
             return Ok(RunStatus::Complete(result.clone()));
         }
         match self.events.try_recv() {
-            Ok(event @ (Event::Before(_) | Event::Trap | Event::Mmio(..))) => {
+            Ok(event @ (Event::Before(_) | Event::Trap(_) | Event::Mmio(..))) => {
                 state.pending_callback = Some(event);
                 self.parked.set(true);
                 Ok(RunStatus::CallbackPending)
@@ -931,6 +931,14 @@ impl Cpu for Core {
     }
 
     fn service_pending_callback(&self, run: RunToken) -> Result<(), ExecutionError> {
+        self.service_pending_callback_with_trap(run, &mut |_| Ok(false))
+    }
+
+    fn service_pending_callback_with_trap(
+        &self,
+        run: RunToken,
+        handle: &mut dyn FnMut(Trap) -> Result<bool, ExecutionError>,
+    ) -> Result<(), ExecutionError> {
         let event = self
             .validate_active_run(run)?
             .as_mut()
@@ -943,22 +951,22 @@ impl Cpu for Core {
         let outcome = match event {
             Event::Before(pc) => {
                 self.before(pc);
-                MmioOutcome::Resume(true)
+                Ok(MmioOutcome::Resume(true))
             }
-            Event::Trap => MmioOutcome::Resume(false),
-            Event::Mmio(trap, access) => match self.mmio_trap(trap, &access, true) {
-                Ok(outcome) => outcome,
-                Err(error) => {
-                    self.validate_active_run(run)?
-                        .as_mut()
-                        .unwrap()
-                        .callback_error = Some(error);
-                    MmioOutcome::Resume(false)
-                }
-            },
+            Event::Trap(trap) => handle(trap).map(MmioOutcome::Resume),
+            Event::Mmio(trap, access) => self.mmio_trap(trap, &access, true),
             Event::Done(_) => unreachable!("completion events cannot become callbacks"),
         };
-        self.resume(outcome)
+        match outcome {
+            Ok(outcome) => self.resume(outcome),
+            Err(error) => {
+                self.validate_active_run(run)?
+                    .as_mut()
+                    .unwrap()
+                    .callback_error = Some(error);
+                self.resume(MmioOutcome::Resume(false))
+            }
+        }
     }
 
     fn cancel_pending_callback(&self, run: RunToken) -> Result<(), ExecutionError> {
@@ -1200,7 +1208,8 @@ impl Drop for Core {
                 if active.pending_callback.take().is_some() {
                     let _ = self.rpc(Op::Resume(false));
                 }
-                while let Ok(Event::Before(_) | Event::Trap | Event::Mmio(..)) = self.events.recv()
+                while let Ok(Event::Before(_) | Event::Trap(_) | Event::Mmio(..)) =
+                    self.events.recv()
                 {
                     let _ = self.rpc(Op::Resume(false));
                 }

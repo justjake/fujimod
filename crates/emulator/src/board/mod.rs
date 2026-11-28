@@ -351,6 +351,7 @@ struct State {
     /// The isolated caller's device policy, while a harness session holds one.
     device_guard: Option<harness::DeviceGuard>,
     memory_access: bool,
+    callback_peers: Option<interactive::CallbackPeers>,
     mprofile_loops: loops::MProfileLoops,
     access_histogram: Option<access_histogram::SharedStatistics>,
     store_observer: Option<Vec<StoreObserverCounters>>,
@@ -775,6 +776,7 @@ impl Board {
             decoders: decoder::Decoders::default(),
             device_guard: None,
             memory_access: false,
+            callback_peers: None,
             mprofile_loops: loops::MProfileLoops::new(n),
             access_histogram: register_access_histogram.clone(),
             store_observer: store_observer.clone(),
@@ -3241,7 +3243,18 @@ impl State {
         // Retain a newly created earlier boundary even after its event is
         // consumed. Unfinished peers may catch up only to this cohort's cap.
         if let Some(epoch) = self.parallel.as_mut() {
+            let previous_limit = epoch.limit();
             epoch.constrain(&self.timeline, self.clock_limit)?;
+            if let Some(peers) = &self.callback_peers {
+                if epoch.limit() < previous_limit {
+                    peers.park(cpus)?;
+                }
+                if !peers.is_parked() {
+                    // A deadline at the epoch limit belongs to the boundary,
+                    // even when the issuer reaches it before its peers.
+                    return Ok(());
+                }
+            }
         }
         let mut count = 0;
         while let Some(event) = self.timeline.pop_due() {
@@ -3313,6 +3326,7 @@ impl State {
             decoders,
             active_slice,
             memory_access,
+            callback_peers,
             settled,
             device_guard,
             ..
@@ -3346,6 +3360,7 @@ impl State {
             device_guard,
             active_core: active_slice.map(|s| s.core),
             memory_access: *memory_access,
+            callback_peers: callback_peers.as_ref(),
         };
         let result = f(bus, &mut host);
         if self::continuation::fired(&self.continuation)
@@ -3354,6 +3369,9 @@ impl State {
             continuation::finish_instruction(&*cpus[core])?;
         }
         if bus.needs_frontier_pcs() {
+            if let Some(peers) = host.callback_peers {
+                peers.park(cpus)?;
+            }
             let pcs = cpus
                 .iter()
                 .map(|cpu| scalar(&**cpu, Register::Pc))
@@ -3384,6 +3402,7 @@ impl State {
                 settled = false;
                 let high = self.interrupt_delivery[core] && controller.inputs.irq();
                 if self.pins[core] != (high, false) {
+                    self.park_callback_peer(cpus, core)?;
                     if cpus[core].features().architectural_exits {
                         cpus[core].set_interrupt(Interrupt::Irq, high)?;
                     }
@@ -3414,12 +3433,15 @@ impl State {
             .filter(|g| g.gic.tracks_processor_security())
             .map_or(0, |g| g.cores);
         for (core, cpu) in cpus.iter().enumerate().take(tracked) {
-            self.deliver_processor_security(&**cpu, core)?;
+            if !self.callback_peers.as_ref().is_some_and(|peers| peers.is_running(core)) {
+                self.deliver_processor_security(&**cpu, core)?;
+            }
         }
         if let Some(g) = &self.interrupts {
             for core in 0..g.cores {
                 let pins = g.gic.pins(core)?;
                 if pins != self.pins[core] {
+                    self.park_callback_peer(cpus, core)?;
                     if cpus[core].features().architectural_exits {
                         cpus[core].set_interrupt(Interrupt::Irq, pins.0)?;
                         cpus[core].set_interrupt(Interrupt::Fiq, pins.1)?;
@@ -3455,6 +3477,14 @@ impl State {
         }
         self.settled.pass = settled && !changed;
         Ok(changed)
+    }
+    fn park_callback_peer(&self, cpus: &[Rc<dyn Cpu>], core: usize) -> Result<(), String> {
+        if let Some(peers) = &self.callback_peers
+            && peers.is_running(core)
+        {
+            peers.park(cpus)?;
+        }
+        Ok(())
     }
     /// Whether the instruction observer may skip its pin push and deadline
     /// refresh: both are a fixed point and guest time is before the next
@@ -3982,6 +4012,7 @@ struct Services<'a> {
     device_guard: &'a mut Option<harness::DeviceGuard>,
     active_core: Option<usize>,
     memory_access: bool,
+    callback_peers: Option<&'a interactive::CallbackPeers>,
 }
 impl Services<'_> {
     fn remember(&mut self, result: Result<(), String>) {
@@ -4139,6 +4170,9 @@ impl Host for Services<'_> {
         if let Some(guard) = self.device_guard.as_ref() {
             guard.model_read(address, out.len() as u64)?;
         }
+        if let Some(peers) = self.callback_peers {
+            peers.park(self.cpus)?;
+        }
         self.memory.read_dma(address, out)
     }
     fn ram_write(&mut self, address: u64, bytes: &[u8]) -> Result<(), String> {
@@ -4147,6 +4181,9 @@ impl Host for Services<'_> {
         }
         if let Some(guard) = self.device_guard.as_mut() {
             guard.model_write(address, bytes.len() as u64)?;
+        }
+        if let Some(peers) = self.callback_peers {
+            peers.park(self.cpus)?;
         }
         self.memory.watch_transfer(
             write_watch::WriteSource::Dma,

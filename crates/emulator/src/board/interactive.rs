@@ -1,6 +1,6 @@
-//! Concurrent CPU windows with owner-only device and memory barriers.
+//! Concurrent CPU windows with owner-serviced callbacks.
 use super::*;
-use fujimod_emulator_cpu::{Clock, ExecutionError, Fault, Model, RunStatus, RunToken};
+use fujimod_emulator_cpu::{Clock, ExecutionError, Fault, Model, RunStatus, RunToken, RunWakeup};
 use std::time::Instant;
 
 #[cfg(test)]
@@ -78,6 +78,9 @@ impl Epoch {
     pub(super) fn open(&self, cores: &[usize]) -> bool {
         cores.iter().any(|&core| self.room(core) > 0)
     }
+    pub(super) fn limit(&self) -> u64 {
+        self.limit
+    }
     fn clock(&self, core: usize) -> Result<Clock, String> {
         self.clock.after(self.progress[core])
     }
@@ -110,6 +113,49 @@ struct Entry {
     exit: Option<Exit>,
 }
 
+/// The active owner callback can keep peers running until it needs to
+/// publish a cross-core effect or access shared backing memory.
+pub(super) struct CallbackPeers {
+    issuer: (usize, RunToken),
+    running: Vec<(usize, RunToken)>,
+    wakeup: RunWakeup,
+    parked: Cell<bool>,
+}
+
+impl CallbackPeers {
+    pub(super) fn is_parked(&self) -> bool {
+        self.parked.get()
+    }
+
+    pub(super) fn is_running(&self, core: usize) -> bool {
+        !self.parked.get() && self.running.iter().any(|&(peer, _)| peer == core)
+    }
+
+    pub(super) fn park(&self, cpus: &[Rc<dyn Cpu>]) -> Result<(), String> {
+        if self.parked.get() {
+            return Ok(());
+        }
+        for &(core, token) in self.running.iter().chain(std::iter::once(&self.issuer)) {
+            cpus[core].request_pause(token).map_err(|e| e.to_string())?;
+        }
+        loop {
+            let generation = self.wakeup.generation();
+            let mut running = false;
+            for &(core, token) in &self.running {
+                running |= matches!(
+                    cpus[core].poll_run(token).map_err(|e| e.to_string())?,
+                    RunStatus::Running
+                );
+            }
+            if !running {
+                self.parked.set(true);
+                return Ok(());
+            }
+            self.wakeup.wait_for_change(generation);
+        }
+    }
+}
+
 impl State {
     pub(super) fn account_interactive(&mut self, core: usize, delta: u64) -> Result<(), String> {
         let epoch = self
@@ -128,8 +174,7 @@ impl State {
 }
 
 impl Board {
-    /// Every return joins started runs, including failures. A pending callback
-    /// is a parked CPU, not permission to touch devices while a peer executes.
+    /// Every return joins started runs, including failures.
     pub(super) fn interactive_window(
         &mut self,
         cores: &[usize],
@@ -174,6 +219,10 @@ impl Board {
     }
 
     fn interactive_cohort(&mut self, cores: &[usize], quantum: usize) -> Result<(), String> {
+        let in_place = cores.iter().all(|&core| {
+            let cpu = &self.cpus[core];
+            cpu.model() == Model::ArmV8A && cpu.features().shared_physical_maps
+        });
         let mprofile = cores
             .iter()
             .copied()
@@ -205,7 +254,11 @@ impl Board {
             let runnable: Vec<usize> = {
                 let state = self.state.borrow();
                 let epoch = state.parallel.as_ref().unwrap();
-                cores.iter().copied().filter(|&core| epoch.room(core) > 0).collect()
+                cores
+                    .iter()
+                    .copied()
+                    .filter(|&core| epoch.room(core) > 0)
+                    .collect()
             };
             let mprofile = mprofile.filter(|core| runnable.contains(core));
             let (blocks, _thumb_slice) = if let Some(core) = mprofile {
@@ -218,11 +271,14 @@ impl Board {
                 let mut state = self.state.borrow_mut();
                 for &core in &runnable {
                     let epoch = state.parallel.as_ref().unwrap();
-                    // A peer must not spend the whole epoch while another is
-                    // parked in a host callback. Bound each segment to one
-                    // processor quantum so every runnable core gets a turn
-                    // before the epoch can end.
-                    let room = epoch.room(core).min(quantum as u64);
+                    let room = epoch.room(core);
+                    // Cohorts that rendezvous on every callback still give
+                    // each runnable peer a bounded turn.
+                    let room = if in_place {
+                        room
+                    } else {
+                        room.min(quantum as u64)
+                    };
                     let cpu = &self.cpus[core];
                     if cpu.features().guest_clock {
                         cpu.set_guest_clock(epoch.clock(core)?)?;
@@ -257,7 +313,7 @@ impl Board {
                     ));
                 }
             }
-            let result = self.interactive_segment(prepared, quantum, mprofile);
+            let result = self.interactive_segment(prepared, quantum, mprofile, in_place);
             if let Some(core) = mprofile {
                 let mut state = self.state.borrow_mut();
                 state.end_code_slice(&*self.cpus[core], core);
@@ -354,6 +410,7 @@ impl Board {
         prepared: Vec<(usize, u64, u64, u64, fujimod_perf::EngineEndReason, Run)>,
         quantum: usize,
         mprofile: Option<usize>,
+        in_place: bool,
     ) -> Result<(), String> {
         let mut entries = Vec::with_capacity(prepared.len());
         let mut error = None;
@@ -437,7 +494,34 @@ impl Board {
                     }
                 }
             }
-            if !barrier && (error.is_some() || entries.iter().any(|e| e.done || e.pending)) {
+            let mut callback_serviced = false;
+            let exit_barrier = entries.iter().any(|entry| {
+                entry.done
+                    && (!in_place
+                        || entry.watch_or_observer_stop
+                        || entry
+                            .exit
+                            .is_some_and(|exit| !matches!(exit, Exit::Stopped)))
+            });
+            if in_place
+                && !barrier
+                && error.is_none()
+                && !exit_barrier
+                && let Some(index) = entries.iter().position(|entry| entry.pending)
+            {
+                callback_serviced = true;
+                match self.service_interactive_callback(&mut entries, index, quantum) {
+                    Ok(false) => continue,
+                    Ok(true) => (),
+                    Err(e) => error = Some(e),
+                }
+            }
+            if !barrier
+                && (callback_serviced
+                    || error.is_some()
+                    || exit_barrier
+                    || entries.iter().any(|entry| entry.pending))
+            {
                 barrier = true;
                 // The M-profile owner must finish admitting a shortened
                 // block when its own observer opened the barrier. Its
@@ -460,6 +544,11 @@ impl Board {
                         error.get_or_insert_with(|| e.to_string());
                     }
                 }
+            }
+            if callback_serviced {
+                // The callback may have parked peers or resumed its issuer.
+                // Observe their current states before draining the barrier.
+                continue;
             }
             if entries.iter().all(|e| e.done) {
                 break;
@@ -541,6 +630,68 @@ impl Board {
             error.get_or_insert(e);
         }
         error.map_or(Ok(()), Err)
+    }
+
+    fn service_interactive_callback(
+        &self,
+        entries: &mut [Entry],
+        index: usize,
+        quantum: usize,
+    ) -> Result<bool, String> {
+        let entry = &entries[index];
+        let core = entry.core;
+        let token = entry.token;
+        let before = {
+            let mut state = self.state.borrow_mut();
+            state.sync(&*self.cpus[core], core)?;
+            state.active_slice = Some(schedule::Slice::new(
+                core,
+                state.instructions[core],
+                quantum,
+                quantum,
+            )?);
+            state.callback_peers = Some(CallbackPeers {
+                issuer: (core, token),
+                running: entries
+                    .iter()
+                    .filter(|peer| !peer.done && !peer.pending)
+                    .map(|peer| (peer.core, peer.token))
+                    .collect(),
+                wakeup: self.run_wakeup.clone(),
+                parked: Cell::new(false),
+            });
+            (
+                state.released.clone(),
+                state.waiting.clone(),
+                state.power_off,
+            )
+        };
+        let cpu = &*self.cpus[core];
+        let result = cpu.service_pending_callback_with_trap(token, &mut |trap| {
+            if trap.syndrome >> 26 != 0x18 {
+                return Ok(false);
+            }
+            let mut state = self.state.borrow_mut();
+            state.system_register(cpu, core, trap.syndrome)?;
+            state.due(&self.cpus)?;
+            state.push_pins(&self.cpus)?;
+            Ok(true)
+        });
+        entries[index].pending = false;
+        let mut state = self.state.borrow_mut();
+        let peers = state.callback_peers.take().unwrap();
+        state.active_slice = None;
+        result.map_err(|e| e.to_string())?;
+        if let Some(error) = state.error.take() {
+            return Err(error);
+        }
+        Ok(peers.parked.get()
+            || state.released != before.0
+            || state.waiting != before.1
+            || state.power_off != before.2
+            || state.decoders.pending()
+            || self.host_pause.get()
+            || state.continuation.borrow().fired)
     }
 
     fn settle_interactive_entry(
