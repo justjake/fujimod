@@ -2298,19 +2298,6 @@ impl Board {
         }
         if let Some(blocks) = s.blocks[core].as_mut() {
             blocks.inline.clear_pages();
-            let seeds = self
-                .cpus
-                .get(core)
-                .map(|cpu| {
-                    s.code_shadow[core]
-                        .as_mut()
-                        .map(|shadow| shadow.proven_pages(&**cpu))
-                        .unwrap_or_default()
-                })
-                .unwrap_or_default();
-            if let Some(blocks) = s.blocks[core].as_mut() {
-                blocks.inline.seed_pages(&seeds);
-            }
         }
         s.settled.clear();
         Ok(true)

@@ -100,37 +100,6 @@ impl Window {
         }
     }
 
-    /// Arm every page whose copied bytes the code shadow has proven, so a
-    /// block that branches to another such page still passes the translated
-    /// guard instead of calling the host. `pc` is the block being admitted;
-    /// its own page is armed even when the shadow could not prove it, which is
-    /// the single-page behaviour `arm` already had.
-    #[inline]
-    pub fn arm_pages(&mut self, pc: u64, remaining: u64, pages: &[u64]) {
-        let Some(mut recovery) = self.recovery else {
-            self.arm(pc, remaining);
-            return;
-        };
-        self.granted = remaining.min(i64::MAX as u64) as i64;
-        let record = unsafe { recovery.as_mut() };
-        record.thumb_accounting.thumb_page = pc & !0x3ff;
-        // Replace, never widen: the caller's set is what the code shadow
-        // proves right now, so a page that changed behind the engine loses
-        // its bit instead of keeping one from an earlier proof.
-        record.thumb_page_bitmap = [0; 16];
-        for &page_address in pages {
-            let page = page_address >> 10;
-            if page < 1024 {
-                record.thumb_page_bitmap[(page >> 6) as usize] |= 1u64 << (page & 63);
-            }
-        }
-        let page = pc >> 10;
-        if page < 1024 {
-            record.thumb_page_bitmap[(page >> 6) as usize] |= 1u64 << (page & 63);
-        }
-        record.thumb_accounting.accounting.budget = self.granted;
-    }
-
     /// The most recent block charged since this window was armed. The
     /// translated guard writes this before executing the first instruction.
     #[inline]
