@@ -863,6 +863,21 @@ pub struct DisableWrites {
     pub value: u64,
 }
 
+/// Declared wake alarm facts: writing 1 to `enable` arms the countdown last
+/// written to the stored register `seconds`, and writing 0 disarms it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetPowerAlarm"))]
+pub struct PowerAlarm {
+    /// Declared basis.
+    pub basis: String,
+    /// Declared enable register.
+    pub enable: u64,
+    /// Declared stored countdown register.
+    pub seconds: u64,
+}
+
 /// Declared strobe facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -915,6 +930,9 @@ pub struct Rtc {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetPowerChecksumRegisters"))]
 pub struct PowerChecksumRegisters {
+    /// Declared wake alarm.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alarm: Option<PowerAlarm>,
     /// Declared basis.
     pub basis: String,
     /// Declared chip select.

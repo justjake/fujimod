@@ -579,8 +579,18 @@ pub(crate) fn build(
                 power_spi_eye_commit,
             )?;
     }
-    if let Some((base, idle, port, pin, high, inputs, disable_writes, rtc, retained_registers)) =
-        checksum_power_spi
+    if let Some((
+        base,
+        idle,
+        port,
+        pin,
+        high,
+        inputs,
+        disable_writes,
+        rtc,
+        retained_registers,
+        alarm,
+    )) = checksum_power_spi
     {
         devices
             .get_or_insert_with(devices::Devices::empty)
@@ -594,6 +604,7 @@ pub(crate) fn build(
                 disable_writes,
                 rtc,
                 retained_registers,
+                alarm,
             )?;
     }
     if let Some(config) = stabilizer_link {

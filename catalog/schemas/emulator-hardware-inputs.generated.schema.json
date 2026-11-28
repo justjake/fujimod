@@ -2194,10 +2194,49 @@
       ],
       "type": "object"
     },
+    "ResetPowerAlarm": {
+      "additionalProperties": false,
+      "description": "Declared wake alarm facts: writing 1 to `enable` arms the countdown last\nwritten to the stored register `seconds`, and writing 0 disarms it.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "enable": {
+          "description": "Declared enable register.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "seconds": {
+          "description": "Declared stored countdown register.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "enable",
+        "seconds"
+      ],
+      "type": "object"
+    },
     "ResetPowerChecksumRegisters": {
       "additionalProperties": false,
       "description": "Declared power checksum registers facts.",
       "properties": {
+        "alarm": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetPowerAlarm"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared wake alarm."
+        },
         "basis": {
           "description": "Declared basis.",
           "type": "string"
