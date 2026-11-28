@@ -3,10 +3,10 @@
   "schema": 1,
   "id": "register-storage-fff75000",
   "base": 4294397952,
-  "size": 16384,
+  "size": 12288,
   "kind": "address-window",
   "device": {
     "model": "register_storage",
-    "basis": "Register words with no modeled behavior: words between the MOVDC outputs and the decompressor."
+    "basis": "Register words with no modeled behavior: words between the MOVDC outputs and the 0xfff78000 register block."
   }
 }
