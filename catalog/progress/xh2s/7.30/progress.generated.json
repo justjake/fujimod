@@ -5,8 +5,8 @@
   "model": "X-H2S",
   "version": "7.30",
   "facts": {
-    "located": 23,
-    "total": 25
+    "located": 24,
+    "total": 26
   },
   "boot_rom": null,
   "tracks": [
@@ -206,12 +206,12 @@
         {
           "id": "rec",
           "title": "Boots to the shooting screen",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "emulator-screen",
           "title": "First usable emulator screen",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "sd-boot-v2-autostart-starts-in-emulator",
@@ -226,7 +226,7 @@
         {
           "id": "menu",
           "title": "Menus respond to remote control",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "stock",
@@ -254,18 +254,18 @@
           "id": "emulator-screen",
           "label": "First usable screen",
           "stage": "emulator-screen",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0,
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
           "id": "rec",
           "label": "Boot",
           "stage": "rec",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0,
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
@@ -306,9 +306,9 @@
           "id": "menu",
           "label": "Menus",
           "stage": "menu",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0,
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
@@ -595,7 +595,7 @@
         {
           "id": "mod-memory",
           "title": "Memory for mods located",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "mod-target",
@@ -646,9 +646,9 @@
           "id": "mod-memory",
           "label": "Memory for mods located",
           "stage": "mod-memory",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0,
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
