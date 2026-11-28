@@ -2500,7 +2500,7 @@ mod tests {
                 .unwrap();
         }
         let observer = tracker.observer(pointer).unwrap();
-        let mut previous = 0;
+        let mut previous = 0u32;
         for value in [17u32, 42] {
             let before = unsafe { tracker.capture(backing.as_ptr()) };
             unsafe { cpu.observe_backings(&[observer]) }.unwrap();
