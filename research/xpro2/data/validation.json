@@ -1,0 +1,84 @@
+{
+  "schema": 1,
+  "source_reproduction": {
+    "status": "pass",
+    "inputs": {
+      "schema": 1,
+      "mode": "offline reference-ROM laboratory",
+      "dat_sha256": "6f9792e53a776ee116732a6df4425b0f5393ad2f53655f573924afe9c61dc54d",
+      "stock_sha256": "ed400cde0abfb07bd54a9aeb9a99f1d993843c47d29f3c71732edd0ed0d5f172",
+      "sd_sha256": "09ef2a0f2719635d1b7597424035bcaae6c605e39b163946311e4854ee45ef56",
+      "rom_sha256": "632445259ac679bf36281ea3f707b127759e0802bd507ba2b8d5b926492fd59f",
+      "input_sha256": "fa638e91fd6dd9790815e031298a3150ff287129d05ebb888ad93c94ce6f7fb7",
+      "physical_hardware_qualified": false,
+      "installable_dat_produced": false,
+      "limitations": [
+        "X-T2 reference ROM; X-Pro2 ROM and boot contacts unqualified",
+        "Timing, DDR training and lens/sensor responses are explicit model assumptions",
+        "No AF speed, power or physical recovery measurement"
+      ]
+    },
+    "stock_image_reconstructed": true,
+    "sd_image_reconstructed": true
+  },
+  "synthetic_tests": {
+    "status": "pass",
+    "tests": 15
+  },
+  "engine_patch_replay": {
+    "status": "pass",
+    "paths": 52,
+    "forward_exact": true,
+    "reverse_restores_base": true
+  },
+  "new_native_replays": {
+    "status": "pass",
+    "runner": "existing native binary built from the laboratory component snapshot; not a rebuild on current upstream",
+    "A": {
+      "source": "nor",
+      "error": null,
+      "frame_sha256": "e4dceb147bffcf80b321df734b7c0745ce2e369a25a9ca8c081ba3d6ec282084",
+      "instruction_counts": [
+        119847114,
+        94330403
+      ]
+    },
+    "B": {
+      "source": "sd",
+      "error": null,
+      "frame_sha256": "e4dceb147bffcf80b321df734b7c0745ce2e369a25a9ca8c081ba3d6ec282084",
+      "instruction_counts": [
+        276109108,
+        80251895
+      ],
+      "handoff_image_sha256": "09ef2a0f2719635d1b7597424035bcaae6c605e39b163946311e4854ee45ef56"
+    },
+    "menu": {
+      "controls": 12,
+      "folder_rows": 10,
+      "preferences": {
+        "menu_opacity": 25,
+        "indicator_opacity": 75,
+        "theme": 0,
+        "guide": 2,
+        "loads": 1,
+        "error": 0
+      },
+      "caption": "FujiMods",
+      "return_and_reentry": true,
+      "recorded_core_faults": false
+    }
+  },
+  "historical_tests": {
+    "component_tests": 111,
+    "builder_tests": 11,
+    "framing_arm_checks": 636,
+    "framing_ui_cold_checks": 21,
+    "framing_raster_checks": 40,
+    "reference_rom_qualification_checks": 43,
+    "scope": "Historical laboratory results; not fresh tests on the contribution branch current-upstream runtime"
+  },
+  "current_upstream_runtime_rebuilt": false,
+  "physical_hardware_qualified": false,
+  "installable_dat_produced": false
+}
