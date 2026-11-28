@@ -154,14 +154,17 @@ extern "C" fn batch_instruction(word: u32) -> u32 {
             }
         }
         0 | 1 => {
-            if unconditional
-                && body & 0x0e00_0090 == 0x0000_0090
-                && body & 0x60 != 0
-                && rn != 15
-                && rd < 14
-                && (pre || !writeback)
-            {
-                3
+            let extra_transfer = body & 0x0e00_0090 == 0x0000_0090 && body & 0x60 != 0;
+            if extra_transfer && rn != 15 && rd < 14 && (pre || !writeback) {
+                if unconditional {
+                    3
+                } else if pre && !writeback && body & 0x0e10_00d0 != 0x0000_00d0 {
+                    // A predicated single transfer with no base update needs
+                    // neither a preflight callback nor a writeback rollback.
+                    2
+                } else {
+                    0
+                }
             } else if body & 0x0fbf_0fff == 0x010f_0000
                 || body & 0x0fb0_fff0 == 0x0120_f000
                 || body & 0x0fb0_f000 == 0x0320_f000
@@ -4060,6 +4063,46 @@ mod tests {
             .unwrap();
         let operands = [5678, 17 << 8, 1 << 8, 0];
         assert_eq!(run(true, 48, operands), run(false, 48, operands));
+    }
+
+    #[test]
+    fn predicated_halfword_transfers_run_natively_and_suppress_false_accesses() {
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        let address = 0x1000;
+        let ram = 0x2000;
+        cpu.map_zeroed(address, 4096, 7).unwrap();
+        cpu.map_zeroed(ram, 4096, 3).unwrap();
+        for (offset, word) in [
+            (0, 0xe350_0000u32), // cmp r0, #0
+            (4, 0xc1c1_20b0),    // strhgt r2, [r1]
+            (8, 0xc1d1_30f0),    // ldrshgt r3, [r1]
+            (12, 0xe280_0001),   // add r0, r0, #1
+        ] {
+            cpu.write_memory(address + offset, &word.to_le_bytes())
+                .unwrap();
+        }
+        cpu.set_cpsr(0xd3).unwrap();
+        for (condition, base, expected) in [(1, ram as u32, 0xffff_8001), (0, 0x4000, 0x55)] {
+            let mut executed = 0;
+            cpu.shared.batching.set(true);
+            let reason = unsafe {
+                ffi::dynarmic_set_reg(cpu.inst, 0, condition);
+                ffi::dynarmic_set_reg(cpu.inst, 1, base);
+                ffi::dynarmic_set_reg(cpu.inst, 2, 0x8001);
+                ffi::dynarmic_set_reg(cpu.inst, 3, 0x55);
+                ffi::dynarmic_set_reg(cpu.inst, 15, address as u32);
+                ffi::dynarmic_run(cpu.inst, 4, &mut executed)
+            };
+            cpu.shared.batching.set(false);
+            assert_eq!(reason, ffi::DynarmicExitReason::Timeout);
+            assert_eq!(executed, 4);
+            assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 0) }, condition + 1);
+            assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 3) }, expected);
+            assert!(cpu.shared.replay_memory.get().is_none());
+        }
+        let mut output = [0; 2];
+        cpu.read_memory(ram, &mut output).unwrap();
+        assert_eq!(u16::from_le_bytes(output), 0x8001);
     }
 
     #[test]
