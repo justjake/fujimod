@@ -307,6 +307,11 @@ fn identity(request: &Request, resolved: &ResolvedConfiguration) -> Result<Strin
         part(b"overlay");
         part(overlay.as_bytes());
     }
+    for (name, value) in &request.camera_settings {
+        part(b"camera-setting");
+        part(name.as_bytes());
+        part(value.as_bytes());
+    }
     part(request.policy.name().as_bytes());
     part(engine_name(resolved).as_bytes());
     match &request.face_result_profile {

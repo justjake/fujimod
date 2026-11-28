@@ -18,6 +18,7 @@ use fujimod_emulator_devices::parts::{nand::Nand, sd_card::Card};
 use fujimod_emulator_session::Session;
 use sha2::{Digest, Sha256};
 use std::{
+    collections::BTreeMap,
     fmt, fs,
     path::{Path, PathBuf},
 };
@@ -154,6 +155,9 @@ pub struct Request {
     /// External face detector results, in place of the run's passive face
     /// bank: a declared result the guest's own detector start consumes.
     pub face_result_profile: Option<RunFaceResultProfile>,
+    /// Named camera settings, such as `language: zh-hans`, that replace the
+    /// run's power-on requests for the same settings.
+    pub camera_settings: BTreeMap<String, String>,
     /// Internal flash and SD card kept from an earlier open, for a power-on.
     pub kept: KeptMedia,
 }
@@ -461,6 +465,19 @@ fn resolve(library: &Library, request: &Request) -> Result<ResolvedConfiguration
         })?;
         preset.factory_options.face_result_profile = Some(profile);
     }
+    if !request.camera_settings.is_empty() {
+        let settings = match resolved.configuration.inputs.as_mut() {
+            Some(RunInputs::Exr2(inputs)) => inputs.settings.as_mut(),
+            _ => None,
+        }
+        .ok_or_else(|| {
+            OpenError::at(
+                Stage::BootRom,
+                "camera settings need a run that declares power-on settings",
+            )
+        })?;
+        settings.requested.extend(request.camera_settings.clone());
+    }
     Ok(resolved)
 }
 
@@ -550,6 +567,7 @@ pub(crate) fn construct(
         run_to_rec: _,
         nand_image,
         face_result_profile: _,
+        camera_settings: _,
         kept,
     } = request;
     let engine = resolved

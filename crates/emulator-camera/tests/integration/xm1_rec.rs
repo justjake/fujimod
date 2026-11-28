@@ -39,6 +39,7 @@ fn request() -> Request {
         run_to_rec: false,
         nand_image: None,
         face_result_profile: None,
+        camera_settings: Default::default(),
         kept: Default::default(),
     }
 }

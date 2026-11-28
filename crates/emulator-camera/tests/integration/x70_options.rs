@@ -241,3 +241,20 @@ fn a_declared_card_layout_is_validated_and_needs_the_card() {
         error.detail
     );
 }
+
+#[test]
+fn requested_camera_settings_replace_the_runs_own() {
+    let Some(library) = library() else {
+        eprintln!("skipped: set FUJIMOD_FIRMWARE_LIBRARY");
+        return;
+    };
+    let mut request = request(Boot::Stock);
+    request.camera_settings = [("language".to_owned(), "zh-hans".to_owned())].into();
+    open_unbooted(&library, request).expect("construct with Simplified Chinese selected");
+    let mut request = self::request(Boot::Stock);
+    request.camera_settings = [("language".to_owned(), "no-such-language".to_owned())].into();
+    let Err(error) = open_unbooted(&library, request) else {
+        panic!("an unknown language value opened");
+    };
+    assert!(error.to_string().contains("no-such-language"), "{error}");
+}

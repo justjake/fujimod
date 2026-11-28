@@ -27,7 +27,7 @@ use fujimod_emulator_camera::{
 use fujimod_emulator_session::Session;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::{fs, path::PathBuf};
+use std::{collections::BTreeMap, fs, path::PathBuf};
 
 pub use autostart::stock_menus;
 pub use emulator::{
@@ -152,6 +152,8 @@ pub struct Request {
     /// External face detector results, in place of the run's passive face
     /// bank.
     pub face_result_profile: Option<RunFaceResultProfile>,
+    /// Named camera settings that replace the run's power-on requests.
+    pub camera_settings: BTreeMap<String, String>,
 }
 
 /// A power-on that keeps the camera's internal flash and SD card.
@@ -344,6 +346,7 @@ fn emulator_request(
             run_to_rec: request.run_to_rec,
             nand_image: request.nand_image.clone(),
             face_result_profile: request.face_result_profile.clone(),
+            camera_settings: request.camera_settings.clone(),
             kept: Default::default(),
         },
         release,

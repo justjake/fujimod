@@ -436,6 +436,7 @@ class Board:
         combination: str | None = None,
         overlays: Sequence[str] = (),
         sd_card_initialization_fault: Mapping[str, object] | str | None = None,
+        camera_settings: Mapping[str, str] | None = None,
     ) -> Self:
         """Open a camera through the shared builder and return it at REC.
 
@@ -479,8 +480,20 @@ class Board:
         models an SD host initialization fault as the device model names it,
         such as `"reject_cmd8"` or
         `{"reject_standby_cmd3_and_cmd8_once_after": 2}`.
+        `camera_settings` names settings by catalog name and value name,
+        such as `{"language": "zh-hans"}`, in place of the run's own.
         """
         firmware = cls._identifier(firmware, "firmware")
+        if camera_settings is not None and not isinstance(camera_settings, Mapping):
+            raise TypeError("camera_settings must map setting names to value names")
+        selected_settings = dict(camera_settings or {})
+        if any(
+            type(key) is not str or type(value) is not str or not key or not value
+            for key, value in selected_settings.items()
+        ):
+            raise TypeError(
+                "camera_settings must map nonempty strings to nonempty strings"
+            )
         if boot not in ("stock", "sd-card", "autostart"):
             raise ValueError("boot must be 'stock', 'sd-card' or 'autostart'")
         if (update is None) != (boot_rom is None):
@@ -615,6 +628,7 @@ class Board:
             combination=combination,
             overlays=selected_overlays,
             sd_card_initialization_fault=fault_text,
+            camera_settings=selected_settings or None,
         )
         quantum = native.boot_quantum
         if type(quantum) is not int or quantum < 1:

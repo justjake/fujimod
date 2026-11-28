@@ -355,6 +355,7 @@ fn open_with_builder(request: OpenCameraRequest) -> Result<(LaunchedCamera, Runn
         card: Default::default(),
         nand_image: None,
         face_result_profile: None,
+        camera_settings: Default::default(),
     };
     let state = StateDir::from_env();
     let room = fujimod_emulator_gui::Room::loopback()?;

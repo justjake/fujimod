@@ -113,6 +113,7 @@ class emulator:
             face_result_profile: str | None = ...,
             overlays: Sequence[str] | None = ...,
             sd_card_initialization_fault: str | None = ...,
+            camera_settings: Mapping[str, str] | None = ...,
         ) -> emulator.Board: ...
         def release_holds(self, /) -> None: ...
         def power_on(

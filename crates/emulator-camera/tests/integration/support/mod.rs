@@ -75,6 +75,7 @@ pub fn request(boot: Boot, image: Option<LoaderImage>, cache: BootCache) -> Requ
         run_to_rec: true,
         nand_image: None,
         face_result_profile: None,
+        camera_settings: Default::default(),
         kept: Default::default(),
     }
 }

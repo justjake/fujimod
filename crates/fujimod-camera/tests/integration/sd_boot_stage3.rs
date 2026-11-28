@@ -35,6 +35,7 @@ fn request(firmware: &str, files: Vec<(String, Vec<u8>)>) -> Request {
         card: Default::default(),
         nand_image: None,
         face_result_profile: None,
+        camera_settings: Default::default(),
     }
 }
 

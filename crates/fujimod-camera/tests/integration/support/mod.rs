@@ -47,6 +47,7 @@ pub fn request(
         card: Default::default(),
         nand_image: None,
         face_result_profile: None,
+        camera_settings: Default::default(),
     }
 }
 

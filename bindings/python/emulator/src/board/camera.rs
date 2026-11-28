@@ -61,7 +61,7 @@ impl Board {
         run_to_rec=true, sd_card_present=true, sd_card_write_protected=false, sd_card_transfer_ticks=None,
         card_layout=None, start="rom", image=None, image_sha256=None, update=None, boot_rom=None,
         flash=None, combination=None, sd_card_files=None, image_bytes=None, nand=None,
-        face_result_profile=None, overlays=None, sd_card_initialization_fault=None))]
+        face_result_profile=None, overlays=None, sd_card_initialization_fault=None, camera_settings=None))]
     #[allow(clippy::too_many_arguments)]
     fn open_camera(
         firmware: String,
@@ -87,7 +87,9 @@ impl Board {
         face_result_profile: Option<String>,
         overlays: Option<Vec<String>>,
         sd_card_initialization_fault: Option<&str>,
+        camera_settings: Option<std::collections::BTreeMap<String, String>>,
     ) -> PyResult<Self> {
+        let camera_settings = camera_settings.unwrap_or_default();
         let files = match (update, boot_rom) {
             (None, None) => emulator::FirmwareInput::Library,
             (Some(update), Some(boot_rom)) => emulator::FirmwareInput::Files { update, boot_rom },
@@ -222,6 +224,7 @@ impl Board {
                     run_to_rec,
                     nand_image: nand.clone(),
                     face_result_profile: face_result_profile.clone(),
+                    camera_settings: camera_settings.clone(),
                     kept: Default::default(),
                 },
             )
@@ -257,6 +260,7 @@ impl Board {
                 run_to_rec,
                 nand_image: nand,
                 face_result_profile,
+                camera_settings,
                 card: fujimod_camera::CardOptions {
                     present: sd_card_present,
                     protected: sd_card_write_protected,
