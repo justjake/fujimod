@@ -100,7 +100,28 @@
         "fields": []
       }
     },
-    "derived_fields": []
+    "derived_fields": [
+      {
+        "store": "settings",
+        "offset": 1871,
+        "bytes": 4,
+        "source": {
+          "kind": "bank_copy",
+          "offset": 339
+        },
+        "basis": "Stock settings defaults builder 0x17c0890 copies configuration keys 0x153..0x156 into the Adobe RGB filename prefix at settings payload +0x64b."
+      },
+      {
+        "store": "settings",
+        "offset": 1875,
+        "bytes": 4,
+        "source": {
+          "kind": "bank_copy",
+          "offset": 331
+        },
+        "basis": "Stock settings defaults builder 0x17c0890 copies configuration keys 0x14b..0x14e into the filename prefix at settings payload +0x64f."
+      }
+    ]
   },
   "settings": {
     "setup": {
