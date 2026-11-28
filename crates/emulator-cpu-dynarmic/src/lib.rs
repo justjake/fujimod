@@ -1201,7 +1201,7 @@ impl CoreShared {
                     Some((page, NativeAccess::Mmio(prepared))) if len == size => {
                         if output.is_none()
                             && size == 4
-                            && matches!(transfer, None)
+                            && transfer.is_none()
                             && let Some(value) = self.project_read(address, page, prepared, elapsed)
                         {
                             self.projected_reads.set(self.projected_reads.get() + 1);
@@ -1540,7 +1540,7 @@ impl Core {
         self.shared.device_accessed.set(true);
         self.tightened.set(false);
         if read {
-            let value = unsafe { (callbacks.read)(offset as u64, width as u32, callbacks.data) };
+            let value = unsafe { (callbacks.read)(offset, width as u32, callbacks.data) };
             let mask = if width == 1 { 0xff } else { u32::MAX };
             unsafe {
                 ffi::dynarmic_set_reg(self.inst, register, value as u32 & mask);
@@ -1548,14 +1548,7 @@ impl Core {
         } else {
             let mask = if width == 1 { 0xff } else { u32::MAX };
             let value = unsafe { ffi::dynarmic_get_reg(self.inst, register) } & mask;
-            unsafe {
-                (callbacks.write)(
-                    offset as u64,
-                    width as u32,
-                    u64::from(value),
-                    callbacks.data,
-                )
-            };
+            unsafe { (callbacks.write)(offset, width as u32, u64::from(value), callbacks.data) };
         }
         unsafe { ffi::dynarmic_set_reg(self.inst, 15, pc.wrapping_add(4)) };
         self.last_progress.set(self.last_progress.get() + 1);

@@ -344,7 +344,7 @@ trait TimerModel: Clone + serde::Serialize + serde::de::DeserializeOwned + Send 
     fn restore(&mut self, value: &serde_json::Value) -> Result<(), String>;
 }
 fn interval_count_channel(offset: u64, size: u8) -> Option<usize> {
-    (size == 4 && (0x10..0x50).contains(&offset) && offset % 8 == 0)
+    (size == 4 && (0x10..0x50).contains(&offset) && offset.is_multiple_of(8))
         .then(|| ((offset - 0x10) / 8) as usize)
 }
 impl TimerModel for IntervalTimers {

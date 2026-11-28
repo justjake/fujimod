@@ -420,8 +420,11 @@ fn projected_device_reads_preserve_fractional_clock_and_deadline() {
         let mut result = [0; 40];
         board.read_memory(0, 0x20000, &mut result).unwrap();
         let values = result
-            .chunks_exact(4)
-            .map(|bytes| u32::from_le_bytes(bytes.try_into().unwrap()))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .copied()
+            .map(u32::from_le_bytes)
             .collect::<Vec<_>>();
         let projected = board.cpu(0).unwrap().exit_counters().unwrap()["projected_mmio_reads"];
         ((board.instruction_counts(), board.now(), values), projected)
