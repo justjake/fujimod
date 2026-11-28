@@ -13,13 +13,13 @@ export default function QrSharing() {
       <ol>
         <li>Press DRIVE and choose QR CODE SCANNER.</li>
         <li>
-          Frame the entire code. Choose FOCUS LOCK or FULL PRESS in DETECT WHEN if you want to
-          start a scan with the shutter button.
+          Frame the entire code. Choose FOCUS LOCK or FULL PRESS in DETECT WHEN if you want to start
+          a scan with the shutter button.
         </li>
         <li>
           Review the recipe or settings on the camera. Choose ADD TO LIBRARY to save a recipe.
-          Choose APPLY ONCE to apply settings, or ALWAYS APPLY WITHOUT ASKING to remember that
-          exact code.
+          Choose APPLY ONCE to apply settings, or ALWAYS APPLY WITHOUT ASKING to remember that exact
+          code.
         </li>
       </ol>
     </TextPage>
