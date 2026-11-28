@@ -257,6 +257,40 @@ struct WatchedPage {
     contents: [u8; 4096],
 }
 
+impl WatchedPage {
+    fn overlaps(&self, first: usize, last: usize) -> bool {
+        let first_slot = first / 64;
+        let last_slot = last / 64;
+        let first_mask = u64::MAX << (first % 64);
+        let last_mask = u64::MAX >> (63 - last % 64);
+        if first_slot == last_slot {
+            return self.seen[first_slot] & first_mask & last_mask != 0;
+        }
+        self.seen[first_slot] & first_mask != 0
+            || self.seen[last_slot] & last_mask != 0
+            || self.seen[first_slot + 1..last_slot]
+                .iter()
+                .any(|&bits| bits != 0)
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn watched_byte_ranges_include_only_requested_bits() {
+    let mut watched = WatchedPage {
+        seen: [0; 64],
+        contents: [0; 4096],
+    };
+    watched.seen[0] = 1 << 62;
+    watched.seen[1] = 1 << 1;
+    assert!(!watched.overlaps(61, 61));
+    assert!(watched.overlaps(61, 62));
+    assert!(!watched.overlaps(63, 64));
+    assert!(watched.overlaps(63, 65));
+    assert!(watched.overlaps(63, 128));
+    assert!(!watched.overlaps(66, 4095));
+}
+
 #[derive(Default)]
 struct WatchedPages {
     pages: RefCell<HashMap<usize, Box<WatchedPage>>>,
@@ -276,12 +310,7 @@ impl CodeVisibility {
             .contains_key(&(pointer.addr() & !4095))
     }
 
-    fn overlapping_pages(
-        &self,
-        pointer: *const u8,
-        count: usize,
-        mut visit: impl FnMut(usize) -> bool,
-    ) -> bool {
+    fn overlaps(&self, pointer: *const u8, count: usize) -> bool {
         if count == 0 {
             return false;
         }
@@ -289,16 +318,10 @@ impl CodeVisibility {
         let pages = self.0.pages.borrow();
         let end = start + count;
         ((start & !4095)..end).step_by(4096).any(|page| {
-            pages.get(&page).is_some_and(|bytes| {
-                (start.saturating_sub(page)..(end - page).min(4096))
-                    .any(|byte| bytes.seen[byte / 64] & (1 << (byte % 64)) != 0)
-                    && visit(page)
+            pages.get(&page).is_some_and(|watched| {
+                watched.overlaps(start.saturating_sub(page), (end - page).min(4096) - 1)
             })
         })
-    }
-
-    fn overlaps(&self, pointer: *const u8, count: usize) -> bool {
-        self.overlapping_pages(pointer, count, |_| true)
     }
 
     fn note_write(&self, pointer: *const u8, count: usize) {
@@ -673,8 +696,9 @@ impl CoreShared {
     fn watch_code_backing(&self, pointer: *const u8) {
         let page = pointer.addr() & !4095;
         let mut pages = self.code_visibility.0.pages.borrow_mut();
-        let new = !pages.contains_key(&page);
+        let mut new = false;
         let watched = pages.entry(page).or_insert_with(|| {
+            new = true;
             Box::new(WatchedPage {
                 seen: [0; 64],
                 contents: [0; 4096],
