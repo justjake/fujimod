@@ -1,3 +1,8 @@
+const qrSharing = {
+  heading: 'QR Sharing',
+  description: 'Share recipes and scan recipe and settings QR codes on the Fujifilm X70.',
+};
+
 export const textPages = {
   '/safety': {
     heading: 'Safety',
@@ -11,6 +16,9 @@ export const textPages = {
     heading: 'Releases',
     description: 'FujiMod release notes.',
   },
+  '/qr': qrSharing,
+  '/recipe': qrSharing,
+  '/settings': qrSharing,
 };
 
 export function textPagePath(path: string): keyof typeof textPages | undefined {

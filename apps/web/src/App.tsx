@@ -21,10 +21,14 @@ const DocsOverview = lazy(() => import('./docs/Overview'));
 const DesignIndex = lazy(() => import('./docs/design/Index'));
 const CustomSettingsEditor = lazy(() => import('./docs/design/custom-settings-editor/Page'));
 const CustomSettingsEditorFeature = lazy(() => import('./features/custom-settings-editor/Page'));
+const QrSharing = lazy(() => import('./text/QrSharing'));
 const textRoutes = {
   '/safety': lazy(() => import('./text/Safety')),
   '/credits': lazy(() => import('./text/Credits')),
   '/releases': lazy(() => import('./text/Releases')),
+  '/qr': QrSharing,
+  '/recipe': QrSharing,
+  '/settings': QrSharing,
 };
 /** A page that fails to render or load shows the error page instead of a blank one. */
 function Guarded(props: { page: () => JSX.Element }) {
