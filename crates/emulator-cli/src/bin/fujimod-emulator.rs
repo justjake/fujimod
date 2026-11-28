@@ -1092,6 +1092,7 @@ fn run_open(open: Open) -> Result<Outcome, String> {
     let opened = camera::open(&library, &state, request).map_err(|error| error.to_string())?;
     let mut report = serde_json::json!({
         "firmware": opened.firmware,
+        "cpu_backend": opened.resolved.configuration.cpu_backend(),
         "boot": open.boot.name(),
         "sd_card": open
             .sd_card
@@ -1166,10 +1167,10 @@ fn run_boot(mut boot_options: Boot) -> Result<Outcome, String> {
         return run_application(boot_options, resolved);
     }
     match resolved.configuration.inputs.as_ref() {
-        Some(RunInputs::Exr2(_)) => run_exr2(boot_options, resolved),
         Some(RunInputs::Xp5(_)) => run_xp5(boot_options, resolved),
         Some(RunInputs::Xp4(_)) => Err("XP4 inputs declared for another SoC".into()),
-        None => Err(format!(
+        _ if boot::is_exr2_run(&resolved) => run_exr2(boot_options, resolved),
+        _ => Err(format!(
             "configuration {configuration_id} declares no startup inputs"
         )),
     }

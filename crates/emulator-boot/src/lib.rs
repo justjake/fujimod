@@ -1087,7 +1087,7 @@ pub fn open(resolved: ResolvedConfiguration, inputs: StartupInputs) -> Result<Ca
 
 /// Whether a configuration runs on EXR II, either from declared startup inputs
 /// or from a body construction that carries its reset values.
-fn is_exr2_run(resolved: &ResolvedConfiguration) -> bool {
+pub fn is_exr2_run(resolved: &ResolvedConfiguration) -> bool {
     matches!(
         resolved.configuration.inputs.as_ref(),
         Some(RunInputs::Exr2(_))
