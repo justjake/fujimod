@@ -15,7 +15,7 @@ use crate::{
     bulk::{Access, BulkError, Result, check_camera, hex},
 };
 use fujimod_catalog_restart::{
-    BootFlag, DeferredTimer, FirmwareRestart, RecIdle, RequestTransport, WordValue,
+    BootFlag, DeferredTimer, FirmwareRestart, RecIdle, RequestTransport, RestartKind, WordValue,
 };
 use fujimod_usb::{
     ff80::{
@@ -234,6 +234,15 @@ pub async fn request(
     let power_off = m.power_off.as_ref().ok_or_else(|| {
         BulkError::Check("This image publishes no power-off that returns from the request".into())
     })?;
+    // The X-Processor 4 query takes its published command byte and a parameter
+    // record longer than its output fields. The borrowed query here sends the
+    // generic diagnostic command and only the output fields, so refuse before
+    // touching the camera.
+    if m.kind == Some(RestartKind::Xp4WakeDeadline) {
+        return Err(BulkError::Check(
+            "This firmware's message request needs a query command and parameter record this workflow does not send".into(),
+        ));
+    }
     check_camera(session, &restart.product, &restart.internal_version).await?;
     let alias = restart.code_alias;
     let mut access = Access { session, limits };
@@ -563,7 +572,7 @@ mod tests {
     }
 
     #[test]
-    fn an_x_processor_4_request_with_its_power_off_reaches_the_camera() {
+    fn an_x_processor_4_request_with_its_power_off_is_refused_before_camera_io() {
         let mut restart: FirmwareRestart = serde_json::from_str(include_str!(
             "../../catalog-restart/tests/fixtures/xp4-wake-deadline.json"
         ))
@@ -590,14 +599,10 @@ mod tests {
         }]);
         let result = block_on(request(&mut session, &restart, limits(), false));
         assert!(
-            !matches!(&result, Err(BulkError::Check(message)) if message.contains("power-off")),
+            matches!(&result, Err(BulkError::Check(message)) if message.contains("query command")),
             "{result:?}"
         );
-        assert_eq!(
-            script.remaining(),
-            0,
-            "the request asks the camera who it is"
-        );
+        assert_eq!(script.remaining(), 1, "no camera I/O before the refusal");
     }
 
     #[test]
