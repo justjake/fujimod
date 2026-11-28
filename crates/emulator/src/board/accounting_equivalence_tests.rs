@@ -449,6 +449,7 @@ fn repeated_read_window_expires_at_a_deadline_and_a_guest_write() {
         value: u64,
         deadline: Option<u64>,
         countdown: bool,
+        sampled_reads: Arc<Mutex<u64>>,
     }
     impl Status {
         fn value_at(&self, at: u64) -> u64 {
@@ -462,8 +463,10 @@ fn repeated_read_window_expires_at_a_deadline_and_a_guest_write() {
             "stable-status"
         }
         fn read_without_advance(&self, _: u64, size: u8, at: u64) -> Option<u64> {
-            (size == 4 && self.deadline.is_none_or(|deadline| at < deadline))
-                .then(|| self.value_at(at))
+            (size == 4 && self.deadline.is_none_or(|deadline| at < deadline)).then(|| {
+                *self.sampled_reads.lock().unwrap() += 1;
+                self.value_at(at)
+            })
         }
         fn projected_value_until(
             &self,
@@ -515,6 +518,7 @@ fn repeated_read_window_expires_at_a_deadline_and_a_guest_write() {
         set(&*cpu, arm::CORE[5], 0x8000000);
         set(&*cpu, arm::CPSR, 0xd3);
         let mut bus = Bus::new(bus::Mode::Strict);
+        let sampled_reads = Arc::new(Mutex::new(0));
         bus.register(
             0x8000000,
             4,
@@ -522,6 +526,7 @@ fn repeated_read_window_expires_at_a_deadline_and_a_guest_write() {
                 value: 7,
                 deadline: Some(4),
                 countdown,
+                sampled_reads: Arc::clone(&sampled_reads),
             }),
         )
         .unwrap();
@@ -556,11 +561,11 @@ fn repeated_read_window_expires_at_a_deadline_and_a_guest_write() {
             [7, 7, 7, 9, 11, 11]
         };
         assert_eq!(values, expected);
+        let projected = cpu.exit_counters().unwrap()["projected_mmio_reads"];
+        let sampled = *sampled_reads.lock().unwrap();
         assert!(
-            board
-                .bindings
-                .iter()
-                .any(|binding| binding.projected_window_hits.get() > 0)
+            projected > sampled,
+            "expected reuse across projected reads, got {projected} reads from {sampled} samples"
         );
     }
 }
