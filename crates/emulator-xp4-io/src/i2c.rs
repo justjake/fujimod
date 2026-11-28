@@ -371,6 +371,10 @@ impl ByteI2c {
             .as_ref()
             .is_some_and(|p| p.operation == Operation::Stop)
         {
+            // Another idle control write leaves the scheduled STOP in place.
+            if control & (MSS | ACK | SCC) == 0 {
+                return Ok(None);
+            }
             return Err("I2C STOP already pending".into());
         }
         if control & MSS == 0 {

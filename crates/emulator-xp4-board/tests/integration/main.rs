@@ -9,6 +9,7 @@ mod functional_system_control;
 mod imaging_frame_start_pulse;
 mod io_groups;
 mod jpeg_decoder;
+mod lens_link;
 mod mali_v61;
 mod movie_audio;
 mod nor_read_bounds;

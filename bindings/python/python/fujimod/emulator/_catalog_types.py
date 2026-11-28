@@ -1109,6 +1109,7 @@ class BodyHardware(TypedDict, total=False):
     serial_attachments: NotRequired[list[SerialAttachment]]
     stabilizer: NotRequired[StabilizerMount | None]
     thermal_connection_ids: NotRequired[list[str]]
+    xp4_lens_mount: NotRequired[Xp4LensMount | None]
 
 
 class BodyProfile(TypedDict, total=False):
@@ -6648,6 +6649,17 @@ class WordValue(TypedDict, total=False):
     address: Required[int]
     size: Required[int]
     value: Required[int]
+
+
+class Xp4LensMount(TypedDict, total=False):
+    controller_id: Required[str]
+    detect_connection_id: Required[str]
+    lens_part_id: Required[str]
+    miso_high: Required[bool]
+    mounted: Required[bool]
+    ready_connection_id: Required[str]
+    sense_connection_ids: Required[list[str]]
+    supply_connection_ids: Required[list[str]]
 
 
 class ZoomMechanism(TypedDict, total=False):

@@ -90,6 +90,13 @@ fn declared_register_peer_round_trip_uses_byte_instructions() {
         wait(&s);
     }
     wb(&s, 4, 0);
+    let stop = s.next_device_tick().unwrap();
+    wb(&s, 4, 0);
+    assert_eq!(
+        s.next_device_tick(),
+        Some(stop),
+        "repeated STOP keeps its deadline"
+    );
     wait(&s);
     for (data, control) in [(0x60, 0x10), (16, 0x10), (0x61, 0x30)] {
         wb(&s, 16, data);

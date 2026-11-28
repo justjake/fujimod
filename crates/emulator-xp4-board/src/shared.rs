@@ -226,7 +226,13 @@ pub fn build(
         window_action: None,
         recording_frames: Default::default(),
     };
-    Ok((session, Inputs { dials }))
+    Ok((
+        session,
+        Inputs {
+            dials,
+            aperture_ring: built.aperture_ring,
+        },
+    ))
 }
 
 /// Build the XP4 board from its definition alone: its cores start from
@@ -602,18 +608,27 @@ pub fn card_medium(
 }
 
 /// External XP4 inputs the shared session's generic inputs do not name: the
-/// command dials of the countdown timers, the USB cable with its condition
+/// command dials, the lens aperture ring, the USB cable with its condition
 /// strap and the DWC3 host transactions, single ADC channels, GPIO pins and
 /// the touch panel.
 pub struct Inputs {
     /// Countdown-timer channel of each named command dial.
     dials: std::collections::BTreeMap<String, usize>,
+    aperture_ring: Option<fujimod_emulator_xp4_io::lens_link::LensLink>,
 }
 
 type Dwc3 = Connected<fujimod_emulator_ip::usb::dwc3::Dwc3>;
 type Session = fujimod_emulator_session::Session;
 
 impl Inputs {
+    /// Move the mounted lens's aperture ring (0 for Auto, 1 and above for manual stops).
+    pub fn set_lens_aperture_ring(&self, ring: u16) -> Result<(), String> {
+        self.aperture_ring
+            .as_ref()
+            .ok_or("Board has no XP4 lens link")?
+            .set_aperture_ring(ring)
+    }
+
     /// Queue `edges` detent edges on a named command dial.
     pub fn turn_dial(&self, session: &mut Session, name: &str, edges: i32) -> Result<(), String> {
         let channel = *self

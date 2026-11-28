@@ -4,7 +4,9 @@
 //! Every value comes from a record. A block keeps its window, interrupt
 //! outputs and device model; the body profile replaces a block's device only
 //! through `block_overrides`.
+use fujimod_catalog::reference::ResolvedSelection;
 use fujimod_catalog_resolution::ResolvedConfiguration;
+use fujimod_emulator_xp4_io::lens_link;
 use serde_json::{Map, Value, json};
 
 /// One processor block with the device the selected body leaves in place.
@@ -62,6 +64,7 @@ pub struct Catalog {
     /// The read and standby gates of each image-sensor part the body installs, as
     /// `[register, mask]` pairs or null.
     image_sensors: Vec<Value>,
+    xp4_lens_link: Option<lens_link::Config>,
     pub board: Value,
 }
 impl Catalog {
@@ -167,6 +170,7 @@ impl Catalog {
             firmware,
             configuration,
             image_sensors,
+            xp4_lens_link: xp4_lens_link(&resolved.reference)?,
             board,
         })
     }
@@ -365,6 +369,9 @@ impl Catalog {
         }
         if self.device("gpio").is_some() {
             out.insert("gpio".into(), board["gpio_input"]["levels"].clone());
+        }
+        if let Some(lens) = &self.xp4_lens_link {
+            out.insert("xp4_lens_link".into(), json!(lens));
         }
         let routes = board["gpio_interrupts"]["routes"]
             .as_array()
@@ -861,6 +868,140 @@ impl Catalog {
         out.insert("usb_condition".into(), json!([usb.base(), false]));
         Ok(())
     }
+}
+
+/// Resolve the connector's physical signals, SoC clock and mounted lens.
+fn xp4_lens_link(selection: &ResolvedSelection) -> Result<Option<lens_link::Config>, String> {
+    use fujimod_catalog::{
+        assembly::PeripheralPart,
+        reference::{ConnectionSignal, PartModel},
+        soc::BlockDevice,
+    };
+    let body = &selection.body;
+    let Some(mount) = body
+        .hardware
+        .as_ref()
+        .and_then(|hw| hw.xp4_lens_mount.as_ref())
+    else {
+        return Ok(None);
+    };
+    let block = selection
+        .soc
+        .blocks
+        .iter()
+        .find(|block| block.id == mount.controller_id)
+        .ok_or("XP4 lens mount needs a declared SPI controller")?;
+    let clock = selection
+        .soc
+        .clocks
+        .iter()
+        .find(|clock| Some(&clock.id) == block.clock_id.as_ref())
+        .ok_or("XP4 lens SPI controller needs a declared clock")?;
+    let hz = clock
+        .frequency_hz
+        .ok_or("XP4 lens clock needs a declared frequency")?;
+    if hz == 0 || !hz.is_multiple_of(1_000_000) {
+        return Err("XP4 lens SPI clock needs whole ticks per microsecond".into());
+    }
+    let ticks = |us: u64| {
+        us.checked_mul(hz / 1_000_000)
+            .ok_or("XP4 lens timing overflows")
+    };
+    let part = selection
+        .parts
+        .iter()
+        .find(|part| part.id == mount.lens_part_id)
+        .ok_or("XP4 lens mount needs an installed part")?;
+    let PartModel::Peripheral {
+        interface:
+            PeripheralPart::XMountLens {
+                preset,
+                sense_unpowered,
+                startup_us,
+                busy_us,
+                operation_us,
+            },
+    } = &part.model
+    else {
+        return Err(format!("Part {} is not an X-mount lens", part.id));
+    };
+    let signals = |id: &str| {
+        body.connections
+            .iter()
+            .find(|connection| connection.id == id)
+            .map(|connection| connection.signals.as_slice())
+            .ok_or_else(|| format!("XP4 lens mount refers to missing connection {id}"))
+    };
+    let pad = |id: &str| {
+        let mut pads = signals(id)?.iter().filter_map(|signal| match signal {
+            ConnectionSignal::Gpio {
+                port,
+                pin,
+                active_level,
+            } => Some(lens_link::Signal {
+                port: usize::from(*port),
+                pin: usize::from(*pin),
+                active_high: *active_level,
+            }),
+            _ => None,
+        });
+        match (pads.next(), pads.next()) {
+            (Some(pad), None) => Ok(pad),
+            _ => Err(format!("XP4 lens connection {id} needs one GPIO pad")),
+        }
+    };
+    let ready = pad(&mount.ready_connection_id)?;
+    let mut interrupts = signals(&mount.ready_connection_id)?
+        .iter()
+        .filter_map(|signal| match signal {
+            ConnectionSignal::Interrupt {
+                controller_id,
+                line,
+            } => Some((controller_id, *line)),
+            _ => None,
+        });
+    let (Some((controller_id, line)), None) = (interrupts.next(), interrupts.next()) else {
+        return Err("XP4 lens ready needs one interrupt route".into());
+    };
+    if !selection.soc.blocks.iter().any(|block| {
+        block.id == *controller_id
+            && matches!(block.device, Some(BlockDevice::GicV2 { lines, .. }) if line < lines)
+    }) {
+        return Err("XP4 lens ready interrupt needs a declared GIC input".into());
+    }
+    let [first, second] = &mount.supply_connection_ids;
+    let sense = mount
+        .sense_connection_ids
+        .iter()
+        .map(|id| {
+            pad(id).map(|pad| lens_link::Pad {
+                port: pad.port,
+                pin: pad.pin,
+            })
+        })
+        .collect::<Result<_, _>>()?;
+    Ok(Some(lens_link::Config {
+        base: block.base,
+        detect: pad(&mount.detect_connection_id)?,
+        ready: fujimod_emulator_devices::parts::gpio::InputIrq {
+            port: ready.port,
+            pin: ready.pin,
+            line,
+            active_high: ready.active_high,
+        },
+        supplies: [pad(first)?, pad(second)?],
+        sense,
+        sense_unpowered: sense_unpowered.clone(),
+        timing: fujimod_emulator_xp4_io::lens_link::Timing {
+            ticks_per_ms: hz / 1000,
+            startup_ticks: ticks(*startup_us)?,
+            busy_ticks: ticks(*busy_us)?,
+            min_operation_ticks: ticks(*operation_us)?,
+        },
+        lens: preset.clone(),
+        mounted: mount.mounted,
+        miso_high: mount.miso_high,
+    }))
 }
 
 /// The XP4 board definition of a resolved run, checked against `Definition`: every catalog field, the

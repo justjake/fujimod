@@ -39,7 +39,7 @@ impl Feedback {
 }
 
 /// A physical pad wired to a level-sensitive processor interrupt input.
-#[derive(Clone, Copy, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct InputIrq {
     pub port: usize,

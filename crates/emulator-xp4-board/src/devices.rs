@@ -1236,6 +1236,20 @@ impl Devices {
         let link = fujimod_emulator_xp4_io::stabilizer_link::StabilizerLink::new(pins, config)?;
         self.spi_input(base, Box::new(link))
     }
+    /// Attach the X-mount lens to its declared SPI and GPIO controllers.
+    pub fn xp4_lens_link(
+        &mut self,
+        config: fujimod_emulator_xp4_io::lens_link::Config,
+    ) -> Result<fujimod_emulator_xp4_io::lens_link::LensLink, String> {
+        let pins = self
+            .pins
+            .clone()
+            .ok_or("The XP4 lens link requires GPIO wiring")?;
+        let base = config.base;
+        let lens = fujimod_emulator_xp4_io::lens_link::LensLink::new(pins, config)?;
+        self.spi_input(base, Box::new(lens.clone()))?;
+        Ok(lens)
+    }
     pub fn spi(&mut self, base: u64, miso: bool) -> Result<(), String> {
         self.spi_input(base, Box::new(fujimod_emulator_xp4_io::spi::FixedPin(miso)))
     }

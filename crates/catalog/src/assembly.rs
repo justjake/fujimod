@@ -38,6 +38,9 @@ pub struct BodyHardware {
     /// The lens mount's serial controller, connector pads and mounted lens, when the body has one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lens_mount: Option<LensMount>,
+    /// An XP4 SPI controller, its lens connector and its pad-to-GIC ready route.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub xp4_lens_mount: Option<Xp4LensMount>,
     /// The sensor-shift stage, its position sensor's capture channel and its coil drive.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stabilizer: Option<StabilizerMount>,
@@ -147,6 +150,30 @@ pub struct LensMount {
     /// Lens mounted on the body, when one is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lens_part_id: Option<String>,
+}
+
+/// An XP4 X-mount connector, with ready wired through its GPIO bank.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct Xp4LensMount {
+    /// SoC SPI controller carrying X-mount commands.
+    pub controller_id: String,
+    pub detect_connection_id: String,
+    pub sense_connection_ids: Vec<String>,
+    pub supply_connection_ids: [String; 2],
+    /// Connection carrying the ready GPIO pad and its GIC interrupt.
+    pub ready_connection_id: String,
+    pub lens_part_id: String,
+    pub mounted: bool,
+    /// MISO level when the lens is not driving the bus.
+    pub miso_high: bool,
 }
 
 /// How a sensor-shift stage is wired: its position sensor and its coil drive.
@@ -268,6 +295,21 @@ impl BodyHardware {
                 ));
             }
         }
+        if let Some(mount) = &self.xp4_lens_mount {
+            for id in std::iter::once(&mount.detect_connection_id)
+                .chain(&mount.sense_connection_ids)
+                .chain(&mount.supply_connection_ids)
+                .chain(std::iter::once(&mount.ready_connection_id))
+            {
+                connection(id)?;
+            }
+            if !body.parts.contains(&mount.lens_part_id) {
+                return Err(format!(
+                    "body {} mounts an uninstalled lens {}",
+                    body.id, mount.lens_part_id
+                ));
+            }
+        }
         if let Some(stage) = &self.stabilizer
             && !body.parts.contains(&stage.part_id)
         {
@@ -374,7 +416,7 @@ pub enum PeripheralPart {
         /// Emulated lens preset.
         preset: String,
         /// Lens-type pattern the sense pads read before power.
-        sense_unpowered: [bool; 3],
+        sense_unpowered: Vec<bool>,
         /// From both supplies high until the lens pulls ready low.
         startup_us: u64,
         /// From then until the lens releases ready high.
