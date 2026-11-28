@@ -1,7 +1,8 @@
 use fujimod_camera::{self as camera, Library, LibraryFirmware, StateDir};
-use fujimod_catalog_configuration::{RunInputs, RunStart};
+use fujimod_catalog_configuration::{RunCpuBackend, RunInputs, RunStart};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot::xp5::RunHost;
+use fujimod_emulator_cpu::ExecutionPolicy;
 use serde::{Deserialize, Serialize};
 use std::{
     path::PathBuf,
@@ -276,7 +277,7 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
                 ..fujimod_emulator_boot::xp5::Run::new(
                     resolved.clone(),
                     update,
-                    fujimod_emulator_cpu::ExecutionPolicy::Interactive,
+                    ExecutionPolicy::Interactive,
                     output,
                 )
             };
@@ -336,9 +337,15 @@ async fn choose_sd_card() -> Option<String> {
 /// Open a camera through the builder and serve the opened session live.
 fn open_with_builder(request: OpenCameraRequest) -> Result<(LaunchedCamera, Running), String> {
     let library = Library::from_env().map_err(|error| error.to_string())?;
-    let resolved = library
+    let mut resolved = library
         .resolved(&request.firmware)
         .map_err(|error| error.to_string())?;
+    fujimod_emulator_boot::prefer_dynarmic(&mut resolved)?;
+    let policy = if resolved.configuration.cpu_backend() == RunCpuBackend::Dynarmic {
+        ExecutionPolicy::Exact
+    } else {
+        ExecutionPolicy::Interactive
+    };
     let preset = match request.boot {
         LauncherBoot::Stock => camera::Preset::Stock,
         LauncherBoot::SdCard => camera::Preset::SdCard,
@@ -360,7 +367,7 @@ fn open_with_builder(request: OpenCameraRequest) -> Result<(LaunchedCamera, Runn
         overlays: Vec::new(),
         preset,
         sd_card,
-        policy: fujimod_emulator_cpu::ExecutionPolicy::Exact,
+        policy,
         engine: None,
         cache: if request.skip_boot_cache {
             camera::BootCache::Bypass
