@@ -287,10 +287,15 @@ impl FirmwareFlash {
         let raw_nand = self.device.kind == "raw-nand";
         let mapped_only =
             self.e1_window.is_some() && self.reader.is_none() && self.transport.is_none();
-        let xpp_identity_unresolved = self.device.kind == "serial-nor"
+        // Stock-reader transports read through the firmware driver, which
+        // needs no part identity from the contract.
+        let identity_unresolved = self.device.kind == "serial-nor"
             && self.device.jedec_id.is_none()
             && self.device.part.is_none()
-            && self.transport.as_deref() == Some("xpp-cmd-callback");
+            && matches!(
+                self.transport.as_deref(),
+                Some("xpp-cmd-callback" | "xp4-stock-query")
+            );
         if !matches!(
             self.device.kind.as_str(),
             "serial-nand" | "serial-nor" | "raw-nand"
@@ -306,7 +311,7 @@ impl FirmwareFlash {
             .is_some_and(|part| part.is_empty())
             || (!raw_nand
                 && !mapped_only
-                && !xpp_identity_unresolved
+                && !identity_unresolved
                 && (self.device.jedec_id.is_none() || self.device.part.is_none()))
             || self.reader.as_ref().is_some_and(|reader| {
                 reader.symbol.is_empty() || !reader.alignment.is_power_of_two()
