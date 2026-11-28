@@ -1,0 +1,25 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-configuration.schema.json",
+  "schema": 1,
+  "id": "xpro3-200",
+  "purpose": "rom_boot",
+  "body_id": "xpro3",
+  "firmware_id": "xpro3-200",
+  "start": {
+    "kind": "loader"
+  },
+  "execution": null,
+  "overlays": [],
+  "dram_address_space": {
+    "limit_bytes": 1073741824,
+    "basis": "Synthetic 1 GiB software address-space limit for bounded X-Pro3 emulator discovery. This is not a measurement or claim of installed DRAM capacity."
+  },
+  "preset": {
+    "factory_options": {},
+    "execution_scope": "offline-boot-development",
+    "hardware_selection": {
+      "soc_profile_id": "xp4",
+      "body_profile_id": "xpro3-discovery"
+    }
+  }
+}
