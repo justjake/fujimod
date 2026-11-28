@@ -201,17 +201,6 @@ pub struct CommandRegisters {
     pub read_frames: Vec<(u64, Vec<u64>)>,
 }
 
-/// Declared module facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "ConstructionModule"))]
-pub struct Module {
-    /// Declared firmware bytes.
-    pub firmware_bytes: u64,
-    /// Declared protocol.
-    pub protocol: String,
-}
 
 /// Declared focus facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -227,148 +216,14 @@ pub struct Focus {
     pub steps_per_mm: f64,
 }
 
-/// Declared optics facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "ConstructionOptics"))]
-pub struct Optics {
-    /// Declared output.
-    pub output: String,
-    /// Declared positions.
-    pub positions: Vec<Vec<f64>>,
-}
 
-/// Declared built-in ND filter facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "ConstructionNdFilter"))]
-pub struct NdFilter {
-    /// Aperture wire the filter scales.
-    pub aperture: String,
-    /// Transmission factor while inserted.
-    pub factor: f64,
-    /// Insert coil mask.
-    pub insert_mask: u16,
-    /// Register the filter reports through.
-    pub register: u16,
-    /// Remove coil mask.
-    pub remove_mask: u16,
-    /// Transmission wire the filter drives.
-    pub transmission: String,
-}
 
-/// Declared counters facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "ConstructionCounters"))]
-pub struct Counters {
-    /// Declared channel.
-    pub channel: u64,
-    /// Declared divider.
-    pub divider: u64,
-}
 
-/// Declared home facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "ConstructionHome"))]
-pub struct Home {
-    /// Declared pin.
-    pub pin: Pin,
-    /// Declared side.
-    pub side: String,
-    /// Declared threshold.
-    pub threshold: u64,
-}
 
-/// Declared motors facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "ConstructionMotors"))]
-pub struct Motors {
-    /// Declared counters.
-    pub counters: Vec<Counters>,
-    /// Declared home.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub home: Option<Home>,
-    /// Declared initial position.
-    pub initial_position: u64,
-    /// Declared settle ticks.
-    pub settle_ticks: u64,
-    /// Declared ticks per step.
-    pub ticks_per_step: u64,
-    /// Declared travel limits.
-    pub travel_limits: Vec<i64>,
-}
 
-/// Declared lensunit options facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "ConstructionLensunitOptions"))]
-pub struct LensunitOptions {
-    /// Declared encoder.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub encoder: Option<String>,
-    /// Declared motors.
-    pub motors: Vec<Motors>,
-    /// Declared protocol.
-    pub protocol: Protocol,
-    /// Declared zoom.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub zoom: Option<String>,
-}
 
-/// Declared panel options facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "ConstructionPanelOptions"))]
-pub struct PanelOptions {
-    /// Declared used mask.
-    pub used_mask: u64,
-}
 
-/// Declared options clock facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "ConstructionOptionsClock"))]
-pub struct OptionsClock {
-    /// Declared initial wall-clock seconds since 2000-01-01.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub initial_seconds: Option<u64>,
-    /// Declared maximum seconds.
-    pub maximum_seconds: u64,
-    /// Declared registers.
-    pub registers: Vec<u64>,
-    /// Declared started.
-    pub started: u64,
-    /// Declared ticks per second.
-    pub ticks_per_second: u64,
-}
 
-/// Declared registers options facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "ConstructionRegistersOptions"))]
-pub struct RegistersOptions {
-    /// Declared clock.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub clock: Option<OptionsClock>,
-    /// Declared readable.
-    pub readable: bool,
-    /// Declared registers.
-    pub registers: Vec<Vec<u64>>,
-    /// Declared status registers.
-    pub status_registers: Vec<u64>,
-}
 
 /// Declared transports facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -410,8 +265,13 @@ pub struct RoutesOptions {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ConstructionRoutes"))]
 pub struct Routes {
-    /// Declared endpoint.
-    pub endpoint: Endpoint,
+    /// The part on the route: its register file, panel, lens unit, stabilizer
+    /// or command stream. The plan model checks its fields when a board is built.
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "unknown")
+    )]
+    pub endpoint: serde_json::Value,
     /// Declared gpio.
     pub gpio: String,
     /// Declared options.
@@ -529,7 +389,26 @@ pub enum Parts {
         register_values: Vec<Vec<u64>>,
         /// topology.
         topology: Vec<u64>,
+        /// Further register chips on the bus.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        extra_registers: Vec<ExtraRegisters>,
     },
+}
+
+/// A further register chip on a secondary control bus.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ConstructionExtraRegisters"))]
+pub struct ExtraRegisters {
+    /// Bus address.
+    pub address: u64,
+    /// Transfer modes it answers.
+    pub modes: Vec<u64>,
+    /// Register values as `[register, value]`.
+    pub values: Vec<Vec<u64>>,
+    /// Writable bits as `[register, mask]`.
+    pub masks: Vec<Vec<u64>>,
 }
 
 /// Closed Clock implementation and its hardware connections.
@@ -573,46 +452,6 @@ pub enum Protocol {
     },
 }
 
-/// Closed Endpoint implementation and its hardware connections.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(tag = "kind", deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "ConstructionEndpoint"))]
-pub enum Endpoint {
-    /// lens-unit hardware.
-    #[serde(rename = "lens-unit")]
-    LensUnit {
-        /// completion.
-        completion: Vec<Irqs>,
-        /// focus.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        focus: Option<Focus>,
-        /// gpio.
-        gpio: String,
-        /// optics.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        optics: Option<Optics>,
-        /// ND filter.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        nd: Option<Box<NdFilter>>,
-        /// options.
-        options: LensunitOptions,
-        /// pulses.
-        pulses: String,
-    },
-    /// panel hardware.
-    #[serde(rename = "panel")]
-    Panel {
-        /// options.
-        options: PanelOptions,
-    },
-    /// registers hardware.
-    #[serde(rename = "registers")]
-    Registers {
-        /// options.
-        options: RegistersOptions,
-    },
-}
 
 /// Explicit H.264 compression implementation, selected before construction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -736,6 +575,23 @@ pub enum ConstructionModel {
         images: String,
         /// statistics.
         statistics: String,
+        /// Sensor frame clock the frames follow, when the sensor drives them.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sensor_clock: Option<String>,
+        /// Radiometric capture: the sensor frames, exposure and aperture wires,
+        /// calibration and lens projection; the plan model checks its fields.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(
+            all(target_arch = "wasm32", not(target_os = "emscripten")),
+            tsify(type = "unknown")
+        )]
+        radiometric: Option<serde_json::Value>,
+        /// Focus position wire.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        position: Option<String>,
+        /// Phase-detection edge wire.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        phase_edges: Option<String>,
     },
     /// face-detector hardware.
     #[serde(rename = "face-detector")]
@@ -810,12 +666,21 @@ pub enum ConstructionModel {
         raw_irq: Core,
         /// readback irq.
         readback_irq: Core,
-        /// sensor.
+        /// The sensor: its frame wire, or its frames, controls and
+        /// calibration; the plan model checks its fields.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        sensor: Option<String>,
-        /// shutter output.
+        #[cfg_attr(
+            all(target_arch = "wasm32", not(target_os = "emscripten")),
+            tsify(type = "unknown")
+        )]
+        sensor: Option<serde_json::Value>,
+        /// The shutter output: its wire or its output index.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        shutter_output: Option<String>,
+        #[cfg_attr(
+            all(target_arch = "wasm32", not(target_os = "emscripten")),
+            tsify(type = "unknown")
+        )]
+        shutter_output: Option<serde_json::Value>,
         /// statistics grid.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         statistics_grid: Option<String>,
@@ -869,6 +734,86 @@ pub enum ConstructionModel {
         /// Bitstream completion interrupt.
         irq: Core,
     },
+    /// Window analysis: per-window gradient and tracking statistics.
+    #[serde(rename = "window-analysis")]
+    WindowAnalysis {
+        /// Interrupt routes the completion raises.
+        routes: String,
+    },
+    /// A lens motor driven through an I2C bridge and pulse outputs.
+    #[serde(rename = "i2c-motor-bridge")]
+    I2cMotorBridge {
+        /// Bridge register file on the control bus.
+        registers: String,
+        /// Pulse-output node stepping the motor.
+        pulses: String,
+        /// GPIO node carrying the bridge's pins.
+        gpio: String,
+        /// Interrupt raised by the bridge clock.
+        clock_irq: Irqs,
+        /// Aperture and ND optics the motor positions; the plan model checks its fields.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(
+            all(target_arch = "wasm32", not(target_os = "emscripten")),
+            tsify(type = "unknown")
+        )]
+        optics: Option<serde_json::Value>,
+    },
+    /// Image scaler.
+    #[serde(rename = "scaler")]
+    Scaler {
+        /// Completion interrupt.
+        irq: Core,
+    },
+    /// Duplex serial audio: a receiver and a transmitter.
+    #[serde(rename = "serial-audio-duplex")]
+    SerialAudioDuplex {
+        /// Interrupt routes the transfers raise.
+        routes: String,
+    },
+    /// Still prefilter.
+    #[serde(rename = "prefilter")]
+    Prefilter {
+        /// Completion interrupt.
+        irq: Core,
+    },
+    /// Still RAW statistics.
+    #[serde(rename = "raw-statistics")]
+    RawStatistics {
+        /// Completion interrupt.
+        irq: Core,
+    },
+    /// Still image processor.
+    #[serde(rename = "still-processor")]
+    StillProcessor {
+        /// Completion interrupt.
+        irq: Core,
+    },
+    /// Still warp, feeding the capture stream.
+    #[serde(rename = "warp")]
+    Warp {
+        /// Completion interrupt.
+        irq: Core,
+        /// Capture stream it writes.
+        stream: String,
+    },
+    /// JPEG encoder reading the capture stream.
+    #[serde(rename = "jpeg-encoder")]
+    JpegEncoder {
+        /// Completion interrupt.
+        irq: Core,
+        /// Capture stream it reads.
+        stream: String,
+    },
+    /// JPEG decoder.
+    #[serde(rename = "jpeg-decoder")]
+    JpegDecoder {
+        /// Completion interrupt.
+        irq: Core,
+    },
+    /// SATA host register window.
+    #[serde(rename = "sata-host")]
+    SataHost,
     /// Addressed image transfer registers.
     #[serde(rename = "image-transfer")]
     ImageTransfer {
@@ -910,8 +855,13 @@ pub enum ConstructionModel {
     SdioHost {
         /// irq.
         irq: Irqs,
-        /// module.
-        module: Module,
+        /// The SDIO module: its firmware size and protocol and its own parts.
+        /// The plan model checks its fields when a board is built.
+        #[cfg_attr(
+            all(target_arch = "wasm32", not(target_os = "emscripten")),
+            tsify(type = "unknown")
+        )]
+        module: serde_json::Value,
     },
     /// serial-audio hardware.
     #[serde(rename = "serial-audio")]
@@ -945,6 +895,9 @@ pub enum ConstructionModel {
         images: String,
         /// routes.
         routes: String,
+        /// Statistics grid wire, when the sensor publishes one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        grid: Option<String>,
     },
     /// usb hardware.
     #[serde(rename = "usb")]
@@ -952,9 +905,9 @@ pub enum ConstructionModel {
         /// cable.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         cable: Option<String>,
-        /// endpoints.
+        /// The endpoint engine's interrupts and the RAM it transfers to.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        endpoints: Option<String>,
+        endpoints: Option<UsbEndpointWiring>,
     },
     /// vector-gpu hardware.
     #[serde(rename = "vector-gpu")]
@@ -962,6 +915,20 @@ pub enum ConstructionModel {
         /// controllers.
         controllers: Vec<String>,
     },
+}
+
+/// The interrupts of a USB endpoint engine and the RAM it transfers to.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ConstructionUsbEndpointWiring"))]
+pub struct UsbEndpointWiring {
+    /// Endpoint interrupt.
+    pub irq: Irqs,
+    /// DMA completion interrupt.
+    pub dma_irq: Irqs,
+    /// RAM extent the DMA addresses.
+    pub ram_bytes: u64,
 }
 
 /// A named signal wire or its declared initial logic level.
@@ -986,6 +953,18 @@ pub enum Wire {
 pub enum WireKind {
     /// Software-triggered pulse.
     SoftwarePulse,
+    /// Registers a bridge exposes on a control bus.
+    BridgeRegisters,
+    /// Sensor exposure.
+    Exposure,
+    /// Sensor frame period.
+    FramePeriod,
+    /// Sensor statistics grid.
+    ImageGrid,
+    /// Focus lens optical position.
+    OpticalPosition,
+    /// Capture stream between still stages.
+    Stream,
     /// Lens aperture output.
     Aperture,
     /// Lens focus output.

@@ -1179,7 +1179,6 @@
               "routes": [
                 {
                   "endpoint": {
-                    "kind": "lens-unit",
                     "completion": [
                       {
                         "Core": {
@@ -1195,6 +1194,7 @@
                       }
                     ],
                     "gpio": "serial_gpio",
+                    "kind": "lens-unit",
                     "options": {
                       "motors": [
                         {
@@ -1236,7 +1236,6 @@
                         }
                       ],
                       "protocol": {
-                        "kind": "banked",
                         "clock": [
                           {
                             "kind": "fixed"
@@ -1245,6 +1244,7 @@
                             "kind": "fixed"
                           }
                         ],
+                        "kind": "banked",
                         "positive_direction_high": false,
                         "stop_response": "settled"
                       }

@@ -5,7 +5,70 @@
   "purpose": "rom_boot",
   "body_id": "x20",
   "firmware_id": "x20-103",
-  "execution": null,
-  "scene": null,
-  "overlays": []
+  "execution": {
+    "mode": "strict",
+    "engine": "unicorn",
+    "quantum": 1000,
+    "instructions_per_tick": {
+      "numerator": 24,
+      "denominator": 1
+    }
+  },
+  "scene": {
+    "kind": "exr2",
+    "frame_period_ticks": 400000,
+    "generated_assets": [
+      {
+        "id": "live_pixels",
+        "pattern": [
+          64,
+          64,
+          128,
+          128
+        ],
+        "size": 4258176
+      },
+      {
+        "id": "live_statistics_0",
+        "pattern": [
+          0
+        ],
+        "size": 1024
+      }
+    ],
+    "images": {
+      "live_image": {
+        "width": 2496,
+        "height": 853,
+        "stride": 4992,
+        "asset": "live_pixels"
+      }
+    },
+    "statistics": {
+      "live_statistics": [
+        {
+          "destination": 2,
+          "offset": 0,
+          "asset": "live_statistics_0"
+        }
+      ]
+    }
+  },
+  "overlays": [],
+  "preset": {
+    "factory_options": {},
+    "settings": {
+      "requested": {
+        "language": "en",
+        "setup": "done"
+      }
+    },
+    "virtual_card": {
+      "filesystem": "fat32",
+      "label": "CAMERA",
+      "sectors": 16777216,
+      "partition_start": 8192,
+      "sectors_per_cluster": 64
+    }
+  }
 }

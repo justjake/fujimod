@@ -6565,67 +6565,6 @@
       ],
       "type": "object"
     },
-    "ConstructionClock": {
-      "description": "Closed Clock implementation and its hardware connections.",
-      "oneOf": [
-        {
-          "additionalProperties": false,
-          "description": "fixed hardware.",
-          "properties": {
-            "kind": {
-              "const": "fixed",
-              "type": "string"
-            }
-          },
-          "required": [
-            "kind"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "description": "encoder_stages hardware.",
-          "properties": {
-            "kind": {
-              "const": "encoder_stages",
-              "type": "string"
-            },
-            "ticks_per_quantum": {
-              "description": "ticks per quantum.",
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "kind",
-            "ticks_per_quantum"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "description": "microstep_stages hardware.",
-          "properties": {
-            "kind": {
-              "const": "microstep_stages",
-              "type": "string"
-            },
-            "ticks_per_quantum": {
-              "description": "ticks per quantum.",
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "kind",
-            "ticks_per_quantum"
-          ],
-          "type": "object"
-        }
-      ]
-    },
     "ConstructionCommandRegisters": {
       "additionalProperties": false,
       "description": "One command-register endpoint with its declared prefix and register frames.",
@@ -6734,170 +6673,60 @@
       ],
       "type": "object"
     },
-    "ConstructionCounters": {
-      "additionalProperties": false,
-      "description": "Declared counters facts.",
-      "properties": {
-        "channel": {
-          "description": "Declared channel.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "divider": {
-          "description": "Declared divider.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "channel",
-        "divider"
-      ],
-      "type": "object"
-    },
     "ConstructionEmpty": {
       "additionalProperties": false,
       "description": "An explicitly empty device-reference set.",
       "type": "object"
     },
-    "ConstructionEndpoint": {
-      "description": "Closed Endpoint implementation and its hardware connections.",
-      "oneOf": [
-        {
-          "additionalProperties": false,
-          "description": "lens-unit hardware.",
-          "properties": {
-            "completion": {
-              "description": "completion.",
-              "items": {
-                "$ref": "#/$defs/ConstructionIrqs"
-              },
-              "type": "array"
-            },
-            "focus": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/ConstructionFocus"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "focus."
-            },
-            "gpio": {
-              "description": "gpio.",
-              "type": "string"
-            },
-            "kind": {
-              "const": "lens-unit",
-              "type": "string"
-            },
-            "nd": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/ConstructionNdFilter"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "ND filter."
-            },
-            "optics": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/ConstructionOptics"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "optics."
-            },
-            "options": {
-              "$ref": "#/$defs/ConstructionLensunitOptions",
-              "description": "options."
-            },
-            "pulses": {
-              "description": "pulses.",
-              "type": "string"
-            }
-          },
-          "required": [
-            "kind",
-            "completion",
-            "gpio",
-            "options",
-            "pulses"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "description": "panel hardware.",
-          "properties": {
-            "kind": {
-              "const": "panel",
-              "type": "string"
-            },
-            "options": {
-              "$ref": "#/$defs/ConstructionPanelOptions",
-              "description": "options."
-            }
-          },
-          "required": [
-            "kind",
-            "options"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "description": "registers hardware.",
-          "properties": {
-            "kind": {
-              "const": "registers",
-              "type": "string"
-            },
-            "options": {
-              "$ref": "#/$defs/ConstructionRegistersOptions",
-              "description": "options."
-            }
-          },
-          "required": [
-            "kind",
-            "options"
-          ],
-          "type": "object"
-        }
-      ]
-    },
-    "ConstructionFocus": {
+    "ConstructionExtraRegisters": {
       "additionalProperties": false,
-      "description": "Declared focus facts.",
+      "description": "A further register chip on a secondary control bus.",
       "properties": {
-        "infinity_position": {
-          "description": "Declared infinity position.",
-          "format": "int64",
+        "address": {
+          "description": "Bus address.",
+          "format": "uint64",
+          "minimum": 0,
           "type": "integer"
         },
-        "output": {
-          "description": "Declared output.",
-          "type": "string"
+        "masks": {
+          "description": "Writable bits as `[register, mask]`.",
+          "items": {
+            "items": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "type": "array"
         },
-        "steps_per_mm": {
-          "description": "Declared steps per mm.",
-          "format": "double",
-          "type": "number"
+        "modes": {
+          "description": "Transfer modes it answers.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "values": {
+          "description": "Register values as `[register, value]`.",
+          "items": {
+            "items": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "type": "array"
         }
       },
       "required": [
-        "infinity_position",
-        "output",
-        "steps_per_mm"
+        "address",
+        "modes",
+        "values",
+        "masks"
       ],
       "type": "object"
     },
@@ -6926,32 +6755,6 @@
         "base",
         "irq",
         "parts"
-      ],
-      "type": "object"
-    },
-    "ConstructionHome": {
-      "additionalProperties": false,
-      "description": "Declared home facts.",
-      "properties": {
-        "pin": {
-          "$ref": "#/$defs/ConstructionPin",
-          "description": "Declared pin."
-        },
-        "side": {
-          "description": "Declared side.",
-          "type": "string"
-        },
-        "threshold": {
-          "description": "Declared threshold.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "pin",
-        "side",
-        "threshold"
       ],
       "type": "object"
     },
@@ -6993,42 +6796,6 @@
         "edge",
         "outputs",
         "pin"
-      ],
-      "type": "object"
-    },
-    "ConstructionLensunitOptions": {
-      "additionalProperties": false,
-      "description": "Declared lensunit options facts.",
-      "properties": {
-        "encoder": {
-          "description": "Declared encoder.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "motors": {
-          "description": "Declared motors.",
-          "items": {
-            "$ref": "#/$defs/ConstructionMotors"
-          },
-          "type": "array"
-        },
-        "protocol": {
-          "$ref": "#/$defs/ConstructionProtocol",
-          "description": "Declared protocol."
-        },
-        "zoom": {
-          "description": "Declared zoom.",
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "motors",
-        "protocol"
       ],
       "type": "object"
     },
@@ -7367,6 +7134,30 @@
               "const": "external-frames",
               "type": "string"
             },
+            "phase_edges": {
+              "description": "Phase-detection edge wire.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "position": {
+              "description": "Focus position wire.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "radiometric": {
+              "description": "Radiometric capture: the sensor frames, exposure and aperture wires,\ncalibration and lens projection; the plan model checks its fields."
+            },
+            "sensor_clock": {
+              "description": "Sensor frame clock the frames follow, when the sensor drives them.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "statistics": {
               "description": "statistics.",
               "type": "string"
@@ -7605,18 +7396,10 @@
               "description": "readback irq."
             },
             "sensor": {
-              "description": "sensor.",
-              "type": [
-                "string",
-                "null"
-              ]
+              "description": "The sensor: its frame wire, or its frames, controls and\ncalibration; the plan model checks its fields."
             },
             "shutter_output": {
-              "description": "shutter output.",
-              "type": [
-                "string",
-                "null"
-              ]
+              "description": "The shutter output: its wire or its output index."
             },
             "statistics_grid": {
               "description": "statistics grid.",
@@ -7792,6 +7575,238 @@
         },
         {
           "additionalProperties": false,
+          "description": "Window analysis: per-window gradient and tracking statistics.",
+          "properties": {
+            "kind": {
+              "const": "window-analysis",
+              "type": "string"
+            },
+            "routes": {
+              "description": "Interrupt routes the completion raises.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "routes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A lens motor driven through an I2C bridge and pulse outputs.",
+          "properties": {
+            "clock_irq": {
+              "$ref": "#/$defs/ConstructionIrqs",
+              "description": "Interrupt raised by the bridge clock."
+            },
+            "gpio": {
+              "description": "GPIO node carrying the bridge's pins.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "i2c-motor-bridge",
+              "type": "string"
+            },
+            "optics": {
+              "description": "Aperture and ND optics the motor positions; the plan model checks its fields."
+            },
+            "pulses": {
+              "description": "Pulse-output node stepping the motor.",
+              "type": "string"
+            },
+            "registers": {
+              "description": "Bridge register file on the control bus.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "registers",
+            "pulses",
+            "gpio",
+            "clock_irq"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Image scaler.",
+          "properties": {
+            "irq": {
+              "$ref": "#/$defs/ConstructionCore",
+              "description": "Completion interrupt."
+            },
+            "kind": {
+              "const": "scaler",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "irq"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Duplex serial audio: a receiver and a transmitter.",
+          "properties": {
+            "kind": {
+              "const": "serial-audio-duplex",
+              "type": "string"
+            },
+            "routes": {
+              "description": "Interrupt routes the transfers raise.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "routes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Still prefilter.",
+          "properties": {
+            "irq": {
+              "$ref": "#/$defs/ConstructionCore",
+              "description": "Completion interrupt."
+            },
+            "kind": {
+              "const": "prefilter",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "irq"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Still RAW statistics.",
+          "properties": {
+            "irq": {
+              "$ref": "#/$defs/ConstructionCore",
+              "description": "Completion interrupt."
+            },
+            "kind": {
+              "const": "raw-statistics",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "irq"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Still image processor.",
+          "properties": {
+            "irq": {
+              "$ref": "#/$defs/ConstructionCore",
+              "description": "Completion interrupt."
+            },
+            "kind": {
+              "const": "still-processor",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "irq"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Still warp, feeding the capture stream.",
+          "properties": {
+            "irq": {
+              "$ref": "#/$defs/ConstructionCore",
+              "description": "Completion interrupt."
+            },
+            "kind": {
+              "const": "warp",
+              "type": "string"
+            },
+            "stream": {
+              "description": "Capture stream it writes.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "irq",
+            "stream"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "JPEG encoder reading the capture stream.",
+          "properties": {
+            "irq": {
+              "$ref": "#/$defs/ConstructionCore",
+              "description": "Completion interrupt."
+            },
+            "kind": {
+              "const": "jpeg-encoder",
+              "type": "string"
+            },
+            "stream": {
+              "description": "Capture stream it reads.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "irq",
+            "stream"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "JPEG decoder.",
+          "properties": {
+            "irq": {
+              "$ref": "#/$defs/ConstructionCore",
+              "description": "Completion interrupt."
+            },
+            "kind": {
+              "const": "jpeg-decoder",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "irq"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "SATA host register window.",
+          "properties": {
+            "kind": {
+              "const": "sata-host",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Addressed image transfer registers.",
           "properties": {
             "irq": {
@@ -7934,8 +7949,7 @@
               "type": "string"
             },
             "module": {
-              "$ref": "#/$defs/ConstructionModule",
-              "description": "module."
+              "description": "The SDIO module: its firmware size and protocol and its own parts.\nThe plan model checks its fields when a board is built."
             }
           },
           "required": [
@@ -8038,6 +8052,13 @@
               "description": "frames.",
               "type": "string"
             },
+            "grid": {
+              "description": "Statistics grid wire, when the sensor publishes one.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "images": {
               "description": "images.",
               "type": "string"
@@ -8071,11 +8092,15 @@
               ]
             },
             "endpoints": {
-              "description": "endpoints.",
-              "type": [
-                "string",
-                "null"
-              ]
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConstructionUsbEndpointWiring"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The endpoint engine's interrupts and the RAM it transfers to."
             },
             "kind": {
               "const": "usb",
@@ -8110,134 +8135,6 @@
           "type": "object"
         }
       ]
-    },
-    "ConstructionModule": {
-      "additionalProperties": false,
-      "description": "Declared module facts.",
-      "properties": {
-        "firmware_bytes": {
-          "description": "Declared firmware bytes.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "protocol": {
-          "description": "Declared protocol.",
-          "type": "string"
-        }
-      },
-      "required": [
-        "firmware_bytes",
-        "protocol"
-      ],
-      "type": "object"
-    },
-    "ConstructionMotors": {
-      "additionalProperties": false,
-      "description": "Declared motors facts.",
-      "properties": {
-        "counters": {
-          "description": "Declared counters.",
-          "items": {
-            "$ref": "#/$defs/ConstructionCounters"
-          },
-          "type": "array"
-        },
-        "home": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ConstructionHome"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared home."
-        },
-        "initial_position": {
-          "description": "Declared initial position.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "settle_ticks": {
-          "description": "Declared settle ticks.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "ticks_per_step": {
-          "description": "Declared ticks per step.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "travel_limits": {
-          "description": "Declared travel limits.",
-          "items": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "counters",
-        "initial_position",
-        "settle_ticks",
-        "ticks_per_step",
-        "travel_limits"
-      ],
-      "type": "object"
-    },
-    "ConstructionNdFilter": {
-      "additionalProperties": false,
-      "description": "Declared built-in ND filter facts.",
-      "properties": {
-        "aperture": {
-          "description": "Aperture wire the filter scales.",
-          "type": "string"
-        },
-        "factor": {
-          "description": "Transmission factor while inserted.",
-          "format": "double",
-          "type": "number"
-        },
-        "insert_mask": {
-          "description": "Insert coil mask.",
-          "format": "uint16",
-          "maximum": 65535,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "register": {
-          "description": "Register the filter reports through.",
-          "format": "uint16",
-          "maximum": 65535,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "remove_mask": {
-          "description": "Remove coil mask.",
-          "format": "uint16",
-          "maximum": 65535,
-          "minimum": 0,
-          "type": "integer"
-        },
-        "transmission": {
-          "description": "Transmission wire the filter drives.",
-          "type": "string"
-        }
-      },
-      "required": [
-        "aperture",
-        "factor",
-        "insert_mask",
-        "register",
-        "remove_mask",
-        "transmission"
-      ],
-      "type": "object"
     },
     "ConstructionNodes": {
       "additionalProperties": false,
@@ -8279,97 +8176,6 @@
         "name",
         "windows",
         "model"
-      ],
-      "type": "object"
-    },
-    "ConstructionOptics": {
-      "additionalProperties": false,
-      "description": "Declared optics facts.",
-      "properties": {
-        "output": {
-          "description": "Declared output.",
-          "type": "string"
-        },
-        "positions": {
-          "description": "Declared positions.",
-          "items": {
-            "items": {
-              "format": "double",
-              "type": "number"
-            },
-            "type": "array"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "output",
-        "positions"
-      ],
-      "type": "object"
-    },
-    "ConstructionOptionsClock": {
-      "additionalProperties": false,
-      "description": "Declared options clock facts.",
-      "properties": {
-        "initial_seconds": {
-          "description": "Declared initial wall-clock seconds since 2000-01-01.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "maximum_seconds": {
-          "description": "Declared maximum seconds.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "registers": {
-          "description": "Declared registers.",
-          "items": {
-            "format": "uint64",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        },
-        "started": {
-          "description": "Declared started.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "ticks_per_second": {
-          "description": "Declared ticks per second.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "maximum_seconds",
-        "registers",
-        "started",
-        "ticks_per_second"
-      ],
-      "type": "object"
-    },
-    "ConstructionPanelOptions": {
-      "additionalProperties": false,
-      "description": "Declared panel options facts.",
-      "properties": {
-        "used_mask": {
-          "description": "Declared used mask.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "used_mask"
       ],
       "type": "object"
     },
@@ -8482,6 +8288,13 @@
                 "boolean",
                 "null"
               ]
+            },
+            "extra_registers": {
+              "description": "Further register chips on the bus.",
+              "items": {
+                "$ref": "#/$defs/ConstructionExtraRegisters"
+              },
+              "type": "array"
             },
             "kind": {
               "const": "secondary",
@@ -8671,98 +8484,12 @@
       ],
       "type": "object"
     },
-    "ConstructionProtocol": {
-      "description": "Closed Protocol implementation and its hardware connections.",
-      "oneOf": [
-        {
-          "additionalProperties": false,
-          "description": "banked hardware.",
-          "properties": {
-            "clock": {
-              "description": "clock.",
-              "items": {
-                "$ref": "#/$defs/ConstructionClock"
-              },
-              "type": "array"
-            },
-            "kind": {
-              "const": "banked",
-              "type": "string"
-            },
-            "positive_direction_high": {
-              "description": "positive direction high.",
-              "type": "boolean"
-            },
-            "stop_response": {
-              "description": "stop response.",
-              "type": "string"
-            }
-          },
-          "required": [
-            "kind",
-            "clock",
-            "positive_direction_high",
-            "stop_response"
-          ],
-          "type": "object"
-        }
-      ]
-    },
-    "ConstructionRegistersOptions": {
-      "additionalProperties": false,
-      "description": "Declared registers options facts.",
-      "properties": {
-        "clock": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ConstructionOptionsClock"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared clock."
-        },
-        "readable": {
-          "description": "Declared readable.",
-          "type": "boolean"
-        },
-        "registers": {
-          "description": "Declared registers.",
-          "items": {
-            "items": {
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "type": "array"
-          },
-          "type": "array"
-        },
-        "status_registers": {
-          "description": "Declared status registers.",
-          "items": {
-            "format": "uint64",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "readable",
-        "registers",
-        "status_registers"
-      ],
-      "type": "object"
-    },
     "ConstructionRoutes": {
       "additionalProperties": false,
       "description": "Declared routes facts.",
       "properties": {
         "endpoint": {
-          "$ref": "#/$defs/ConstructionEndpoint",
-          "description": "Declared endpoint."
+          "description": "The part on the route: its register file, panel, lens unit, stabilizer\nor command stream. The plan model checks its fields when a board is built."
         },
         "gpio": {
           "description": "Declared gpio.",
@@ -9054,6 +8781,32 @@
       ],
       "type": "object"
     },
+    "ConstructionUsbEndpointWiring": {
+      "additionalProperties": false,
+      "description": "The interrupts of a USB endpoint engine and the RAM it transfers to.",
+      "properties": {
+        "dma_irq": {
+          "$ref": "#/$defs/ConstructionIrqs",
+          "description": "DMA completion interrupt."
+        },
+        "irq": {
+          "$ref": "#/$defs/ConstructionIrqs",
+          "description": "Endpoint interrupt."
+        },
+        "ram_bytes": {
+          "description": "RAM extent the DMA addresses.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "irq",
+        "dma_irq",
+        "ram_bytes"
+      ],
+      "type": "object"
+    },
     "ConstructionWindows": {
       "additionalProperties": false,
       "description": "Declared windows facts.",
@@ -9104,6 +8857,36 @@
         {
           "const": "software-pulse",
           "description": "Software-triggered pulse.",
+          "type": "string"
+        },
+        {
+          "const": "bridge-registers",
+          "description": "Registers a bridge exposes on a control bus.",
+          "type": "string"
+        },
+        {
+          "const": "exposure",
+          "description": "Sensor exposure.",
+          "type": "string"
+        },
+        {
+          "const": "frame-period",
+          "description": "Sensor frame period.",
+          "type": "string"
+        },
+        {
+          "const": "image-grid",
+          "description": "Sensor statistics grid.",
+          "type": "string"
+        },
+        {
+          "const": "optical-position",
+          "description": "Focus lens optical position.",
+          "type": "string"
+        },
+        {
+          "const": "stream",
+          "description": "Capture stream between still stages.",
           "type": "string"
         },
         {
@@ -20349,7 +20132,9 @@
         "endpoint7-and9-virtual-write-ack",
         "endpoint7-stationary-and9-heartbeat-latched-irq-unmeasured",
         "declared-register-status-pair-latched-irq-unmeasured",
-        "usbcharge-disconnected-pwic-startup-tagged"
+        "usbcharge-disconnected-pwic-startup-tagged",
+        "declared-bus1-register-replies-unmeasured",
+        "endpoint7-stationary-z-plus-1g"
       ],
       "type": "string"
     },
@@ -20503,38 +20288,49 @@
       "type": "string"
     },
     "NativeImageInputInputsClockSource": {
-      "additionalProperties": false,
-      "description": "Declared NativeImageInputInputsClockSource startup inputs and execution limits.",
-      "properties": {
-        "first_delay_ticks": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+      "description": "What clocks the image input: a periodic timer, or the sensor's frames.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "first_delay_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "kind": {
+              "const": "periodic",
+              "type": "string"
+            },
+            "period_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "period_ticks"
+          ],
+          "type": "object"
         },
-        "kind": {
-          "$ref": "#/$defs/NativeImageInputInputsClockSourceKind"
-        },
-        "period_ticks": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "sensor",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
         }
-      },
-      "required": [
-        "kind",
-        "period_ticks"
-      ],
-      "type": "object"
-    },
-    "NativeImageInputInputsClockSourceKind": {
-      "description": "Closed NativeImageInputInputsClockSourceKind selection.",
-      "enum": [
-        "periodic"
-      ],
-      "type": "string"
+      ]
     },
     "NativeImageInputInputsCommand": {
       "description": "Closed NativeImageInputInputsCommand selection.",
@@ -20626,30 +20422,47 @@
       "type": "string"
     },
     "NativeOutputChannelInputsClock": {
-      "additionalProperties": false,
-      "description": "Declared NativeOutputChannelInputsClock startup inputs and execution limits.",
-      "properties": {
-        "kind": {
-          "$ref": "#/$defs/NativeOutputChannelInputsClockKind"
+      "description": "How an output channel paces its frames: a fixed time per frame or a\nthroughput in bytes per tick.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "fixed",
+              "type": "string"
+            },
+            "ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "ticks"
+          ],
+          "type": "object"
         },
-        "ticks": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
+        {
+          "additionalProperties": false,
+          "properties": {
+            "bytes_per_tick": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "throughput",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "bytes_per_tick"
+          ],
+          "type": "object"
         }
-      },
-      "required": [
-        "kind",
-        "ticks"
-      ],
-      "type": "object"
-    },
-    "NativeOutputChannelInputsClockKind": {
-      "description": "Closed NativeOutputChannelInputsClockKind selection.",
-      "enum": [
-        "fixed"
-      ],
-      "type": "string"
+      ]
     },
     "NativeOutputChannelInputsGeometry": {
       "description": "Closed NativeOutputChannelInputsGeometry selection.",
@@ -20803,31 +20616,119 @@
       ],
       "type": "string"
     },
-    "NativeStatisticsInputsClock": {
+    "NativeSerialAudioReceive": {
       "additionalProperties": false,
-      "description": "Declared NativeStatisticsInputsClock startup inputs and execution limits.",
+      "description": "A serial audio receiver's DMA limits and constant input sample.",
       "properties": {
-        "kind": {
-          "$ref": "#/$defs/NativeStatisticsInputsClockKind"
+        "max_transfer_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
         },
-        "ticks": {
+        "ram_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sample": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "sample_rate": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ticks_per_second": {
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
         }
       },
       "required": [
-        "kind",
-        "ticks"
+        "ram_bytes",
+        "max_transfer_bytes",
+        "ticks_per_second",
+        "sample_rate",
+        "sample"
       ],
       "type": "object"
     },
-    "NativeStatisticsInputsClockKind": {
-      "description": "Closed NativeStatisticsInputsClockKind selection.",
-      "enum": [
-        "fixed"
+    "NativeSerialAudioTransmit": {
+      "additionalProperties": false,
+      "description": "A serial audio transmitter's DMA limits and pacing.",
+      "properties": {
+        "max_transfer_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "minimum_ticks": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ram_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ticks_per_byte": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ram_bytes",
+        "max_transfer_bytes",
+        "ticks_per_byte",
+        "minimum_ticks"
       ],
-      "type": "string"
+      "type": "object"
+    },
+    "NativeStatisticsInputsClock": {
+      "description": "How the statistics engine paces its output: a fixed time per frame or a\nthroughput in bytes per tick.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "fixed",
+              "type": "string"
+            },
+            "ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "ticks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "bytes_per_tick": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "throughput",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "bytes_per_tick"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "NativeUsbEndpoints": {
       "additionalProperties": false,
@@ -30414,6 +30315,9 @@
             "clock": {
               "$ref": "#/$defs/NativeStatisticsInputsClock"
             },
+            "contrast": {
+              "description": "Contrast arithmetic of a body with contrast autofocus."
+            },
             "diagnostic_reads": {
               "default": false,
               "type": "boolean"
@@ -30427,6 +30331,22 @@
             "kind": {
               "const": "statistics",
               "type": "string"
+            },
+            "metering": {
+              "description": "Metering arithmetic.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "pixels_per_tick": {
+              "description": "Statistics throughput.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
             },
             "stop_ticks": {
               "format": "uint64",
@@ -30532,10 +30452,22 @@
               "const": "external-frames",
               "type": "string"
             },
+            "optics": {
+              "description": "Focus optics the frames' sharpness follows."
+            },
             "period_ticks": {
               "format": "uint64",
               "minimum": 0,
               "type": "integer"
+            },
+            "phase_source": {
+              "description": "Phase-detection source index.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
             }
           },
           "required": [
@@ -31140,7 +31072,14 @@
               "type": "integer"
             },
             "rectangle_profile": {
-              "$ref": "#/$defs/NativeScanoutInputsRectangleProfile"
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/NativeScanoutInputsRectangleProfile"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "reset_ticks": {
               "format": "uint64",
@@ -31155,7 +31094,6 @@
             "matrix",
             "graphics_profile",
             "backdrop_profile",
-            "rectangle_profile",
             "max_pixels",
             "reset_ticks"
           ],
@@ -31251,12 +31189,16 @@
               "const": "encoder",
               "type": "string"
             },
+            "outputs": {
+              "description": "ADC channels and their levels, for an encoder read through the ADC."
+            },
             "phase_ticks": {
               "format": "uint64",
               "minimum": 0,
               "type": "integer"
             },
             "pins": {
+              "description": "GPIO pins the encoder drives; empty for an encoder read through ADC levels.",
               "items": {
                 "$ref": "#/$defs/NativeEncoderInputsPinsItem"
               },
@@ -31270,7 +31212,6 @@
           },
           "required": [
             "kind",
-            "pins",
             "phase_ticks",
             "rest_phase"
           ],
@@ -31360,6 +31301,292 @@
             "kind",
             "modes",
             "transfer_ticks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Window analysis arithmetic and its time per window.",
+          "properties": {
+            "arithmetic": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "window-analysis",
+              "type": "string"
+            },
+            "ticks_per_window": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "arithmetic",
+            "ticks_per_window"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A bridged lens motor's resting position and its pulse output.",
+          "properties": {
+            "initial_position": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "kind": {
+              "const": "i2c-motor-bridge",
+              "type": "string"
+            },
+            "position_units_per_step": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "pulse_channel": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "pulse_function": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "pulse_pin": {
+              "$ref": "#/$defs/NativeGpioInputsOutputLevelsItemPin"
+            },
+            "travel_limits": {
+              "description": "The motor's mechanical travel stops, when declared.",
+              "items": {
+                "format": "int64",
+                "type": "integer"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "initial_position",
+            "position_units_per_step",
+            "pulse_channel",
+            "pulse_function",
+            "pulse_pin"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Ticks a stage takes to complete one job.",
+          "properties": {
+            "completion_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "scaler",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "completion_ticks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Duplex serial audio: the receiver's signal and the transmitter's pacing.",
+          "properties": {
+            "kind": {
+              "const": "serial-audio-duplex",
+              "type": "string"
+            },
+            "receive": {
+              "$ref": "#/$defs/NativeSerialAudioReceive"
+            },
+            "sinks": {
+              "description": "Whether each transmit sink is connected.",
+              "items": {
+                "type": "boolean"
+              },
+              "type": "array"
+            },
+            "transmit": {
+              "$ref": "#/$defs/NativeSerialAudioTransmit"
+            }
+          },
+          "required": [
+            "kind",
+            "receive",
+            "transmit",
+            "sinks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Ticks a still stage takes to complete a job and to reset.",
+          "properties": {
+            "completion_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "prefilter",
+              "type": "string"
+            },
+            "reset_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "completion_ticks",
+            "reset_ticks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Ticks a still stage takes to complete a job and to reset.",
+          "properties": {
+            "completion_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "raw-statistics",
+              "type": "string"
+            },
+            "reset_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "completion_ticks",
+            "reset_ticks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "The still processor's completion time and its sensor colour filter array.",
+          "properties": {
+            "cfa": {
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "completion_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "still-processor",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "completion_ticks",
+            "cfa"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "The warp stage's completion and stop times.",
+          "properties": {
+            "completion_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "warp",
+              "type": "string"
+            },
+            "stop_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "completion_ticks",
+            "stop_ticks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Ticks a still stage takes to complete a job and to reset.",
+          "properties": {
+            "completion_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "jpeg-encoder",
+              "type": "string"
+            },
+            "reset_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "completion_ticks",
+            "reset_ticks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Ticks a still stage takes to complete a job and to reset.",
+          "properties": {
+            "completion_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "jpeg-decoder",
+              "type": "string"
+            },
+            "reset_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "completion_ticks",
+            "reset_ticks"
           ],
           "type": "object"
         }

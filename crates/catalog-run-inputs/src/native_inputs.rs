@@ -97,6 +97,164 @@ pub enum RunNativeDeviceInputs {
     ContactActuator(NativeContactActuatorInputs),
     #[serde(rename = "i2c")]
     I2c(NativeControlBusInputs),
+    #[serde(rename = "window-analysis")]
+    WindowAnalysis(NativeWindowAnalysisInputs),
+    #[serde(rename = "i2c-motor-bridge")]
+    I2cMotorBridge(NativeI2cMotorBridgeInputs),
+    #[serde(rename = "scaler")]
+    Scaler(NativeCompletionInputs),
+    #[serde(rename = "serial-audio-duplex")]
+    SerialAudioDuplex(NativeSerialAudioDuplexInputs),
+    #[serde(rename = "prefilter")]
+    Prefilter(NativeStillStageInputs),
+    #[serde(rename = "raw-statistics")]
+    RawStatistics(NativeStillStageInputs),
+    #[serde(rename = "still-processor")]
+    StillProcessor(NativeStillProcessorInputs),
+    #[serde(rename = "warp")]
+    Warp(NativeWarpInputs),
+    #[serde(rename = "jpeg-encoder")]
+    JpegEncoder(NativeStillStageInputs),
+    #[serde(rename = "jpeg-decoder")]
+    JpegDecoder(NativeStillStageInputs),
+}
+
+/// Window analysis arithmetic and its time per window.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct NativeWindowAnalysisInputs {
+    pub arithmetic: String,
+    pub ticks_per_window: u64,
+}
+
+/// A bridged lens motor's resting position and its pulse output.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct NativeI2cMotorBridgeInputs {
+    pub initial_position: i64,
+    pub position_units_per_step: u64,
+    pub pulse_channel: u64,
+    pub pulse_function: u64,
+    pub pulse_pin: NativeGpioInputsOutputLevelsItemPin,
+    /// The motor's mechanical travel stops, when declared.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub travel_limits: Option<Vec<i64>>,
+}
+
+/// Ticks a stage takes to complete one job.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct NativeCompletionInputs {
+    pub completion_ticks: u64,
+}
+
+/// Ticks a still stage takes to complete a job and to reset.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct NativeStillStageInputs {
+    pub completion_ticks: u64,
+    pub reset_ticks: u64,
+}
+
+/// The still processor's completion time and its sensor colour filter array.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct NativeStillProcessorInputs {
+    pub completion_ticks: u64,
+    pub cfa: Vec<u8>,
+}
+
+/// The warp stage's completion and stop times.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct NativeWarpInputs {
+    pub completion_ticks: u64,
+    pub stop_ticks: u64,
+}
+
+/// Duplex serial audio: the receiver's signal and the transmitter's pacing.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct NativeSerialAudioDuplexInputs {
+    pub receive: NativeSerialAudioReceive,
+    pub transmit: NativeSerialAudioTransmit,
+    /// Whether each transmit sink is connected.
+    pub sinks: Vec<bool>,
+}
+
+/// A serial audio receiver's DMA limits and constant input sample.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct NativeSerialAudioReceive {
+    pub ram_bytes: u64,
+    pub max_transfer_bytes: u64,
+    pub ticks_per_second: u64,
+    pub sample_rate: u64,
+    pub sample: i64,
+}
+
+/// A serial audio transmitter's DMA limits and pacing.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct NativeSerialAudioTransmit {
+    pub ram_bytes: u64,
+    pub max_transfer_bytes: u64,
+    pub ticks_per_byte: u64,
+    pub minimum_ticks: u64,
 }
 
 /// Closed NativeExr2InterruptControllerInputsArbitration selection.
@@ -290,31 +448,19 @@ pub struct NativeAdcInputs {
     pub samples: Vec<u64>,
 }
 
-/// Closed NativeStatisticsInputsClockKind selection.
+/// How the statistics engine paces its output: a fixed time per frame or a
+/// throughput in bytes per tick.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
-pub enum NativeStatisticsInputsClockKind {
-    #[serde(rename = "fixed")]
-    Fixed,
-}
-
-/// Declared NativeStatisticsInputsClock startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(
-    all(target_arch = "wasm32", not(target_os = "emscripten")),
-    derive(tsify::Tsify),
-    tsify(hashmap_as_object, missing_as_null)
-)]
-pub struct NativeStatisticsInputsClock {
-    pub kind: NativeStatisticsInputsClockKind,
-    pub ticks: u64,
+pub enum NativeStatisticsInputsClock {
+    Fixed { ticks: u64 },
+    Throughput { bytes_per_tick: u64 },
 }
 
 /// Declared NativeStatisticsInputs startup inputs and execution limits.
@@ -334,34 +480,36 @@ pub struct NativeStatisticsInputs {
     pub external_statistics: bool,
     #[serde(default)]
     pub diagnostic_reads: bool,
+    /// Contrast arithmetic of a body with contrast autofocus.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "unknown")
+    )]
+    pub contrast: Option<serde_json::Value>,
+    /// Metering arithmetic.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metering: Option<String>,
+    /// Statistics throughput.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pixels_per_tick: Option<u64>,
 }
 
-/// Closed NativeOutputChannelInputsClockKind selection.
+/// How an output channel paces its frames: a fixed time per frame or a
+/// throughput in bytes per tick.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
-pub enum NativeOutputChannelInputsClockKind {
-    #[serde(rename = "fixed")]
-    Fixed,
+pub enum NativeOutputChannelInputsClock {
+    Fixed { ticks: u64 },
+    Throughput { bytes_per_tick: u64 },
 }
 
-/// Declared NativeOutputChannelInputsClock startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(
-    all(target_arch = "wasm32", not(target_os = "emscripten")),
-    derive(tsify::Tsify),
-    tsify(hashmap_as_object, missing_as_null)
-)]
-pub struct NativeOutputChannelInputsClock {
-    pub kind: NativeOutputChannelInputsClockKind,
-    pub ticks: u64,
-}
 
 /// Closed NativeOutputChannelInputsGeometry selection.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -460,6 +608,16 @@ pub struct NativePhaseDetectionInputs {
 )]
 pub struct NativeExternalFramesInputs {
     pub period_ticks: u64,
+    /// Focus optics the frames' sharpness follows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "unknown")
+    )]
+    pub optics: Option<serde_json::Value>,
+    /// Phase-detection source index.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phase_source: Option<u64>,
 }
 
 /// Declared NativeSdioHostInputs startup inputs and execution limits.
@@ -762,33 +920,23 @@ pub enum NativeImageInputInputsClockMode {
     SourceMask,
 }
 
-/// Closed NativeImageInputInputsClockSourceKind selection.
+/// What clocks the image input: a periodic timer, or the sensor's frames.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
-pub enum NativeImageInputInputsClockSourceKind {
-    #[serde(rename = "periodic")]
-    Periodic,
+pub enum NativeImageInputInputsClockSource {
+    Periodic {
+        period_ticks: u64,
+        first_delay_ticks: Option<u64>,
+    },
+    Sensor,
 }
 
-/// Declared NativeImageInputInputsClockSource startup inputs and execution limits.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(
-    all(target_arch = "wasm32", not(target_os = "emscripten")),
-    derive(tsify::Tsify),
-    tsify(hashmap_as_object, missing_as_null)
-)]
-pub struct NativeImageInputInputsClockSource {
-    pub kind: NativeImageInputInputsClockSourceKind,
-    pub period_ticks: u64,
-    pub first_delay_ticks: Option<u64>,
-}
 
 /// Declared NativeImageInputInputsClock startup inputs and execution limits.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -1051,7 +1199,8 @@ pub struct NativeScanoutInputs {
     pub matrix: NativeScanoutInputsMatrix,
     pub graphics_profile: NativeScanoutInputsGraphicsProfile,
     pub backdrop_profile: NativeScanoutInputsBackdropProfile,
-    pub rectangle_profile: NativeScanoutInputsRectangleProfile,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rectangle_profile: Option<NativeScanoutInputsRectangleProfile>,
     pub max_pixels: u64,
     pub reset_ticks: u64,
 }
@@ -1180,7 +1329,16 @@ pub struct NativeEncoderInputsPinsItem {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct NativeEncoderInputs {
+    /// GPIO pins the encoder drives; empty for an encoder read through ADC levels.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pins: Vec<NativeEncoderInputsPinsItem>,
+    /// ADC channels and their levels, for an encoder read through the ADC.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "unknown")
+    )]
+    pub outputs: Option<serde_json::Value>,
     pub phase_ticks: u64,
     pub rest_phase: u64,
 }
@@ -1260,6 +1418,10 @@ pub enum NativeControlBusProfile {
     RegisterStatus,
     #[serde(rename = "usbcharge-disconnected-pwic-startup-tagged")]
     Secondary,
+    #[serde(rename = "declared-bus1-register-replies-unmeasured")]
+    DeclaredRegisterReplies,
+    #[serde(rename = "endpoint7-stationary-z-plus-1g")]
+    StationaryGravity,
 }
 
 /// External raw-NAND scene selection; geometry must match the selected medium.
