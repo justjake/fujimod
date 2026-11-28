@@ -35,6 +35,35 @@ enum Mapping {
     },
 }
 
+impl Mapping {
+    fn bytes(self) -> usize {
+        match self {
+            Self::Backing { bytes, .. } | Self::Mmio { bytes, .. } => bytes,
+        }
+    }
+    fn permissions(self) -> u32 {
+        match self {
+            Self::Backing { permissions, .. } => permissions,
+            Self::Mmio { .. } => 3,
+        }
+    }
+}
+
+fn ram_window_end(address: u64, physical: u64, bytes: usize) -> Result<u64, String> {
+    let end = address
+        .checked_add(bytes as u64)
+        .ok_or("Dynarmic mapping overflows")?;
+    if bytes == 0
+        || end > 1 << 32
+        || physical.checked_add(bytes as u64).is_none()
+        || !address.is_multiple_of(4096)
+        || !bytes.is_multiple_of(4096)
+    {
+        return Err("Dynarmic requires a nonempty page-aligned 32-bit mapping".into());
+    }
+    Ok(end)
+}
+
 extern "C" fn batch_instruction(word: u32) -> u32 {
     let body = word & 0x0fff_ffff;
     if matches!(word & !15, 0xf57ff040 | 0xf57ff050) {
@@ -537,9 +566,7 @@ impl CoreShared {
         }
         let mappings = self.mappings.borrow();
         let (&base, &mapping) = mappings.range(..=address).next_back()?;
-        let size = match mapping {
-            Mapping::Backing { bytes, .. } | Mapping::Mmio { bytes, .. } => bytes,
-        };
+        let size = mapping.bytes();
         let offset = usize::try_from(address - base).ok()?;
         (offset.checked_add(bytes)? <= size).then_some((mapping, offset))
     }
@@ -1493,7 +1520,6 @@ pub struct Core {
     identity: Identity,
     model: Model,
     shared: Box<CoreShared>,
-    memory_regions: RefCell<Vec<MemoryRegion>>,
     last_progress: Cell<u64>,
     pending_anchor: Cell<Option<DeviceReadAnchor>>,
 
@@ -1618,7 +1644,6 @@ impl Core {
             identity: Identity::allocate(),
             model,
             shared,
-            memory_regions: RefCell::new(Vec::new()),
             last_progress: Cell::new(0),
             pending_anchor: Cell::new(None),
 
@@ -1659,11 +1684,6 @@ impl Core {
                 project,
             },
         );
-        self.memory_regions.borrow_mut().push(MemoryRegion {
-            begin: address,
-            end: address + (bytes as u64) - 1,
-            permissions: 3,
-        });
         Ok(())
     }
 
@@ -2107,7 +2127,17 @@ impl Cpu for Core {
     }
 
     fn memory_regions(&self) -> Result<Vec<MemoryRegion>, String> {
-        Ok(self.memory_regions.borrow().clone())
+        Ok(self
+            .shared
+            .mappings
+            .borrow()
+            .iter()
+            .map(|(&begin, &mapping)| MemoryRegion {
+                begin,
+                end: begin + mapping.bytes() as u64 - 1,
+                permissions: mapping.permissions(),
+            })
+            .collect())
     }
 
     fn rprofile_identity(&self, value: Option<u32>) -> Result<u32, String> {
@@ -2143,17 +2173,7 @@ impl Cpu for Core {
         permissions: u32,
         backing: NonNull<u8>,
     ) -> Result<(), String> {
-        let end = address
-            .checked_add(bytes as u64)
-            .ok_or("Dynarmic mapping overflows")?;
-        if bytes == 0
-            || end > 1 << 32
-            || physical.checked_add(bytes as u64).is_none()
-            || !address.is_multiple_of(4096)
-            || !bytes.is_multiple_of(4096)
-        {
-            return Err("Dynarmic requires a nonempty page-aligned 32-bit mapping".into());
-        }
+        ram_window_end(address, physical, bytes)?;
         self.shared.mapping_changed();
         self.shared.mappings.borrow_mut().insert(
             address,
@@ -2165,12 +2185,83 @@ impl Cpu for Core {
             },
         );
 
-        self.memory_regions.borrow_mut().push(MemoryRegion {
-            begin: address,
-            end: address + (bytes as u64) - 1,
-            permissions,
-        });
+        Ok(())
+    }
 
+    unsafe fn replace_physical(
+        &self,
+        address: u64,
+        physical: u64,
+        bytes: usize,
+        permissions: u32,
+        backing: NonNull<u8>,
+    ) -> Result<(), String> {
+        if self.run_limit.get().is_some() {
+            return Err("physical replacement requires a stopped Dynarmic processor".into());
+        }
+        let end = ram_window_end(address, physical, bytes)?;
+        let mut maps = self.shared.mappings.borrow_mut();
+        let mut previous = Vec::new();
+        let mut pieces = Vec::new();
+        let mut cursor = address;
+        while cursor < end {
+            let Some((
+                &base,
+                &Mapping::Backing {
+                    bytes,
+                    permissions,
+                    ptr,
+                    physical_base,
+                },
+            )) = maps.range(..=cursor).next_back()
+            else {
+                return Err("physical replacement has no complete external RAM underlay".into());
+            };
+            let limit = base + bytes as u64;
+            if limit <= cursor {
+                return Err("physical replacement has no complete external RAM underlay".into());
+            }
+            previous.push(base);
+            if base < address {
+                pieces.push((
+                    base,
+                    Mapping::Backing {
+                        bytes: (address - base) as usize,
+                        permissions,
+                        ptr,
+                        physical_base,
+                    },
+                ));
+            }
+            if end < limit {
+                let offset = (end - base) as usize;
+                pieces.push((
+                    end,
+                    Mapping::Backing {
+                        bytes: (limit - end) as usize,
+                        permissions,
+                        ptr: unsafe { ptr.add(offset) },
+                        physical_base: physical_base + offset as u64,
+                    },
+                ));
+            }
+            cursor = limit;
+        }
+        for base in previous {
+            maps.remove(&base);
+        }
+        maps.extend(pieces);
+        maps.insert(
+            address,
+            Mapping::Backing {
+                bytes,
+                permissions,
+                ptr: backing,
+                physical_base: physical,
+            },
+        );
+        drop(maps);
+        self.shared.mapping_changed();
         Ok(())
     }
 
@@ -2198,22 +2289,19 @@ impl Cpu for Core {
     }
 
     fn unmap(&self, address: u64, bytes: usize) -> Result<(), String> {
-        if !self.memory_regions.borrow().iter().any(|r| {
-            r.begin == address
-                && r.end
-                    .checked_sub(address)
-                    .and_then(|delta| delta.checked_add(1))
-                    == Some(bytes as u64)
-        }) {
+        if !self
+            .shared
+            .mappings
+            .borrow()
+            .get(&address)
+            .is_some_and(|mapping| mapping.bytes() == bytes)
+        {
             return Err("Dynarmic can only unmap an entire mapped range".into());
         }
         self.shared.mapping_changed();
         self.shared.mappings.borrow_mut().remove(&address);
         self.owned.borrow_mut().remove(&address);
         self.invalidate_code(Some((address, address + bytes as u64)))?;
-        self.memory_regions
-            .borrow_mut()
-            .retain(|r| r.begin != address);
         Ok(())
     }
 

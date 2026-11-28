@@ -634,4 +634,65 @@ mod tests {
         run(&cores[0], 0x1004);
         assert_eq!(unsafe { ffi::dynarmic_get_reg(cores[0].inst, 4) }, 1);
     }
+
+    #[test]
+    fn physical_decoder_replaces_the_underlay_of_private_tcm() {
+        use fujimod_emulator_cpu::memory::Backing;
+        let original = Backing::aligned_zeros(0x3000, 4096).unwrap();
+        let replacement = Backing::aligned_zeros(4096, 4096).unwrap();
+        let cpu = Core::new_rprofile(
+            Config {
+                tcm: tcm::Options {
+                    atcm: tcm::BankOptions {
+                        bytes: 4096,
+                        reset: 0x2001,
+                    },
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            Default::default(),
+        )
+        .unwrap();
+        unsafe {
+            cpu.map_physical(
+                0x1000,
+                0x8000,
+                original.len(),
+                7,
+                NonNull::new(original.as_ptr()).unwrap(),
+            )
+            .unwrap();
+            replacement.as_ptr().write(9);
+        }
+        cpu.write_memory(0x1000, &[1]).unwrap();
+        cpu.write_memory(0x2000, &[2]).unwrap();
+        cpu.write_memory(0x3000, &[3]).unwrap();
+        unsafe {
+            cpu.replace_physical(
+                0x2000,
+                0xb000,
+                replacement.len(),
+                7,
+                NonNull::new(replacement.as_ptr()).unwrap(),
+            )
+            .unwrap();
+        }
+        let read = |address| {
+            let mut bytes = [0];
+            cpu.read_memory(address, &mut bytes).unwrap();
+            bytes[0]
+        };
+        assert_eq!(read(0x2000), 2);
+        cpu.coprocessor(cp15(9, 1, 1), Some(0x2000)).unwrap();
+        assert_eq!([read(0x1000), read(0x2000), read(0x3000)], [1, 9, 3]);
+        assert_eq!(
+            cpu.exclusive_address(0x2000, 4, Access::Read).unwrap(),
+            0xb000
+        );
+        assert_eq!(
+            cpu.exclusive_address(0x3000, 4, Access::Read).unwrap(),
+            0xa000
+        );
+    }
 }
