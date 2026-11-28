@@ -1,0 +1,44 @@
+diff --git a/src/dynarmic/ir/opt/verification_pass.cpp b/src/dynarmic/ir/opt/verification_pass.cpp
+index 8bc9e6f1..85ca215b 100644
+--- a/src/dynarmic/ir/opt/verification_pass.cpp
++++ b/src/dynarmic/ir/opt/verification_pass.cpp
+@@ -4,10 +4,10 @@
+  */
+
+ #include <cstdio>
+-#include <map>
+
+ #include <mcl/assert.hpp>
+ #include <mcl/stdint.hpp>
++#include <tsl/robin_map.h>
+
+ #include "dynarmic/ir/basic_block.h"
+ #include "dynarmic/ir/microinstruction.h"
+@@ -18,21 +18,18 @@
+ namespace Dynarmic::Optimization {
+
+ void VerificationPass(const IR::Block& block) {
++    tsl::robin_map<const IR::Inst*, size_t> actual_uses;
++    actual_uses.reserve(block.size());
+     for (const auto& inst : block) {
+-        for (size_t i = 0; i < inst.NumArgs(); i++) {
+-            const IR::Type t1 = inst.GetArg(i).GetType();
++        const auto count = inst.NumArgs();
++        for (size_t i = 0; i < count; ++i) {
++            const auto arg = inst.GetArg(i);
++            const IR::Type t1 = arg.GetType();
+             const IR::Type t2 = IR::GetArgTypeOf(inst.GetOpcode(), i);
+             if (!IR::AreTypesCompatible(t1, t2)) {
+                 std::puts(IR::DumpBlock(block).c_str());
+                 ASSERT_FALSE("above block failed validation");
+             }
+-        }
+-    }
+-
+-    std::map<IR::Inst*, size_t> actual_uses;
+-    for (const auto& inst : block) {
+-        for (size_t i = 0; i < inst.NumArgs(); i++) {
+-            const auto arg = inst.GetArg(i);
+             if (!arg.IsImmediate()) {
+                 actual_uses[arg.GetInst()]++;
+             }
