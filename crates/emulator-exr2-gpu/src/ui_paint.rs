@@ -206,6 +206,9 @@ pub(super) async fn render_async(
     cpu: i64,
     host: &mut dyn Inputs,
 ) -> Result<RenderedBatch> {
+    if draws.is_empty() {
+        return Ok((Vec::new(), 0));
+    }
     let mut target_bytes = Vec::<(SurfaceKey, Vec<u8>)>::new();
     let mut target_slots = HashMap::<u64, usize>::new();
     let mut texture_bytes = HashMap::<(u64, u32, u32), Vec<u8>>::new();
@@ -439,12 +442,14 @@ pub(super) async fn render_async(
         .map_err(|error| Unsupported(format!("Graphics UI GPU readback {error}")))?;
     context.submit(encoder.finish());
 
+    // Register the count's mapping before waiting for the surface copies so
+    // native WGPU can complete both readbacks in the same device poll.
+    let touched_halfwords = map_touched_halfwords(&touched_readback);
     let readbacks = context
         .finish_readbacks_async(pending)
         .await
         .map_err(|error| Unsupported(format!("Graphics UI GPU readback {error}")))?;
-    let touched_halfwords = map_buffer_async(&touched_readback, device).await?;
-    let touched_halfwords = u32::from_le_bytes(touched_halfwords[..4].try_into().unwrap()) as u64;
+    let touched_halfwords = u64::from(touched_halfwords.await?);
 
     let mut output_by_key = HashMap::new();
     for (key, readback) in readbacks {
@@ -462,7 +467,9 @@ pub(super) async fn render_async(
     Ok((output, touched_halfwords * 2))
 }
 
-async fn map_buffer_async(buffer: &wgpu::Buffer, _device: &wgpu::Device) -> Result<Vec<u8>> {
+fn map_touched_halfwords(
+    buffer: &wgpu::Buffer,
+) -> impl std::future::Future<Output = Result<u32>> + '_ {
     struct MappingState {
         result: Option<std::result::Result<(), String>>,
         waker: Option<std::task::Waker>,
@@ -485,36 +492,32 @@ async fn map_buffer_async(buffer: &wgpu::Buffer, _device: &wgpu::Device) -> Resu
             }
         });
 
-    #[cfg(not(target_arch = "wasm32"))]
-    _device
-        .poll(wgpu::PollType::wait_indefinitely())
-        .map_err(|error| Unsupported(format!("Graphics UI GPU touched-halfword poll: {error}")))?;
+    async move {
+        std::future::poll_fn(|context| {
+            let Ok(mut state) = state.lock() else {
+                return Poll::Ready(Err(Unsupported(
+                    "Graphics UI GPU touched-halfword mapping state lock poisoned".into(),
+                )));
+            };
+            if let Some(result) = state.result.take() {
+                Poll::Ready(result.map_err(|error| {
+                    Unsupported(format!("Graphics UI GPU touched-halfword map: {error}"))
+                }))
+            } else {
+                state.waker = Some(context.waker().clone());
+                Poll::Pending
+            }
+        })
+        .await?;
 
-    std::future::poll_fn(|context| {
-        let Ok(mut state) = state.lock() else {
-            return Poll::Ready(Err(Unsupported(
-                "Graphics UI GPU touched-halfword mapping state lock poisoned".into(),
-            )));
-        };
-        if let Some(result) = state.result.take() {
-            Poll::Ready(result.map_err(|error| {
-                Unsupported(format!("Graphics UI GPU touched-halfword map: {error}"))
-            }))
-        } else {
-            state.waker = Some(context.waker().clone());
-            Poll::Pending
-        }
-    })
-    .await?;
-
-    let mapped = buffer
-        .slice(..)
-        .get_mapped_range()
-        .map_err(|error| Unsupported(format!("Graphics UI GPU touched-halfword range: {error}")))?;
-    let bytes = mapped.to_vec();
-    drop(mapped);
-    buffer.unmap();
-    Ok(bytes)
+        let mapped = buffer.slice(..).get_mapped_range().map_err(|error| {
+            Unsupported(format!("Graphics UI GPU touched-halfword range: {error}"))
+        })?;
+        let count = u32::from_le_bytes(mapped[..4].try_into().unwrap());
+        drop(mapped);
+        buffer.unmap();
+        Ok(count)
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
