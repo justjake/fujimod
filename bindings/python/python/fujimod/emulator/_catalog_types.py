@@ -400,6 +400,7 @@ type BlockDevice = (
     | BlockDeviceVariant95
     | BlockDeviceVariant96
     | BlockDeviceVariant97
+    | BlockDeviceVariant98
 )
 
 
@@ -1013,10 +1014,15 @@ class BlockDeviceVariant95(TypedDict, total=False):
 
 class BlockDeviceVariant96(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["unmodeled_bus_drain"]]
+    model: Required[Literal["bank_command"]]
 
 
 class BlockDeviceVariant97(TypedDict, total=False):
+    basis: Required[str]
+    model: Required[Literal["unmodeled_bus_drain"]]
+
+
+class BlockDeviceVariant98(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["register_storage"]]
 

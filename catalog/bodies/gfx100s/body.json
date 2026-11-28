@@ -6,6 +6,29 @@
   "hardware": {
     "profiles": {
       "gfx100s-discovery": {
+        "block_overrides": [
+          {
+            "block_id": "bank-command-fff49c10",
+            "device": {
+              "model": "bank_command",
+              "basis": "GFX100S 2.13 writes a word of one to this address. The model accepts a zero after a one at the same address. The effect on physical memory is unknown."
+            }
+          },
+          {
+            "block_id": "bank-command-fff49c20",
+            "device": {
+              "model": "bank_command",
+              "basis": "GFX100S 2.13 writes a word of one to this address. The model accepts a zero after a one at the same address. The effect on physical memory is unknown."
+            }
+          },
+          {
+            "block_id": "bank-command-fff49c30",
+            "device": {
+              "model": "bank_command",
+              "basis": "GFX100S 2.13 writes a word of one to this address. The model accepts a zero after a one at the same address. The effect on physical memory is unknown."
+            }
+          }
+        ],
         "dram_basis": "Installed DRAM capacity is unknown; this profile makes no body-level capacity claim."
       }
     }

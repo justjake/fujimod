@@ -32,6 +32,7 @@ pub(crate) fn build(
         storage_dma_routes,
         spi_inputs,
         control_requests,
+        bank_command_registers,
         request_acknowledgment_ticks,
         xp4_functional_system_control,
         storage_geometry,
@@ -610,6 +611,11 @@ pub(crate) fn build(
         devices
             .get_or_insert_with(devices::Devices::empty)
             .requests(control_requests)?;
+    }
+    if !bank_command_registers.is_empty() {
+        devices
+            .get_or_insert_with(devices::Devices::empty)
+            .bank_control(bank_command_registers)?;
     }
     if !sd_clocks.is_empty() {
         if sd_clocks.iter().any(|(address, ticks)| {

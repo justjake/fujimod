@@ -266,7 +266,7 @@ impl Catalog {
             .collect::<Result<Vec<_>, String>>()?;
         out.insert("control_requests".into(), json!(requests));
         self.output_fields(&mut out)?;
-        out.insert("register_banks".into(), json!(self.register_storage()?));
+        self.register_storage_fields(&mut out)?;
         out.insert("xpp_register_blocks".into(), json!(self.register_blocks()?));
         if let Some(sram) = self.soc["memory_regions"]
             .as_array()
@@ -611,6 +611,25 @@ impl Catalog {
             .collect()
     }
 
+    /// Install specialized command words alongside the remaining storage ranges.
+    fn register_storage_fields(&self, out: &mut Map<String, Value>) -> Result<(), String> {
+        let mut commands = Vec::new();
+        for block in self.with_device("bank_command") {
+            if block.size() != 4 || !block.base().is_multiple_of(4) {
+                return Err(format!(
+                    "bank command {} requires one aligned word",
+                    block.id()
+                ));
+            }
+            commands.push(block.base());
+        }
+        if !commands.is_empty() {
+            out.insert("bank_command_registers".into(), json!(commands));
+        }
+        out.insert("register_banks".into(), json!(self.register_storage()?));
+        Ok(())
+    }
+
     /// Register-storage windows less every address another selected block owns,
     /// as `[low, high)` ranges in record order.
     pub fn register_storage(&self) -> Result<Vec<(u64, u64)>, String> {
@@ -943,6 +962,34 @@ mod tests {
         }
         assert!(configurations.iter().any(|(id, _)| *id == "xt4-212"));
         configurations
+    }
+
+    #[test]
+    fn gfx_bank_commands_replace_only_their_own_words() {
+        let resolved = ResolvedConfiguration::bundled("gfx100s-213-cpu-entry").unwrap();
+        let catalog = Catalog::new(&resolved).unwrap();
+        let words = [0xfff4_9c10u64, 0xfff4_9c20, 0xfff4_9c30];
+        let mut fields = Map::new();
+        catalog.register_storage_fields(&mut fields).unwrap();
+        assert_eq!(fields["bank_command_registers"], json!(words));
+        let ranges = catalog.register_storage().unwrap();
+        for word in words {
+            for byte in word - 1..=word + 4 {
+                let stored = ranges.iter().any(|&(lo, hi)| lo <= byte && byte < hi);
+                assert_eq!(stored, !(word..word + 4).contains(&byte));
+            }
+        }
+        let other = xt3();
+        let mut other_fields = Map::new();
+        other.register_storage_fields(&mut other_fields).unwrap();
+        assert!(!other_fields.contains_key("bank_command_registers"));
+        assert!(
+            other
+                .register_storage()
+                .unwrap()
+                .iter()
+                .any(|&(lo, hi)| lo <= words[0] && hi >= words[2] + 4)
+        );
     }
 
     fn xt3() -> Catalog {

@@ -1,5 +1,7 @@
 //! Every integration test of this crate, linked into one test binary.
 
+mod bank_control;
+
 mod byte_i2c;
 mod card_media;
 mod coherent_scanout;

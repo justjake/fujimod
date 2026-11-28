@@ -93,6 +93,9 @@ pub struct Definition {
     pub spi_inputs: Vec<(u64, bool)>,
     #[serde(default)]
     pub control_requests: Vec<(u64, u64)>,
+    /// Absolute addresses of write-only bank command words.
+    #[serde(default)]
+    pub bank_command_registers: Vec<u64>,
     /// Optional unmeasured delay for the single-word XP4 request acknowledgment.
     #[serde(default)]
     pub request_acknowledgment_ticks: Option<u64>,

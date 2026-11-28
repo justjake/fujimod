@@ -4184,6 +4184,25 @@
         },
         {
           "additionalProperties": false,
+          "description": "An independent write-only bank command word.",
+          "properties": {
+            "basis": {
+              "description": "Evidence for this device selection.",
+              "type": "string"
+            },
+            "model": {
+              "const": "bank_command",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Address that only discards reads.",
           "properties": {
             "basis": {

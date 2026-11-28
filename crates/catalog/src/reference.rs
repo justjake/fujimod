@@ -582,6 +582,7 @@ impl Soc {
                     | crate::soc::BlockDevice::Xp5ImagingStatistics { .. }
                     | crate::soc::BlockDevice::ImagingDsp { .. }
                     | crate::soc::BlockDevice::UnmodeledBusDrain { .. }
+                    | crate::soc::BlockDevice::BankCommand { .. }
                     | crate::soc::BlockDevice::RegisterStorage { .. } => {}
                 }
             }
