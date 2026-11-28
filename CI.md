@@ -18,9 +18,10 @@ PR CI tests a pull request into `main` on request:
 | `ci:run` label                                         | Runs on the latest commit, for anyone's pull request; the label is removed |
 | A push to a ready pull request                         | Starts nothing; the new commit waits for `ci:run`                          |
 
-Each run tests the pull request merged into the current `main` (GitHub's
-`refs/pull/N/merge`), so a branch behind `main` needs no rebase to be tested as
-it would land; a pull request with conflicts does not run. The result is the
+Each run tests the pull request merged into the current `main`, so a branch
+behind `main` needs no rebase to be tested as it would land. GitHub refreshes its
+merge (`refs/pull/N/merge`) only when asked, so PR CI's first job asks and waits
+for a merge onto `main`'s head; a pull request with conflicts fails there. The result is the
 `CI required` commit status on the pull request's head:
 pending while untested or running, then passed or failed, linked to the run.
 There is no per-author run limit: runs use GitHub's hosted runners, which cost

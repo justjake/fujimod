@@ -37,12 +37,15 @@ jobs:
           # A run whose checks were skipped (a push waiting for ci:run, another
           # label) posts nothing. A replaced run was canceled; its replacement
           # owns the status.
-          result=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs" --paginate \
-            --jq '.jobs[] | select(.name == "Checks / CI required") | .conclusion')
+          jobs=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs" --paginate --jq '.jobs[]')
+          merge=$(jq -r 'select(.name == "Merge into main") | .conclusion' <<< "$jobs")
+          result=$(jq -r 'select(.name == "Checks / CI required") | .conclusion' <<< "$jobs")
+          [ "$merge" = failure ] && result=unmerged
           echo "number=" >> "$GITHUB_OUTPUT"
           case "$result" in
             success) state=success description='Passed' ;;
             failure) state=failure description='Failed: see the run' ;;
+            unmerged) state=failure description='Could not merge into main: see the run' ;;
             *) echo "Checks did not finish ($result); nothing to post."; echo "land=false" >> "$GITHUB_OUTPUT"; exit 0 ;;
           esac
           gh api -X POST "repos/$REPO/statuses/$SHA" -f context='CI required' \
