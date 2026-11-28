@@ -129,6 +129,9 @@ impl FilterEngine {
 }
 
 impl Device for FilterEngine {
+    fn future_deadline_is_stable(&self) -> bool {
+        true
+    }
     fn name(&self) -> &'static str {
         "xp4-filter-engine"
     }

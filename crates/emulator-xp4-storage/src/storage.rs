@@ -1152,6 +1152,10 @@ impl fujimod_emulator_devices::capability::ExecuteInPlace for SerialFlashControl
     }
 }
 impl Device for SerialFlashController {
+    fn future_deadline_is_stable(&self) -> bool {
+        // Pending program data is ready immediately. NOR operations retain their ticks.
+        true
+    }
     fn name(&self) -> &'static str {
         "xp4-serial-flash"
     }
@@ -2220,6 +2224,11 @@ impl Device for DmaController {
         if let Err(e) = self.access(cx, address, size, true, value as u32) {
             cx.fail(e);
         }
+    }
+    fn future_deadline_is_stable(&self) -> bool {
+        // Ready channels cause an immediate deadline. Other deadlines are
+        // recorded completion ticks or absent until an input changes.
+        true
     }
     fn next_deadline(&self, now: u64) -> Option<u64> {
         (0..16)

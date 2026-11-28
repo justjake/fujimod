@@ -117,6 +117,14 @@ struct Transactions {
     omitted: u64,
     ranges: Option<Vec<TransactionRange>>,
 }
+#[derive(Clone, Copy, Debug)]
+pub(super) struct ProjectedRead {
+    pub value: u64,
+    pub device: usize,
+    pub valid_before: u64,
+    pub model_validity: Option<fujimod_emulator_devices::bus::ReadValidity>,
+}
+
 pub struct Bus {
     transactions: Option<Transactions>,
     continuation: Option<std::rc::Rc<std::cell::RefCell<super::continuation::Stops>>>,
@@ -766,6 +774,51 @@ impl Bus {
         self.touch(source);
         self.wake_dependents(host, source)
     }
+    pub(super) fn project_read(
+        &mut self,
+        address: u64,
+        size: u8,
+        at: u64,
+        deadlines: &[Option<u64>],
+    ) -> Option<ProjectedRead> {
+        if !matches!(size, 1 | 2 | 4 | 8) || !self.loop_window() || !self.touched.is_empty() {
+            return None;
+        }
+        let device = self.window_at(address, size)?;
+        let value = self.windows[device]
+            .device
+            .read_without_advance(address, size, at)?;
+        // The ordinary read would wake each direct dependent. The proposed
+        // read can do that cheaply only when none is due and its published
+        // deadline would not change at this precise tick.
+        let device_limit = self.windows[device]
+            .device
+            .projected_value_until(address, size);
+        let mut valid_before = device_limit.map_or(at, |validity| {
+            validity
+                .before
+                .min(validity.countdown_expiry.unwrap_or(u64::MAX))
+        });
+        for &dependent in &self.dependents[device] {
+            let deadline = self.deadline(dependent, at);
+            if deadline != deadlines[dependent] || deadline.is_some_and(|due| due <= at) {
+                return None;
+            }
+            if !self.windows[dependent].device.future_deadline_is_stable() {
+                valid_before = at;
+            } else if let Some(deadline) = deadline {
+                valid_before = valid_before.min(deadline);
+            }
+        }
+        self.remember_quiet_reads(device, 1);
+        let mask = u64::MAX >> (64 - u32::from(size) * 8);
+        Some(ProjectedRead {
+            value: value & mask,
+            device,
+            valid_before,
+            model_validity: device_limit,
+        })
+    }
     /// Whether repeated reads of this register in a poll loop may be left
     /// out (`Device::poll_stable`). Never while accesses are logged or outside
     /// strict mode.
@@ -815,9 +868,13 @@ impl Bus {
         let Some(source) = self.window_at(address, size) else {
             return;
         };
-        if count == 0 {
+        self.remember_quiet_reads(source, count);
+    }
+    pub(super) fn remember_quiet_reads(&mut self, source: usize, count: u64) {
+        if count == 0 || self.dependents[source].is_empty() {
             return;
         }
+        self.wake_queue.clear();
         let (generation, wrapped) = self.wake_generation.overflowing_add(count);
         self.wake_generation = generation;
         if wrapped || generation == 0 {
@@ -1152,6 +1209,9 @@ impl Bus {
         self.wake_dependents(host, device)
     }
     fn wake_dependents(&mut self, host: &mut dyn Host, source: usize) -> Result<(), String> {
+        if self.dependents[source].is_empty() {
+            return Ok(());
+        }
         self.wake_queue.clear();
         self.wake_generation = self.wake_generation.wrapping_add(1);
         if self.wake_generation == 0 {
@@ -1332,6 +1392,50 @@ mod tests {
         fn record(&mut self, _: Record) {
             panic!("unexpected record")
         }
+    }
+    #[test]
+    fn projected_read_declines_when_it_would_change_a_dependency_deadline() {
+        struct Probe(bool);
+        impl Device for Probe {
+            fn name(&self) -> &'static str {
+                "projected-deadline-probe"
+            }
+            fn read(&mut self, _: &mut Cx<'_>, _: u64, _: u8) -> u64 {
+                7
+            }
+            fn read_without_advance(&self, _: u64, _: u8, _: u64) -> Option<u64> {
+                (!self.0).then_some(7)
+            }
+            fn projected_value_until(
+                &self,
+                _: u64,
+                _: u8,
+            ) -> Option<fujimod_emulator_devices::bus::ReadValidity> {
+                (!self.0).then_some(fujimod_emulator_devices::bus::ReadValidity {
+                    before: 200,
+                    countdown_expiry: None,
+                })
+            }
+            fn write(&mut self, _: &mut Cx<'_>, _: u64, _: u8, _: u64) {}
+            fn next_deadline(&self, now: u64) -> Option<u64> {
+                self.0.then_some(100 + now)
+            }
+        }
+
+        let mut bus = Bus::new(Mode::Strict);
+        let source = bus.register(0x1000, 4, Box::new(Probe(false))).unwrap();
+        let dependent = bus.register(0x2000, 4, Box::new(Probe(true))).unwrap();
+        bus.native_dependencies(dependent, vec![source]).unwrap();
+        let _ = bus.changed_deadlines(0).count();
+        let before = bus.wake_generation;
+        let read = bus.project_read(0x1000, 4, 0, &[None, Some(100)]).unwrap();
+        assert_eq!((read.value, read.valid_before), (7, 0));
+        assert_eq!(bus.wake_generation, before + 1);
+        assert_eq!(bus.visited, [before + 1; 2]);
+        assert!(bus.touched.is_empty());
+        assert!(bus.project_read(0x1000, 4, 1, &[None, Some(100)]).is_none());
+        assert_eq!(bus.wake_generation, before + 1);
+        assert!(bus.touched.is_empty());
     }
     #[test]
     fn state_capture_uses_complete_device_state_without_building_diagnostic_summaries() {

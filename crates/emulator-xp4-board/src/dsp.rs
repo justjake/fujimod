@@ -135,6 +135,9 @@ impl Dsp {
 }
 
 impl Device for Dsp {
+    fn future_deadline_is_stable(&self) -> bool {
+        true
+    }
     fn name(&self) -> &'static str {
         "xp4-dsp"
     }

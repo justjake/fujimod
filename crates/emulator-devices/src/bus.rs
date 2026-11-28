@@ -323,6 +323,15 @@ impl<'a> Cx<'a> {
     }
 }
 
+/// A device's read result within an interval with unchanged inputs.
+#[derive(Clone, Copy, Debug)]
+pub struct ReadValidity {
+    pub before: u64,
+    /// A running countdown returns expiry minus the current tick minus one.
+    /// Without an expiry, the accepted value is constant in this interval.
+    pub countdown_expiry: Option<u64>,
+}
+
 /// A register-level device behind one or more address windows.
 pub trait Device: Send + std::any::Any {
     fn name(&self) -> &'static str;
@@ -471,6 +480,16 @@ pub trait Device: Send + std::any::Any {
     /// device state, output signals, and its published deadlines unchanged.
     fn read_without_advance(&self, _address: u64, _size: u8, _now: u64) -> Option<u64> {
         None
+    }
+    /// Exclusive tick limit for reusing a read already accepted by
+    /// `read_without_advance`, while the device and its inputs remain unchanged.
+    fn projected_value_until(&self, _address: u64, _size: u8) -> Option<ReadValidity> {
+        None
+    }
+    /// A future or absent `next_deadline(now)` stays identical as the clock
+    /// advances toward that deadline, until the device or its inputs change.
+    fn future_deadline_is_stable(&self) -> bool {
+        false
     }
     /// A read of `size` bytes at `address` (absolute, so one model can own
     /// several windows).

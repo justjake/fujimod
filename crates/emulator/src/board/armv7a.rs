@@ -2,7 +2,7 @@
 //! These inputs are processor wiring, independent of any guest program.
 use super::{Board, scalar, set};
 use fujimod_emulator_cpu::ExecutionPolicy;
-use fujimod_emulator_cpu::armv7a::{CLREX, exclusive_instruction};
+use fujimod_emulator_cpu::armv7a::exclusive_instruction;
 use fujimod_emulator_cpu::{Access, Cpu, Hint, Model, Register, arm, exclusive};
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -104,7 +104,10 @@ impl Profile {
             return Ok(Entry::Execute);
         }
         if cpsr & 0x20 == 0 && exclusive_instruction(word) {
-            self.exclusive(cpu, word, cpsr, monitors)?;
+            let owner = self
+                .owner
+                .ok_or("ARMv7-A exclusive without a monitor owner")?;
+            fujimod_emulator_cpu::armv7a::execute_exclusive(cpu, word, cpsr, owner, monitors)?;
             set(cpu, Register::Pc, pc.wrapping_add(4))?;
             cpu.stop()?;
             return Ok(Entry::Completed);
@@ -182,77 +185,6 @@ impl Profile {
         set(cpu, Register::Pc, pc.wrapping_add(4))?;
         cpu.stop()?;
         Ok(entry)
-    }
-    /// A LDREX/STREX of any width, or CLREX, against the cluster-wide
-    /// monitor. Every processor's stores reach that monitor through the
-    /// board store hook, so a peer store invalidates a reservation even when
-    /// it leaves the bytes unchanged.
-    fn exclusive(
-        &self,
-        cpu: &dyn Cpu,
-        word: u32,
-        cpsr: u32,
-        monitors: &exclusive::Shared,
-    ) -> Result<(), String> {
-        let owner = self
-            .owner
-            .ok_or("ARMv7-A exclusive without a monitor owner")?;
-        let mut monitors = monitors.lock().map_err(|_| "exclusive monitors poisoned")?;
-        if word == CLREX {
-            monitors.clear(owner);
-            return Ok(());
-        }
-        if cpsr & 0x200 != 0 {
-            return Err("big-endian ARMv7-A exclusives are unsupported".into());
-        }
-        let load = word & (1 << 20) != 0;
-        let rn = ((word >> 16) & 15) as usize;
-        let rd = ((word >> 12) & 15) as usize;
-        let rt = (word & 15) as usize;
-        let size = match (word >> 21) & 3 {
-            0 => 4,
-            1 => 8,
-            2 => 1,
-            _ => 2,
-        };
-        let pair = |r: usize| size == 8 && (r & 1 != 0 || r > 12);
-        if rn == 15
-            || rd == 15
-            || (load && pair(rd))
-            || (!load
-                && (rt == 15 || rd == rn || rd == rt || pair(rt) || (size == 8 && rd == rt + 1)))
-        {
-            return Err(format!("unpredictable ARMv7-A exclusive {word:#010x}"));
-        }
-        let address = scalar(cpu, arm::CORE[rn])? as u32 as u64;
-        if !address.is_multiple_of(size as u64) {
-            return Err(format!("unaligned ARMv7-A exclusive at {address:#x}"));
-        }
-        let access = if load { Access::Read } else { Access::Write };
-        let physical = cpu.translate(address, access)?;
-        if load {
-            let mut bytes = [0; 8];
-            // This checks permissions and refuses MMIO without driving a device.
-            cpu.read_virtual(address, access, &mut bytes[..size])?;
-            monitors.load(owner, physical, size);
-            let value = u64::from_le_bytes(bytes);
-            set(cpu, arm::CORE[rd], value & 0xffff_ffff)?;
-            if size == 8 {
-                set(cpu, arm::CORE[rd + 1], value >> 32)?;
-            }
-        } else {
-            let success = monitors.store(owner, physical, size);
-            if success {
-                let mut value = scalar(cpu, arm::CORE[rt])? & 0xffff_ffff;
-                if size == 8 {
-                    value |= (scalar(cpu, arm::CORE[rt + 1])? & 0xffff_ffff) << 32;
-                }
-                cpu.write_memory(physical, &value.to_le_bytes()[..size])?;
-                monitors.written(Some((physical, size)))?;
-            }
-            set(cpu, arm::CORE[rd], u64::from(!success))?;
-        }
-        Ok(())
     }
     /// The processor wiring's answer to an identity register read (MPIDR,
     /// CBAR and, when declared, CCSIDR), for guest reads and host inspection.
@@ -360,6 +292,8 @@ impl Board {
             .lock()
             .map_err(|_| "exclusive monitors poisoned")?
             .register(64)?;
+        self.cpu(core)?
+            .set_armv7a_exclusive_context(state.exclusive.clone(), owner);
         state.armv7a[core] = Some(Profile::new(config, owner));
         Ok(())
     }
@@ -465,12 +399,26 @@ mod tests {
     }
     #[test]
     fn a_same_value_peer_store_fails_every_exclusive_width() {
+        check_peer_store(["unicorn", "unicorn"]);
+    }
+    #[cfg(all(
+        feature = "dynarmic",
+        target_arch = "aarch64",
+        any(target_os = "linux", target_os = "macos")
+    ))]
+    #[test]
+    fn dynarmic_and_unicorn_share_the_exclusive_monitor() {
+        check_peer_store(["dynarmic", "unicorn"]);
+        check_peer_store(["unicorn", "dynarmic"]);
+    }
+    fn check_peer_store(backends: [&str; 2]) {
         // LDREX{,D,B,H} r0,[r2]; STREX{,D,B,H} r4,r0,[r2] on core 0; STRB r0,[r2] on core 1.
         for (size, bits) in [(4usize, 0u32), (8, 1), (1, 2), (2, 3)] {
             let processors: Vec<_> = (0..2)
                 .map(|core| {
                     json!({
-                        "model":"cortex-a7", "released":true, "mprofile":null, "rprofile":null,
+                        "model":"cortex-a7", "cpu_backend":backends[core], "released":true,
+                        "mprofile":null, "rprofile":null,
                         "registers":[["Pc",0x1000+core*0x1000],["Pstate",0xd3],[{"Arm32":{"R":2}},0x3000]]
                     })
                 })

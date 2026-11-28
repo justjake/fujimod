@@ -682,6 +682,9 @@ impl Statistics {
     }
 }
 impl Device for Statistics {
+    fn future_deadline_is_stable(&self) -> bool {
+        true
+    }
     fn name(&self) -> &'static str {
         "imaging-statistics-sram"
     }

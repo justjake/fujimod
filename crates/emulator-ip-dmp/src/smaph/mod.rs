@@ -1880,6 +1880,9 @@ fn known(o: u64) -> bool {
     )
 }
 impl Device for Renderer {
+    fn future_deadline_is_stable(&self) -> bool {
+        true
+    }
     fn name(&self) -> &'static str {
         "dmp-smaph-h"
     }

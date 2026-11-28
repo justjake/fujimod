@@ -171,6 +171,9 @@ impl Controller {
 }
 
 impl Device for Controller {
+    fn future_deadline_is_stable(&self) -> bool {
+        self.host.future_deadline_is_stable()
+    }
     fn name(&self) -> &'static str {
         "xp4-sd"
     }

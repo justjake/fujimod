@@ -74,6 +74,14 @@ impl IntervalTimers {
             irqs,
         }
     }
+    /// The current value of a channel's count register.
+    pub fn count_at(&self, channel: usize, now: u64) -> Option<u32> {
+        self.counters.get(channel).map(|counter| counter.value(now))
+    }
+    /// An enabled channel counts down linearly before this expiry.
+    pub fn count_expiry(&self, channel: usize) -> Option<Option<u64>> {
+        self.counters.get(channel).map(|counter| counter.next)
+    }
     pub fn next_event_tick(&self, _now: u64) -> Option<u64> {
         self.counters.iter().filter_map(|c| c.next).min()
     }

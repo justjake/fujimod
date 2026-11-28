@@ -205,6 +205,34 @@ impl Clock {
         Ok(Self { now, phase, ..self })
     }
 }
+/// Exact count-clock pair at an ordered board frontier with no processor lag.
+#[derive(Clone, Copy)]
+pub struct DeviceReadAnchor {
+    pub entries: u64,
+    pub clock: Clock,
+}
+
+#[derive(Clone, Copy)]
+pub struct ProjectedDeviceRead {
+    pub value: u64,
+    pub window: Option<ProjectedDeviceWindow>,
+}
+
+#[derive(Clone, Copy)]
+pub struct ProjectedDeviceWindow {
+    pub before: u64,
+    pub countdown_expiry: Option<u64>,
+    pub source: usize,
+    pub account: unsafe fn(usize, u64, *mut c_void),
+}
+
+/// A side-effect-free device read at an exact guest tick. An optional window
+/// permits consecutive reads until its exclusive frontier within this CPU
+/// run. The processor accounts for those reads before returning to the board
+/// or making any different device access.
+pub type DeviceReadProjection =
+    unsafe fn(u64, u32, u64, *mut c_void) -> Option<ProjectedDeviceRead>;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Access {
     Read,
@@ -619,6 +647,10 @@ pub trait Cpu {
     fn set_armv7a_owner_exclusives(&self, _on: bool) -> Result<(), String> {
         Err("backend does not exit before ARMv7-A exclusives".into())
     }
+    /// Supply the same reservation owner and monitor used by the ordered board.
+    /// Engines that adopt this domain must observe every conflicting guest store.
+    fn set_armv7a_exclusive_context(&self, _monitors: exclusive::Shared, _owner: exclusive::Owner) {
+    }
     /// Select the board's MPIDR execution path before a scheduler run.
     fn select_armv7a_affinity_policy(&self, _policy: ExecutionPolicy) -> Result<(), String> {
         Ok(())
@@ -697,6 +729,11 @@ pub trait Cpu {
     fn set_guest_clock(&self, _clock: Clock) -> Result<(), String> {
         Err("backend does not consume a guest-clock anchor".into())
     }
+    fn supports_projected_device_reads(&self) -> bool {
+        false
+    }
+    fn set_device_read_anchor(&self, _anchor: Option<DeviceReadAnchor>) {}
+
     fn read_register(&self, register: Register, out: &mut [u8]) -> Result<usize, String>;
     fn write_register(&self, register: Register, bytes: &[u8]) -> Result<(), String>;
     fn coprocessor(&self, register: arm::Coprocessor, value: Option<u64>) -> Result<u64, String>;
@@ -818,6 +855,19 @@ pub trait Cpu {
         _fast_reads: Vec<FastMmioRead>,
     ) -> Result<(), String> {
         unsafe { self.map_mmio(address, bytes, callbacks) }
+    }
+    /// # Safety
+    /// The callback requirements of `map_mmio_fast` apply. A successful
+    /// projected read may not advance or otherwise change the device or board.
+    unsafe fn map_mmio_projected(
+        &self,
+        address: u64,
+        bytes: usize,
+        callbacks: Mmio,
+        fast_reads: Vec<FastMmioRead>,
+        _project: DeviceReadProjection,
+    ) -> Result<(), String> {
+        unsafe { self.map_mmio_fast(address, bytes, callbacks, fast_reads) }
     }
     fn unmap(&self, address: u64, bytes: usize) -> Result<(), String>;
     fn protect(&self, address: u64, bytes: usize, permissions: u32) -> Result<(), String>;

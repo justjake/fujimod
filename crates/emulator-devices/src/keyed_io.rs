@@ -28,6 +28,9 @@ impl KeyedIoGroup {
     }
 }
 impl Device for KeyedIoGroup {
+    fn future_deadline_is_stable(&self) -> bool {
+        true
+    }
     fn name(&self) -> &'static str {
         "keyed-io-group-control"
     }

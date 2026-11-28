@@ -146,6 +146,10 @@ impl Adc {
 }
 
 impl Device for Adc {
+    fn future_deadline_is_stable(&self) -> bool {
+        // A pending rearm is due immediately; a conversion has an absolute tick.
+        true
+    }
     fn name(&self) -> &'static str {
         "xp4-adc"
     }

@@ -213,6 +213,13 @@ impl Spi {
         self.pending = Some((at, self.generation, word, bits));
         cx.schedule(at, self.generation);
     }
+    fn status(&self) -> u32 {
+        u32::from(self.tx.is_empty())
+            | (u32::from(self.tx.len() < 8) << 1)
+            | (u32::from(!self.rx.is_empty()) << 2)
+            | (u32::from(self.rx.len() == 8) << 3)
+            | (u32::from(self.pending.is_some() || self.exchange.is_some()) << 4)
+    }
     fn access(
         &mut self,
         cx: &mut Cx<'_>,
@@ -245,13 +252,7 @@ impl Spi {
                             .ok_or("XP4 SPI receive FIFO underflow")?,
                     )
                 }
-                0xc => {
-                    u32::from(self.tx.is_empty())
-                        | (u32::from(self.tx.len() < 8) << 1)
-                        | (u32::from(!self.rx.is_empty()) << 2)
-                        | (u32::from(self.rx.len() == 8) << 3)
-                        | (u32::from(self.pending.is_some() || self.exchange.is_some()) << 4)
-                }
+                0xc => self.status(),
                 0x10 => self.divider,
                 0x14 => self.causes,
                 0x24 => self.requests,
@@ -433,6 +434,9 @@ impl Spi {
 }
 
 impl Device for Spi {
+    fn future_deadline_is_stable(&self) -> bool {
+        true
+    }
     fn name(&self) -> &'static str {
         match self.base {
             0xfff32000 => "xp4-spi0",
@@ -444,6 +448,29 @@ impl Device for Spi {
             0xfff38000 => "xp4-spi6",
             _ => "xp4-spi",
         }
+    }
+    fn projected_value_until(
+        &self,
+        address: u64,
+        size: u8,
+    ) -> Option<fujimod_emulator_devices::bus::ReadValidity> {
+        if size != 4 || address.wrapping_sub(self.base) != 0xc {
+            return None;
+        }
+        Some(fujimod_emulator_devices::bus::ReadValidity {
+            before: self
+                .exchange
+                .map_or(u64::MAX, |(_, end)| end)
+                .min(self.pending.map_or(u64::MAX, |pending| pending.0)),
+            countdown_expiry: None,
+        })
+    }
+    fn read_without_advance(&self, address: u64, size: u8, now: u64) -> Option<u64> {
+        (size == 4
+            && address.wrapping_sub(self.base) == 0xc
+            && self.exchange.is_none_or(|(_, end)| end > now)
+            && self.pending.is_none_or(|pending| pending.0 > now))
+        .then(|| u64::from(self.status()))
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         match self.access(cx, address, size, false, 0) {
@@ -619,6 +646,52 @@ mod tests {
         for pin in [false, true] {
             assert_eq!(trace(0x2000, pin), trace(0x123456, pin));
         }
+    }
+    #[test]
+    fn status_projection_preserves_fifo_state_and_declines_at_the_edge() {
+        let mut device = Spi::new(0x1000, Box::new(FixedPin(false)));
+        let mut host = Clock::default();
+        write_all(
+            &mut device,
+            &mut host,
+            &[(0, 0xc7), (0x10, 2), (4, 0xa), (8, 0x12)],
+        );
+        let deadline = device.next_deadline(0).unwrap();
+        assert_eq!(
+            device
+                .projected_value_until(0x100c, 4)
+                .map(|read| read.before),
+            Some(deadline)
+        );
+        assert_eq!(
+            device
+                .projected_value_until(0x1008, 4)
+                .map(|read| read.before),
+            None
+        );
+        let before = device.save();
+        for now in [0, deadline - 1] {
+            host.now = now;
+            assert_eq!(
+                device.read_without_advance(0x100c, 4, now),
+                Some(device.read(&mut Cx::new(&mut host, 0, 0, 0), 0x100c, 4))
+            );
+        }
+        assert_eq!(device.save(), before);
+        assert_eq!(device.read_without_advance(0x1008, 4, 0), None);
+        assert_eq!(device.read_without_advance(0x100c, 2, 0), None);
+        assert_eq!(device.read_without_advance(0x100c, 4, deadline), None);
+
+        let (mut dma, _) = linked(false);
+        let transfer = dma.dma_begin(100, 2, 1).unwrap();
+        assert_eq!(
+            dma.projected_value_until(0x100c, 4).map(|read| read.before),
+            Some(transfer.end)
+        );
+        let before = dma.save();
+        assert_eq!(dma.read_without_advance(0x100c, 4, 100), Some(0x13));
+        assert_eq!(dma.read_without_advance(0x100c, 4, transfer.end), None);
+        assert_eq!(dma.save(), before);
     }
     #[test]
     fn pending_fifo_words_keep_their_edges_after_restore() {

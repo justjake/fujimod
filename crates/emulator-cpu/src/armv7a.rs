@@ -1,7 +1,7 @@
 //! ARMv7-A (AArch32, ARM state) architectural mechanisms, independent of a
 //! host execution backend. Cluster identity, PMU and hint semantics belong to
 //! the board; this module only names the instructions the board performs.
-use super::{Cpu, Register, arm};
+use super::{Access, Cpu, Register, arm, exclusive};
 
 pub mod abort;
 pub mod mmu;
@@ -54,6 +54,79 @@ pub const CLREX: u32 = 0xf57f_f01f;
 /// ARM-state LDREX/STREX (any width) and CLREX.
 pub fn exclusive_instruction(word: u32) -> bool {
     word & 0x0f90_0fff == 0x0190_0f9f || word & 0x0f90_0ff0 == 0x0180_0f90 || word == CLREX
+}
+
+/// Execute a decoded, condition-passing ARM exclusive against the cluster
+/// monitor. The caller owns instruction accounting, interrupt boundaries,
+/// and observation of ordinary stores while a reservation is live.
+pub fn execute_exclusive(
+    cpu: &dyn Cpu,
+    word: u32,
+    cpsr: u32,
+    owner: exclusive::Owner,
+    monitors: &exclusive::Shared,
+) -> Result<(), String> {
+    let scalar = |register| {
+        let mut bytes = [0; 8];
+        cpu.read_register(register, &mut bytes)?;
+        Ok::<u64, String>(u64::from_le_bytes(bytes))
+    };
+    let set = |register, value: u64| cpu.write_register(register, &(value as u32).to_le_bytes());
+    let mut monitors = monitors.lock().map_err(|_| "exclusive monitors poisoned")?;
+    if word == CLREX {
+        monitors.clear(owner);
+        return Ok(());
+    }
+    if cpsr & 0x200 != 0 {
+        return Err("big-endian ARMv7-A exclusives are unsupported".into());
+    }
+    let load = word & (1 << 20) != 0;
+    let rn = ((word >> 16) & 15) as usize;
+    let rd = ((word >> 12) & 15) as usize;
+    let rt = (word & 15) as usize;
+    let size = match (word >> 21) & 3 {
+        0 => 4,
+        1 => 8,
+        2 => 1,
+        _ => 2,
+    };
+    let pair = |r: usize| size == 8 && (r & 1 != 0 || r > 12);
+    if rn == 15
+        || rd == 15
+        || (load && pair(rd))
+        || (!load && (rt == 15 || rd == rn || rd == rt || pair(rt) || (size == 8 && rd == rt + 1)))
+    {
+        return Err(format!("unpredictable ARMv7-A exclusive {word:#010x}"));
+    }
+    let address = scalar(arm::CORE[rn])? as u32 as u64;
+    if !address.is_multiple_of(size as u64) {
+        return Err(format!("unaligned ARMv7-A exclusive at {address:#x}"));
+    }
+    let access = if load { Access::Read } else { Access::Write };
+    let physical = cpu.translate(address, access)?;
+    if load {
+        let mut bytes = [0; 8];
+        // This checks permissions and refuses MMIO without driving a device.
+        cpu.read_virtual(address, access, &mut bytes[..size])?;
+        monitors.load(owner, physical, size);
+        let value = u64::from_le_bytes(bytes);
+        set(arm::CORE[rd], value & 0xffff_ffff)?;
+        if size == 8 {
+            set(arm::CORE[rd + 1], value >> 32)?;
+        }
+    } else {
+        let success = monitors.store(owner, physical, size);
+        if success {
+            let mut value = scalar(arm::CORE[rt])? & 0xffff_ffff;
+            if size == 8 {
+                value |= (scalar(arm::CORE[rt + 1])? & 0xffff_ffff) << 32;
+            }
+            cpu.write_memory(physical, &value.to_le_bytes()[..size])?;
+            monitors.written(Some((physical, size)))?;
+        }
+        set(arm::CORE[rd], u64::from(!success))?;
+    }
+    Ok(())
 }
 
 /// Data cache invalidate, clean, or clean-and-invalidate by set/way.
