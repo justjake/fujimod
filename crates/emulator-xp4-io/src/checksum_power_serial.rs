@@ -185,10 +185,16 @@ impl Input for ChecksumPowerSerial {
                     let value = u16::from_be_bytes([s.frame[1], s.frame[2]]);
                     if let Some(rtc) = s.rtc.as_mut().filter(|r| r.config.owns(register)) {
                         if register == rtc.config.control && value == rtc.retained_control_value() {
-                            // X-S10 3.11 commits again without rewriting the
-                            // words, so every word needs one write since reset.
-                            if s.retained_registers.is_empty()
-                                || s.retained_written != s.retained_registers
+                            // Words without a declared reset value need one
+                            // write since reset; X-S10 3.11 commits again
+                            // without rewriting them.
+                            let unset = s
+                                .retained_registers
+                                .iter()
+                                .filter(|r| !s.inputs.contains_key(r))
+                                .collect::<Vec<_>>();
+                            if unset.is_empty()
+                                || unset.iter().any(|r| !s.retained_written.contains(r))
                             {
                                 return Err("Retained control commit requires a write to every declared word".into());
                             }
@@ -510,7 +516,7 @@ mod tests {
     }
 
     #[test]
-    fn a_retained_commit_needs_each_word_written_once_since_reset() {
+    fn a_retained_commit_needs_each_unset_word_written_once_since_reset() {
         fn write(
             peer: &mut ChecksumPowerSerial,
             register: u8,
@@ -556,10 +562,10 @@ mod tests {
             5,
             true,
             false,
-            BTreeMap::new(),
+            [(14, 0x11)].into(),
             vec![],
             Some(rtc),
-            vec![65],
+            vec![14, 65],
         )
         .unwrap();
         select(&mut gpio, true);

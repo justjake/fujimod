@@ -36,6 +36,8 @@
           "inputs": {
             "0": 0,
             "2": 0,
+            "3": 520,
+            "4": 640,
             "14": 17,
             "16": 0,
             "25": 16,
@@ -48,7 +50,7 @@
               "value": 0
             }
           ],
-          "retained_registers": [42, 43, 44, 45],
+          "retained_registers": [14, 42, 43, 44, 45],
           "rtc": {
             "control": 36,
             "read_low": 34,
@@ -67,7 +69,7 @@
             "initial_seconds": 0,
             "ticks_per_second": 54000000
           },
-          "basis": "Four-byte checksum transport; synthetic status inputs and unset RTC. Registers 2 and 14 read 0x0000 and 0x0011, physical service-mode samples stable over five seconds (register 14 with the headphone field clear); writes to them refuse. Register 25 (USB power status) reads 0x0010, the declared value of the X-E4 and X100V runs; registers 37 and 38 read zero, as the X-E4 run declares; the physical X-S10 values are unmeasured. Stored words initially read zero. Clock loads preserve retained validity. Control reads retain the load strobe through the declared set window, refuse the unresolved interval, then clear it. Once every retained word has been written since reset, the declared validity update latches; X-S10 3.11 repeats it without rewriting the words without a clock reload or persistence effect. Independent control operations and alarm enables refuse."
+          "basis": "Four-byte checksum transport; synthetic status inputs and unset RTC. Registers 2 and 14 read 0x0000 and 0x0011, physical service-mode samples stable over five seconds (register 14 with the headphone field clear). Register 2 refuses writes; register 14 stores the firmware's writes (0x11, 0x51, 0xd1 in the 3.11 boot), as in the X-E4 run. Registers 3 and 4 read 520 and 640, the X-E4 run's declared values. Register 25 (USB power status) reads 0x0010, the declared value of the X-E4 and X100V runs; registers 37 and 38 read zero, as the X-E4 run declares; the physical X-S10 values are unmeasured. Stored words initially read zero. Clock loads preserve retained validity. Control reads retain the load strobe through the declared set window, refuse the unresolved interval, then clear it. Once every retained word has been written since reset, the declared validity update latches; X-S10 3.11 repeats it without rewriting the words without a clock reload or persistence effect. Independent control operations and alarm enables refuse."
         }
       },
       "2": {
