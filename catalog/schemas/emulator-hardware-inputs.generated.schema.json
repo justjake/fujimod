@@ -2381,6 +2381,10 @@
           "minimum": 0,
           "type": "integer"
         },
+        "idempotent_retained_commit": {
+          "description": "Allow a repeated retained commit when no retained words were rewritten.",
+          "type": "boolean"
+        },
         "initial_control": {
           "description": "Declared initial control.",
           "format": "uint64",
@@ -2422,6 +2426,10 @@
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
+        },
+        "stage_readback": {
+          "description": "Allow reading the staged seconds halves.",
+          "type": "boolean"
         },
         "strobe": {
           "$ref": "#/$defs/ResetStrobe",

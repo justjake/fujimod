@@ -907,6 +907,12 @@ pub struct Rtc {
     pub ticks_per_second: u64,
     /// Declared valid mask.
     pub valid_mask: u64,
+    /// Allow reading the staged seconds halves.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub stage_readback: bool,
+    /// Allow a repeated retained commit when no retained words were rewritten.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub idempotent_retained_commit: bool,
 }
 
 /// Declared power checksum registers facts.
@@ -1499,3 +1505,27 @@ pub type PanelContract = (Vec<u64>, Vec<u64>, Vec<Option<u64>>, u64);
 
 /// Serial endpoint index, configuration, selection, read support and register inputs.
 pub type SerialEndpointInputs = (u64, u64, Vec<u64>, bool, Vec<Vec<u64>>);
+
+#[cfg(test)]
+mod rtc_tests {
+    use super::Rtc;
+    use serde_json::json;
+
+    #[test]
+    fn rtc_options_default_off_and_round_trip_when_enabled() {
+        let base = json!({"control":100, "read_low":101, "read_high":102,
+            "stage_low":103, "stage_high":104, "commit_value":514,
+            "valid_mask":2, "retained_valid_mask":1,
+            "strobe":{"mask":512, "set_through_ticks":2, "clear_from_ticks":5},
+            "initial_control":0, "initial_seconds":0, "ticks_per_second":10});
+        let rtc: Rtc = serde_json::from_value(base.clone()).unwrap();
+        assert!(!rtc.stage_readback && !rtc.idempotent_retained_commit);
+        assert_eq!(serde_json::to_value(&rtc).unwrap(), base);
+        let mut enabled = base;
+        enabled["stage_readback"] = true.into();
+        enabled["idempotent_retained_commit"] = true.into();
+        let rtc: Rtc = serde_json::from_value(enabled.clone()).unwrap();
+        assert!(rtc.stage_readback && rtc.idempotent_retained_commit);
+        assert_eq!(serde_json::to_value(rtc).unwrap(), enabled);
+    }
+}

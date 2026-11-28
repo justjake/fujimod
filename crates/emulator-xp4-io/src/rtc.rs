@@ -62,6 +62,12 @@ pub struct StagedConfig {
     pub initial_control: u16,
     pub initial_seconds: u32,
     pub ticks_per_second: u64,
+    /// Allow reads of the staged halves independently of the running counter.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub stage_readback: bool,
+    /// Allow a repeated retained commit when no retained words were rewritten.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub idempotent_retained_commit: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -154,6 +160,10 @@ impl StagedClock {
             Ok(self.counter.counter(tick)? as u16)
         } else if register == c.read_high {
             Ok((self.counter.counter(tick)? >> 16) as u16)
+        } else if c.stage_readback && register == c.stage_low {
+            Ok(self.staged as u16)
+        } else if c.stage_readback && register == c.stage_high {
+            Ok((self.staged >> 16) as u16)
         } else {
             Err("Staged RTC staging-register readback is not modeled".into())
         }
@@ -186,6 +196,9 @@ impl StagedClock {
     }
     pub fn retained_control_value(&self) -> u16 {
         self.config.valid_mask | self.config.retained_valid_mask
+    }
+    pub fn retained_committed(&self) -> bool {
+        self.committed && self.control_written == self.retained_control_value()
     }
     pub fn commit_retained(&mut self, value: u16, tick: u64) -> Result<(), String> {
         let elapsed = tick
@@ -243,12 +256,16 @@ mod tests {
             initial_control: 0,
             initial_seconds: 0,
             ticks_per_second: 10,
+            stage_readback: false,
+            idempotent_retained_commit: false,
         }
     }
     #[test]
     fn staged_load_uses_the_shared_counter_and_refuses_unknown_control_semantics() {
         let mut clock = StagedClock::new(config()).unwrap();
         assert_eq!(clock.read(100, 0).unwrap(), 0);
+        assert!(clock.read(103, 0).is_err());
+        assert!(clock.read(104, 0).is_err());
         clock.write(103, 0x5678, 3).unwrap();
         assert!(clock.write(100, 0x202, 4).is_err());
         assert_eq!(clock.counter.counter(5).unwrap(), 0);
@@ -291,6 +308,27 @@ mod tests {
         let before = serde_json::to_value(&resumed).unwrap();
         assert_eq!(resumed.counter.counter(29).unwrap(), 0x12349878);
         assert_eq!(serde_json::to_value(&resumed).unwrap(), before);
+        let mut other = config();
+        other.stage_readback = true;
+        assert!(
+            resumed
+                .validate_restore(&StagedClock::new(other).unwrap())
+                .is_err()
+        );
+        let mut other = config();
+        other.idempotent_retained_commit = true;
+        assert!(
+            resumed
+                .validate_restore(&StagedClock::new(other).unwrap())
+                .is_err()
+        );
+        let serialized = serde_json::to_value(config()).unwrap();
+        assert!(serialized.get("stage_readback").is_none());
+        assert!(serialized.get("idempotent_retained_commit").is_none());
+        assert_eq!(
+            serde_json::from_value::<StagedConfig>(serialized).unwrap(),
+            config()
+        );
         let mut other = config();
         other.ticks_per_second = 11;
         assert!(
