@@ -1459,12 +1459,17 @@ fn xp4_packet_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> 
     if image_origin != 0x274 {
         return Err("XP4 packet flash update origin differs from its registered DAT bias".into());
     }
+    // The stock reader has copied this flash on an X-E4 2.01 camera through
+    // the diagnostic query callback, so only that firmware publishes the
+    // stock-query transport. The reader takes 128-byte aligned requests.
+    let stock_query = firmware == "xe4-201";
     Ok(json!({
         "device":{"kind":"serial-nor"},
         "window":{"address":0xf0000000u64,"size":0x4000000u64},
         "e1_window":{"address":0xf0000000u64,"size":0x4000000u64},
         "update_image":{"dat_offset":image_origin,"xor":255},
-        "transport":null,
+        "reader":stock_query.then(|| json!({"symbol":"stock flash reader","alignment":128})),
+        "transport":stock_query.then_some("xp4-stock-query"),
         "code_ranges":[
             high_level.span("flash command routine"),
             reader.span("stock flash reader"),
