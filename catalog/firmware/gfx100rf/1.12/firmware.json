@@ -4,6 +4,9 @@
   "id": "gfx100rf-112",
   "body_id": "gfx100rf",
   "version": "1.12",
+  "start": {
+    "kind": "loader"
+  },
   "update": {
     "size": 106613548,
     "sha256": "8d4d9a14fc53eebacac79246adabd7e8f70c5bf3c2c24a754608c56ec08ab1d3"

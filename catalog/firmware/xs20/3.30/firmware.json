@@ -4,6 +4,9 @@
   "id": "xs20-330",
   "body_id": "xs20",
   "version": "3.30",
+  "start": {
+    "kind": "loader"
+  },
   "update": {
     "size": 109365264,
     "sha256": "ca1c02452f8eb7763a5a4d2b042665dd10156d63dfa63b8da316e0385889ea8b"

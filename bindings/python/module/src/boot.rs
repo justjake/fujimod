@@ -61,12 +61,9 @@ impl Boot for CatalogBoot {
             if inputs.second_card_image.is_some() || !inputs.second_card_files.is_empty() {
                 return Err("a card in SD slot 2 requires an XP5 run configuration".into());
             }
-            let plan = inputs
-                .application_plan
-                .ok_or("application startup needs an application plan")?;
             let startup = boot::application::Startup {
                 update: inputs.update.into(),
-                plan,
+                plan: inputs.application_plan,
                 discovery: inputs.discovery,
                 quantum: inputs.quantum,
                 card_image: inputs.card_image,

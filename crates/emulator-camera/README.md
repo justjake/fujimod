@@ -58,35 +58,40 @@ for the run's limits and outputs.
 ## How a camera resolves
 
 `plan` resolves a description, as the builder's `Request`, without reading a
-firmware byte: the body and
-firmware choice select a firmware, the firmware's run configuration is
-resolved, and the configuration's processor decides the startup path (EXR II,
-XP5, or the XP4 and X-Processor Pro application start) and whether the start
-reads the boot ROM. Each refusal names its gap, for example
-`body x100t has no device list yet`. The catalog test `catalog_plans` plans
-every bundled firmware and lists the gap of each one that does not open yet,
-so a body falling off the shared path fails there.
+firmware byte: the body and firmware choice select a firmware; the body's
+record is the hardware (`hardware.board`, its resting inputs and bus facts)
+and the firmware's record says how it starts (`start`) and, for a body of
+unknown DRAM, the address space its memory plan reaches. A firmware's run
+configuration, `configurations/emulator/<firmware-id>/run.json` when it has
+one, adds only session defaults: execution policy, scene, power-on settings and
+the host factory's device policies; a firmware without one resolves from its
+records and its processor's choices. The body's processor decides the startup
+path (EXR II, XP5, or the XP4 and X-Processor Pro application start) and
+whether the start reads the boot ROM. Each refusal names its gap. The catalog
+test `catalog_plans` plans every bundled firmware and lists the gap of each
+one that does not open yet, so a body falling off the shared path fails there.
 
 `open` then reads the firmware's files, builds the board, puts the cards in
-their slots and runs the camera to REC. A firmware that declares no REC
-readiness facts is built and returned before its first instruction, saying
-so; the caller runs it.
+their slots and runs the camera to REC: EXR II from the firmware's observation
+facts, X-Processor 5 from its generated REC readiness record
+(`rec-readiness.generated.json`: the UI, pending, system and menu words, their
+REC values, the stock code that must stay intact and the settle time). An XP4
+or X-Processor Pro application starts from its generated application startup
+record (`application-startup.generated.json`: the placed images by offset and
+encoding in the update, entry registers and labels, the boot-information block
+and the NOR contents) unless the description names an `application_plan`. A
+firmware that declares no REC readiness facts is built and returned before its
+first instruction, saying so; the caller runs it.
 
-## The canonical run configuration, for now
+## What a run configuration still holds
 
-Until the run configurations are sorted into body, firmware and session
-facts, each firmware has exactly one canonical run configuration,
-`configurations/emulator/<firmware-id>/run.json`, and the builder uses only
-that one. Other run configurations and overlays of a firmware remain for the
-tests and tools that still use them.
+A run configuration holds no hardware and no start entry. What it still holds,
+and why:
 
-Later steps move what a run configuration still holds to its layer:
-
-- hardware (device options, hardware-input profiles, body profiles) into the
-  body's one description;
-- startup facts (start kind, startup registers, application startup plans)
-  into the firmware record;
-- session choices (card, settings, scene, date, engine) into camera
-  defaults.
-
-When a run configuration holds nothing that a layer does not, it goes away.
+- the execution policy (engine, quantum, instruction rate) and the scene: the
+  session defaults of the firmware's open;
+- power-on settings: the camera description's default settings;
+- the host factory's device policies (`preset.factory_options`) and the virtual
+  card format: they choose device models and fixtures for the host factory's
+  runs, per test and per purpose, through overlays;
+- overlays: the alternative starts, executions and inputs of tests and tools.

@@ -69,6 +69,31 @@ fn main() {
     configuration_source.push_str("];\n");
     overlay_source.push_str("];\n");
     processor_source.push_str("];\n");
+    let assets = configurations.join("assets");
+    println!("cargo:rerun-if-changed={}", assets.display());
+    let mut asset_files = fs::read_dir(&assets)
+        .map(|entries| {
+            entries
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|path| path.extension().is_some_and(|extension| extension == "bin"))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    asset_files.sort();
+    processor_source.push_str("const BUNDLED_ASSETS: &[(&str, &[u8])] = &[\n");
+    for path in asset_files {
+        let Some(id) = path.file_stem().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        processor_source.push_str(&format!(
+            "    ({id:?}, include_bytes!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../configurations/emulator/assets/{name}\"))),\n"
+        ));
+    }
+    processor_source.push_str("];\n");
     let output = PathBuf::from(env::var_os("OUT_DIR").expect("output directory"))
         .join("bundled_configurations.rs");
     fs::write(

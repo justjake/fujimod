@@ -754,6 +754,14 @@
       ],
       "type": "object"
     },
+    "ApplicationKind": {
+      "description": "The processor whose board the start builds.",
+      "enum": [
+        "xp4",
+        "xpp"
+      ],
+      "type": "string"
+    },
     "ApplicationLadderInput": {
       "additionalProperties": false,
       "description": "The value one body ladder reads while none of its controls is held.\n\nA run input, not a body fact: it is supplied only where the body record\nhas no established released value, and its basis says why the value holds\nno control. An ADC ladder's value is the ADC block input's sample.",
@@ -1005,6 +1013,105 @@
           "type": "object"
         }
       ]
+    },
+    "ApplicationStartup": {
+      "additionalProperties": false,
+      "description": "The application start of one firmware.",
+      "properties": {
+        "$schema": {
+          "type": "string"
+        },
+        "assets": {
+          "description": "Statistics buffers the processor reads, by run asset name (X-Processor Pro).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "cores": {
+          "description": "Cores that enter the kernel.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "firmware_id": {
+          "type": "string"
+        },
+        "firmware_sha256": {
+          "description": "SHA-256 of the update the start was located in.",
+          "type": "string"
+        },
+        "flash": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FlashContents"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The NOR contents, for a body whose processor reads them."
+        },
+        "id": {
+          "type": "string"
+        },
+        "images": {
+          "items": {
+            "$ref": "#/$defs/PlacedImage"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "$ref": "#/$defs/ApplicationKind"
+        },
+        "labels": {
+          "description": "Entry addresses the image declares (X-Processor 4).",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "loader_handoff": {
+          "$ref": "#/$defs/LoaderHandoff"
+        },
+        "registers": {
+          "description": "Each core's entry registers, as `[register, value]`.",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              true,
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "schema": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "$schema",
+        "schema",
+        "id",
+        "firmware_id",
+        "firmware_sha256",
+        "kind",
+        "cores",
+        "registers",
+        "images",
+        "loader_handoff"
+      ],
+      "type": "object"
     },
     "ApplicationStatisticsInput": {
       "additionalProperties": false,
@@ -14924,6 +15031,31 @@
       ],
       "type": "object"
     },
+    "FlashContents": {
+      "additionalProperties": false,
+      "description": "Where the NOR contents start in the bit-inverted update.",
+      "properties": {
+        "dat_offset": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "size": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "dat_offset",
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
     "FlashControl": {
       "additionalProperties": false,
       "description": "Update-backed initial read.",
@@ -15404,6 +15536,27 @@
           "type": "object"
         }
       ]
+    },
+    "HandoffWord": {
+      "additionalProperties": false,
+      "description": "One word of the loader's boot-information block.",
+      "properties": {
+        "offset": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offset",
+        "value"
+      ],
+      "type": "object"
     },
     "HardwareAfExtraction": {
       "additionalProperties": false,
@@ -18299,6 +18452,21 @@
       ],
       "type": "object"
     },
+    "ImageEncoding": {
+      "description": "How an image's bytes are stored in the bit-inverted update.",
+      "oneOf": [
+        {
+          "const": "raw",
+          "description": "The placed bytes themselves.",
+          "type": "string"
+        },
+        {
+          "const": "method4",
+          "description": "A method-4 LZ stream with its inner header; the placed bytes are the\nfirst `size` decoded bytes.",
+          "type": "string"
+        }
+      ]
+    },
     "InputBinding": {
       "description": "A debug key, native input name, or exact located scanner-row identity.",
       "oneOf": [
@@ -18957,6 +19125,47 @@
           "type": "string"
         }
       ]
+    },
+    "LoaderHandoff": {
+      "additionalProperties": false,
+      "description": "The boot-information block the loader leaves for the kernel.",
+      "properties": {
+        "address": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fill": {
+          "description": "The byte every other position holds.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "description": "SHA-256 of the block.",
+          "type": "string"
+        },
+        "size": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "words": {
+          "items": {
+            "$ref": "#/$defs/HandoffWord"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "address",
+        "size",
+        "fill",
+        "words",
+        "sha256"
+      ],
+      "type": "object"
     },
     "LocatedInput": {
       "additionalProperties": false,
@@ -23016,6 +23225,45 @@
         "bgra8888"
       ],
       "type": "string"
+    },
+    "PlacedImage": {
+      "additionalProperties": false,
+      "description": "One image the stock loader places.",
+      "properties": {
+        "address": {
+          "description": "Physical address of the first placed byte.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "dat_offset": {
+          "description": "Offset of the image in the bit-inverted update.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "encoding": {
+          "$ref": "#/$defs/ImageEncoding"
+        },
+        "sha256": {
+          "description": "SHA-256 of the placed bytes.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Bytes placed.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "size",
+        "sha256",
+        "dat_offset",
+        "encoding"
+      ],
+      "type": "object"
     },
     "PowerControlAssembly": {
       "additionalProperties": false,
@@ -27768,6 +28016,17 @@
       "additionalProperties": false,
       "description": "All resolved reference records for one body and firmware selection.",
       "properties": {
+        "application_startup": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ApplicationStartup"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "How an X-Processor 4 or X-Processor Pro application starts."
+        },
         "body": {
           "$ref": "#/$defs/Body",
           "description": "Resolved body record."

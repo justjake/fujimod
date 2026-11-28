@@ -1,0 +1,125 @@
+{
+  "$schema": "https://fujimod.com/schemas/application-startup.generated.schema.json",
+  "schema": 1,
+  "id": "xt3-511-application-startup",
+  "firmware_id": "xt3-511",
+  "firmware_sha256": "9f2c75fd8a16a1d71b9218f6dbd3144b1f11820bcecd3a9608c8cda9f25f95a3",
+  "kind": "xp4",
+  "cores": 4,
+  "registers": [
+    [
+      "Pc",
+      358568
+    ],
+    [
+      "Pstate",
+      211
+    ],
+    [
+      {
+        "Arm32": {
+          "R": 0
+        }
+      },
+      18117872
+    ],
+    [
+      {
+        "Arm32": {
+          "R": 1
+        }
+      },
+      9437184
+    ]
+  ],
+  "images": [
+    {
+      "address": 262144,
+      "size": 111232,
+      "sha256": "7357d741111e8367643795a5cf34666812fe09f91d3265e093dbff29bac5e71f",
+      "dat_offset": 393844,
+      "encoding": "raw"
+    },
+    {
+      "address": 15863808,
+      "size": 6191112,
+      "sha256": "7cd5f9f8cce57fc3d9100bf303ac01ae74735e5daa7392138ef73759a343d673",
+      "dat_offset": 2490996,
+      "encoding": "method4"
+    },
+    {
+      "address": 28631040,
+      "size": 8224768,
+      "sha256": "caa261813993aa407a9a7de5c6ebaa3f187c3926834fcb63a2b309681a50740a",
+      "dat_offset": 5505652,
+      "encoding": "method4"
+    },
+    {
+      "address": 13762560,
+      "size": 1024,
+      "sha256": "1e1b417d2ae61e74b860e2ce899041d61e45aca2528b45532cd802b808145bec",
+      "dat_offset": 1311348,
+      "encoding": "raw"
+    },
+    {
+      "address": 13763584,
+      "size": 175296,
+      "sha256": "4c92151d95163748e3bf1d21dd4e2c4b3cb66315d8ba6d5fda19ca5b2e8e2a23",
+      "dat_offset": 1442420,
+      "encoding": "raw"
+    },
+    {
+      "address": 14812160,
+      "size": 175296,
+      "sha256": "e70a3991014bc2e2a970f910a5d49dd43f1c5669636d93eadd82ec2a91745304",
+      "dat_offset": 1966708,
+      "encoding": "raw"
+    },
+    {
+      "address": 1966080,
+      "size": 5759544,
+      "sha256": "a7db8fd4ccbba79a7b47efd86accd5ed8bf42a220e23632c4216ee6e1c3ef0a7",
+      "dat_offset": 25166452,
+      "encoding": "raw"
+    },
+    {
+      "address": 8257536,
+      "size": 671421,
+      "sha256": "748de5756e3114a56ce6baeb86fd321e3ff2a036dd882a654d53c96534f8f844",
+      "dat_offset": 31195764,
+      "encoding": "raw"
+    },
+    {
+      "address": 54202368,
+      "size": 9494528,
+      "sha256": "72178b9fff8a9931cc352d6400a578dad9483dedff317eb31b96b50f5cf9208a",
+      "dat_offset": 10224244,
+      "encoding": "raw"
+    }
+  ],
+  "loader_handoff": {
+    "address": 9437184,
+    "size": 1484,
+    "fill": 0,
+    "words": [
+      {
+        "offset": 320,
+        "value": 4
+      }
+    ],
+    "sha256": "6decfedde737d86483c6f882a9309cf1b3d3ec6892d0684b60437959593a9c02"
+  },
+  "flash": {
+    "dat_offset": 628,
+    "size": 50135624,
+    "sha256": "52917cc3150065b98cfc9262bd9133d1be5102da05582fa3bac5e5c8d2ea50f4"
+  },
+  "labels": [
+    262344,
+    270188,
+    278956,
+    358568,
+    18117872,
+    18119244
+  ]
+}

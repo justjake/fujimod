@@ -153,6 +153,12 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         ),
     );
     documents.insert(
+        "application-startup.generated.schema.json",
+        schema::<fujimod_catalog::application_startup::ApplicationStartup>(
+            fujimod_catalog::application_startup::APPLICATION_STARTUP_SCHEMA_URI,
+        ),
+    );
+    documents.insert(
         "rec-readiness.generated.schema.json",
         schema::<fujimod_catalog::rec_readiness::RecReadiness>(
             fujimod_catalog::rec_readiness::REC_READINESS_SCHEMA_URI,

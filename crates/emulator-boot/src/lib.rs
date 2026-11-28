@@ -1091,9 +1091,7 @@ pub fn open_request(
             }
             StartupInputs::Application(application::Startup {
                 update: request.update,
-                plan: request
-                    .application_plan
-                    .ok_or("this camera needs its application startup plan")?,
+                plan: request.application_plan,
                 discovery: request.discovery,
                 quantum: None,
                 card_image: card.image,

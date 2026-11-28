@@ -20,6 +20,14 @@ pub const RUN_OVERLAY_SCHEMA_URI: &str =
 
 include!(concat!(env!("OUT_DIR"), "/bundled_configurations.rs"));
 
+/// A run asset's bytes by name (`configurations/emulator/assets/<name>.bin`):
+/// the statistics windows and lens registrations a scene presents.
+pub fn bundled_asset(name: &str) -> Option<&'static [u8]> {
+    BUNDLED_ASSETS
+        .iter()
+        .find_map(|(candidate, bytes)| (*candidate == name).then_some(*bytes))
+}
+
 /// A validated, named run configuration for one resolved body and firmware.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

@@ -3436,6 +3436,9 @@ pub struct ResolvedSelection {
     /// Where the firmware keeps the state that says the camera is at REC.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rec_readiness: Option<crate::rec_readiness::RecReadiness>,
+    /// How an X-Processor 4 or X-Processor Pro application starts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub application_startup: Option<crate::application_startup::ApplicationStartup>,
     /// Exact stock setting names and their firmware-specific IDs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ui_setting_names: Option<crate::ui_setting_names::UiSettingNames>,
@@ -3481,6 +3484,7 @@ pub struct ReferenceCatalog {
     first_start: BTreeMap<String, crate::first_start::FirstStartMenu>,
     ui_scene_names: BTreeMap<String, crate::ui_scene_names::UiSceneNames>,
     rec_readiness: BTreeMap<String, crate::rec_readiness::RecReadiness>,
+    application_startup: BTreeMap<String, crate::application_startup::ApplicationStartup>,
     ui_setting_names: BTreeMap<String, crate::ui_setting_names::UiSettingNames>,
     ui_event_codes: BTreeMap<String, crate::ui_event_codes::UiEventCodes>,
     osd_items: BTreeMap<String, crate::osd_items::OsdItems>,
@@ -3658,6 +3662,7 @@ impl ReferenceCatalog {
             first_start: self.first_start.get(&firmware.id).cloned(),
             ui_scene_names: self.ui_scene_names.get(&firmware.id).cloned(),
             rec_readiness: self.rec_readiness.get(&firmware.id).cloned(),
+            application_startup: self.application_startup.get(&firmware.id).cloned(),
             ui_setting_names: self.ui_setting_names.get(&firmware.id).cloned(),
             ui_event_codes: self.ui_event_codes.get(&firmware.id).cloned(),
             bulk: self.bulk.get(&firmware.id).cloned(),
@@ -3859,6 +3864,16 @@ impl ReferenceCatalog {
                 value.validate()?;
                 insert_unique(
                     &mut self.ui_event_codes,
+                    value.firmware_id.clone(),
+                    value,
+                    path,
+                )
+            }
+            ReferenceKind::ApplicationStartup => {
+                let value: crate::application_startup::ApplicationStartup = decode(bytes, path)?;
+                value.validate()?;
+                insert_unique(
+                    &mut self.application_startup,
                     value.firmware_id.clone(),
                     value,
                     path,
@@ -4067,6 +4082,18 @@ impl ReferenceCatalog {
             if update != Some(scenes.firmware_sha256.as_str()) {
                 return Err(format!(
                     "scene names differ from update identity {firmware_id}"
+                ));
+            }
+        }
+        for (firmware_id, startup) in &self.application_startup {
+            let update = self
+                .firmwares
+                .get(firmware_id)
+                .and_then(|firmware| firmware.update.as_ref())
+                .map(|update| update.sha256.as_str());
+            if update != Some(startup.firmware_sha256.as_str()) {
+                return Err(format!(
+                    "application startup differs from update identity {firmware_id}"
                 ));
             }
         }
@@ -5089,6 +5116,7 @@ enum ReferenceKind {
     FirstStart,
     UiSceneNames,
     RecReadiness,
+    ApplicationStartup,
     UiSettingNames,
     UiEventCodes,
     OsdItems,
@@ -5133,6 +5161,7 @@ impl ReferenceKind {
             Some("first-start.generated.json") => Ok(Self::FirstStart),
             Some("ui-scene-names.generated.json") => Ok(Self::UiSceneNames),
             Some("rec-readiness.generated.json") => Ok(Self::RecReadiness),
+            Some("application-startup.generated.json") => Ok(Self::ApplicationStartup),
             Some("ui-setting-names.generated.json") => Ok(Self::UiSettingNames),
             Some("ui-event-codes.generated.json") => Ok(Self::UiEventCodes),
             Some("osd-items.generated.json") => Ok(Self::OsdItems),

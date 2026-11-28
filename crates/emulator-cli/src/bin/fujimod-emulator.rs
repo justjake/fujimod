@@ -24,8 +24,9 @@ CAMERA is the camera description the MCP server's camera_open and Python's Board
 xh2s), firmware (a version such as 7.30, a firmware id, or none; the body's newest when omitted),\n\
 settings ({\"language\": \"en\", \"setup\": \"done\"}), sd_card, sd_card_2, cfexpress_card ({present,\n\
 write_protected, files | directory | image}), date, scene, engine, execution_policy, firmware_files\n\
-({update, boot_rom}), application_plan, face_result_profile and overlays. The body and firmware\n\
-select the firmware's run configuration; its processor decides the startup path. The firmware's\n\
+({update, boot_rom}), application_plan, face_result_profile and overlays. The body record is the\n\
+hardware and the firmware record says how it starts; the firmware's run configuration, when it has\n\
+one, adds session defaults, and the body's processor decides the startup path. The firmware's\n\
 files come from its source record under FUJIMOD_FIRMWARE_LIBRARY (or the current directory) unless\n\
 firmware_files names them.\n\
 ACTIONS is a list of timed inputs (catalog/schemas/emulator-actions.generated.schema.json), each\n\
@@ -42,7 +43,7 @@ Run flags: --seconds N (guest time), --wall-seconds N (host time), --instruction
 --manifest FILE, --watch-pcs ADDR[,ADDR...], --watch-writes ADDR:LEN[,...], --dump ADDR:LEN[;...],\n\
 --hash ADDR:LEN[;...].\n\
 --gui opens the desktop window connected to the session.\n\
-boot prints a JSON report; it exits 0 at REC (EXR II) or at the end of the run, 2 at a stopped\n\
+boot prints a JSON report; it exits 0 at REC (EXR II, XP5) or at the end of the run, 2 at a stopped\n\
 frontier.\n\n\
 open adds FujiMod to the camera: its boot is stock, sd-card (FujiMod from sd_card, or the\n\
 current release card downloaded into FUJIMOD_STATE_DIR when it names no files) or autostart (the\n\
@@ -960,10 +961,7 @@ fn run_application(options: Boot) -> Result<Outcome, String> {
     }
     let request = boot::application::Startup {
         update: options.files.update.clone(),
-        plan: options
-            .application_plan
-            .clone()
-            .ok_or("this camera needs application_plan")?,
+        plan: options.application_plan.clone(),
         card_image: card.image,
         card_files: card.files,
         camera_settings: options.settings.clone(),

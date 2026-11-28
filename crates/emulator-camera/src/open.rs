@@ -556,7 +556,10 @@ pub fn plan(library: &Library, request: &Request) -> Result<Plan, OpenError> {
     let refuse = |detail: String| OpenError::at(Stage::BootRom, detail);
     let path = boot::startup_path(&resolved).map_err(refuse)?;
     let processor = processor_name(&resolved.reference.soc.id);
-    if path == StartupPath::Application && request.application_plan.is_none() {
+    if path == StartupPath::Application
+        && request.application_plan.is_none()
+        && resolved.reference.application_startup.is_none()
+    {
         return Err(refuse(format!(
             "firmware {firmware} starts from an application startup plan, which the catalog \
              does not hold yet; name one in application_plan"

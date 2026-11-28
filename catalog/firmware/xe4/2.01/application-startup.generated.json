@@ -1,0 +1,229 @@
+{
+  "$schema": "https://fujimod.com/schemas/application-startup.generated.schema.json",
+  "schema": 1,
+  "id": "xe4-201-application-startup",
+  "firmware_id": "xe4-201",
+  "firmware_sha256": "ce80e4a88f0fffff998d3144ef51411d8285d16c06e4791c89cd36823769f8c2",
+  "kind": "xp4",
+  "cores": 4,
+  "registers": [
+    [
+      "Pc",
+      358592
+    ],
+    [
+      "Pstate",
+      211
+    ],
+    [
+      {
+        "Arm32": {
+          "R": 0
+        }
+      },
+      19512160
+    ],
+    [
+      {
+        "Arm32": {
+          "R": 1
+        }
+      },
+      65644
+    ]
+  ],
+  "images": [
+    {
+      "address": 262144,
+      "size": 111328,
+      "sha256": "73377e4a729e4de0329cc41db81417b2c5c8ac0faba7b3e158cb8437390487a4",
+      "dat_offset": 393844,
+      "encoding": "raw"
+    },
+    {
+      "address": 16912384,
+      "size": 6930896,
+      "sha256": "54fe07ac2df616b58606261cf521d1ec8ff9ac810f6b07e639a981cb107b5bcd",
+      "dat_offset": 2490996,
+      "encoding": "method4"
+    },
+    {
+      "address": 30953472,
+      "size": 9187328,
+      "sha256": "8092a07c96c29a8d04b31fedd1da08d2f08cc2d97201e013f2c3b48986a065ef",
+      "dat_offset": 5898868,
+      "encoding": "method4"
+    },
+    {
+      "address": 61153280,
+      "size": 9756672,
+      "sha256": "c7c2d9f69496a7ddd48a4b40500885875fdfebb8b29482c96cdf2ab96269a29e",
+      "dat_offset": 11141748,
+      "encoding": "method4"
+    },
+    {
+      "address": 1966080,
+      "size": 6404880,
+      "sha256": "1f8681ead9a37a178b8dfbf03676d83ae7a4f003caa697d6718632d8bd016576",
+      "dat_offset": 27263604,
+      "encoding": "method4"
+    },
+    {
+      "address": 9306112,
+      "size": 671421,
+      "sha256": "748de5756e3114a56ce6baeb86fd321e3ff2a036dd882a654d53c96534f8f844",
+      "dat_offset": 31064692,
+      "encoding": "raw"
+    },
+    {
+      "address": 14812160,
+      "size": 147680,
+      "sha256": "f124568609578906c681c5e4c6090c21530c4035f9d1e0d45d5b9e142c1759a4",
+      "dat_offset": 1442420,
+      "encoding": "raw"
+    },
+    {
+      "address": 15860736,
+      "size": 147680,
+      "sha256": "5c28f677e93c3e7a1a980a3ab4537be69af08594224c44991491814dd9c59cf4",
+      "dat_offset": 1966708,
+      "encoding": "raw"
+    },
+    {
+      "address": 14811136,
+      "size": 1024,
+      "sha256": "a97a5ff5247e4b52667d2b45ddfa22a5aacaf4ef966dd75625da45c309ae3ad2",
+      "dat_offset": 1311348,
+      "encoding": "raw"
+    }
+  ],
+  "loader_handoff": {
+    "address": 65644,
+    "size": 1488,
+    "fill": 0,
+    "words": [
+      {
+        "offset": 0,
+        "value": 8
+      },
+      {
+        "offset": 40,
+        "value": 20
+      },
+      {
+        "offset": 44,
+        "value": 6
+      },
+      {
+        "offset": 60,
+        "value": 3
+      },
+      {
+        "offset": 64,
+        "value": 16777216
+      },
+      {
+        "offset": 68,
+        "value": 76
+      },
+      {
+        "offset": 72,
+        "value": 285212672
+      },
+      {
+        "offset": 76,
+        "value": 300599
+      },
+      {
+        "offset": 80,
+        "value": 16777728
+      },
+      {
+        "offset": 84,
+        "value": 301326
+      },
+      {
+        "offset": 88,
+        "value": 285213184
+      },
+      {
+        "offset": 92,
+        "value": 809266
+      },
+      {
+        "offset": 96,
+        "value": 1398031684
+      },
+      {
+        "offset": 192,
+        "value": 16777984
+      },
+      {
+        "offset": 196,
+        "value": 3910
+      },
+      {
+        "offset": 200,
+        "value": 16778240
+      },
+      {
+        "offset": 204,
+        "value": 351226
+      },
+      {
+        "offset": 208,
+        "value": 285213696
+      },
+      {
+        "offset": 212,
+        "value": 354498
+      },
+      {
+        "offset": 216,
+        "value": 285213440
+      },
+      {
+        "offset": 220,
+        "value": 354886
+      },
+      {
+        "offset": 224,
+        "value": 1398031684
+      },
+      {
+        "offset": 320,
+        "value": 4
+      },
+      {
+        "offset": 452,
+        "value": 98304
+      },
+      {
+        "offset": 1468,
+        "value": 1
+      },
+      {
+        "offset": 1472,
+        "value": 62
+      },
+      {
+        "offset": 1480,
+        "value": 261
+      },
+      {
+        "offset": 1484,
+        "value": 32
+      }
+    ],
+    "sha256": "831f2937788608a600d44967476cc7226204209cdcdc597e01fd6ed8c50dd169"
+  },
+  "flash": {
+    "dat_offset": 628,
+    "size": 50135700,
+    "sha256": "9b39ba157d2e23af3acd7bdc607245bd3b2fae6241c906de7713b3527d3cc0fd"
+  },
+  "labels": [
+    358592,
+    19512160
+  ]
+}
