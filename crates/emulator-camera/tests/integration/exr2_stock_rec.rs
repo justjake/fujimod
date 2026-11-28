@@ -6,33 +6,24 @@ use crate::support;
 use support::{library, state};
 
 use fujimod_emulator_camera::{
-    BootCache, CardInputs, ExecutionPolicy, FirmwareInput, Flash, Request, Stage, Start, open,
-    open_unbooted,
+    ExecutionPolicy, FirmwareChoice, Request, Stage, open, open_unbooted,
 };
 
 /// The three EXR II bodies whose runtime profiles declare X70's hardware.
-const BODIES: [&str; 3] = ["xe2-411", "xe2s-111", "xt10-131"];
+const BODIES: [(&str, &str); 3] = [
+    ("xe2", "xe2-411"),
+    ("xe2s", "xe2s-111"),
+    ("xt10", "xt10-131"),
+];
 /// The catalog declares REC as this UI mode for each body.
 const REC_MODE: u32 = 3;
 /// Enough stock instructions to reach the record UI and settle there.
 const INSTRUCTIONS: u64 = 400_000_000;
 
-fn request(firmware: &str) -> Request {
+fn request((body, firmware): (&str, &str)) -> Request {
     Request {
-        firmware: firmware.into(),
-        files: FirmwareInput::Library,
-        overlays: Vec::new(),
-        start: Start::Rom,
-        flash: Flash::Stock,
-        card: CardInputs::default(),
         policy: ExecutionPolicy::Interactive,
-        engine: None,
-        cache: BootCache::Bypass,
-        run_to_rec: true,
-        nand_image: None,
-        face_result_profile: None,
-        camera_settings: Default::default(),
-        kept: Default::default(),
+        ..Request::new(body, FirmwareChoice::Named(firmware.into()))
     }
 }
 
@@ -43,8 +34,9 @@ fn stock_opens_boot_the_declared_hardware_to_rec_mode() {
         eprintln!("skipped: set FUJIMOD_FIRMWARE_LIBRARY");
         return;
     };
-    for firmware in BODIES {
-        let mut opened = open_unbooted(&library, request(firmware))
+    for selection in BODIES {
+        let firmware = selection.1;
+        let mut opened = open_unbooted(&library, request(selection))
             .unwrap_or_else(|error| panic!("{firmware}: {error}"));
         opened
             .release_holds()
@@ -98,8 +90,9 @@ fn stock_open_through_the_camera_api_reaches_rec() {
         eprintln!("skipped: set FUJIMOD_FIRMWARE_LIBRARY");
         return;
     };
-    for firmware in BODIES {
-        let opened = open(&library, &state(), request(firmware))
+    for selection in BODIES {
+        let firmware = selection.1;
+        let opened = open(&library, &state(), request(selection))
             .unwrap_or_else(|error| panic!("{firmware}: {error}"));
         assert_eq!(opened.stage, Stage::Rec, "{firmware} stopped short of REC");
     }

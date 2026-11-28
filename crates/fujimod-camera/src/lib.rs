@@ -21,20 +21,20 @@ mod autostart;
 mod release;
 
 use fujimod_emulator_camera as emulator;
-use fujimod_emulator_camera::{
-    CardInputs, Opened as EmulatorOpened, Request as EmulatorRequest, Start,
-};
+use fujimod_emulator_camera::BootPreset;
+use fujimod_emulator_camera::{Opened as EmulatorOpened, Request as EmulatorRequest, Start};
 use fujimod_emulator_session::Session;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeMap, fs, path::PathBuf};
+use std::{fs, path::PathBuf};
 
 pub use autostart::stock_menus;
 pub use emulator::{
-    BootCache, CardLayout, ExecutionPolicy, FirmwareInput, Flash, Library, LibraryError,
-    LibraryFirmware, LoaderImage, OpenError, PowerOn as EmulatorPowerOn,
+    Action, ActionInput, Actions, BootCache, CameraDescription, Card, CardContents, CardFile,
+    CardLayout, Cards, ExecutionPolicy, ExecutionPolicyName, FirmwareChoice, FirmwareInput, Flash,
+    Library, LibraryError, LibraryFirmware, LoaderImage, OpenError, PowerOn as EmulatorPowerOn,
     Request as EmulatorRequestBase, RunEngine, RunFaceResultProfile, Stage, StateDir,
-    directory_files, read_flash,
+    directory_files, plan, read_flash,
 };
 pub use release::{RELEASES_URL, card as release_card};
 
@@ -74,50 +74,13 @@ impl Preset {
             _ => None,
         }
     }
-}
 
-/// Where an SD card's files come from.
-#[derive(Clone, Debug)]
-pub enum CardSource {
-    /// The current release's SD card, downloaded once into the state directory.
-    Release,
-    /// A folder holding an SD card tree.
-    Directory(PathBuf),
-    /// Name and bytes pairs, for callers without a host filesystem.
-    Files(Vec<(String, Vec<u8>)>),
-}
-
-impl CardSource {
-    /// A directory's files.
-    pub fn directory(directory: impl Into<PathBuf>) -> Result<Self, Error> {
-        Ok(Self::Files(directory_files(&directory.into())?))
-    }
-}
-
-/// The SD card's contacts and options, on top of a preset's files.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CardOptions {
-    /// Whether the card is inserted at power-on.
-    pub present: bool,
-    /// Whether the card's write-protect contact is asserted.
-    pub protected: bool,
-    /// Guest ticks the host charges for each SD data transfer.
-    pub transfer_ticks: Option<u64>,
-    /// FAT geometry for a stock card.
-    pub layout: Option<CardLayout>,
-    /// The modeled SD host's initialization fault, as the device model names
-    /// it.
-    pub initialization_fault: Option<serde_json::Value>,
-}
-
-impl Default for CardOptions {
-    fn default() -> Self {
-        Self {
-            present: true,
-            protected: false,
-            transfer_ticks: None,
-            layout: None,
-            initialization_fault: None,
+    /// A request document's boot.
+    pub fn from_description(boot: Option<BootPreset>) -> Self {
+        match boot {
+            None | Some(BootPreset::Stock) => Self::Stock,
+            Some(BootPreset::SdCard) => Self::SdCard,
+            Some(BootPreset::Autostart) => Self::Autostart,
         }
     }
 }
@@ -125,35 +88,29 @@ impl Default for CardOptions {
 /// One camera to open with FujiMod.
 #[derive(Clone)]
 pub struct Request {
-    /// Catalog firmware identity, for example x70-110.
-    pub firmware: String,
-    /// The firmware's update and boot ROM: the library's files, or two named
-    /// files.
-    pub files: FirmwareInput,
-    /// Further catalog overlays that resolve the camera's run, after the
-    /// library profile's own.
-    pub overlays: Vec<String>,
+    /// The emulator request: the body, its firmware, cards, settings and the
+    /// session's other choices. A `stock` preset keeps its start and flash;
+    /// the other presets choose their own.
+    pub camera: EmulatorRequest,
+    /// How the camera starts with FujiMod. The card presets boot FujiMod from
+    /// the first SD card's files, or from the current release card when it
+    /// names none.
     pub preset: Preset,
-    /// The SD card. A stock preset adds these files to an otherwise empty card;
-    /// the card presets use it as the FujiMod SD card, or the release when none
-    /// is given.
-    pub sd_card: Option<CardSource>,
-    pub policy: ExecutionPolicy,
-    /// Scheduler engine override; the run configuration's engine otherwise.
-    pub engine: Option<RunEngine>,
-    /// Whether the open may restore a saved boot and keep a new one.
-    pub cache: BootCache,
-    /// Run the camera to REC before returning.
-    pub run_to_rec: bool,
-    /// The SD card's contacts and options.
-    pub card: CardOptions,
-    /// A saved internal-flash image, restored before the first instruction.
-    pub nand_image: Option<Vec<u8>>,
-    /// External face detector results, in place of the run's passive face
-    /// bank.
-    pub face_result_profile: Option<RunFaceResultProfile>,
-    /// Named camera settings that replace the run's power-on requests.
-    pub camera_settings: BTreeMap<String, String>,
+}
+
+impl Request {
+    /// The request a camera document describes, with host paths relative to
+    /// `base`. The document's `snapshot` is the caller's to restore.
+    pub fn from_description(
+        document: &CameraDescription,
+        base: &std::path::Path,
+    ) -> Result<Self, Error> {
+        let camera = emulator::description::request(document, base).map_err(Error::Missing)?;
+        Ok(Self {
+            camera,
+            preset: Preset::from_description(document.boot),
+        })
+    }
 }
 
 /// A power-on that keeps the camera's internal flash and SD card.
@@ -281,7 +238,7 @@ pub fn open(library: &Library, state: &StateDir, request: Request) -> Result<Ope
         camera: emulator::open(library, state, emulator_request)?,
         preset: request.preset,
         release,
-        has_card_source: card_source(&request).is_some(),
+        has_card_source: !matches!(card_source(&request), CardSource::None),
     };
     opened.check(library)?;
     Ok(opened)
@@ -298,7 +255,7 @@ pub fn open_unbooted(
         camera: emulator::open_unbooted(library, emulator_request)?,
         preset: request.preset,
         release,
-        has_card_source: card_source(&request).is_some(),
+        has_card_source: !matches!(card_source(&request), CardSource::None),
     })
 }
 
@@ -309,93 +266,88 @@ fn emulator_request(
     library: &Library,
     request: &Request,
 ) -> Result<(EmulatorRequest, Option<String>), Error> {
-    let card = card_source(request);
-    let files = match card {
-        Some(source) => card_files(state, library, &request.firmware, source)?,
-        None => Vec::new(),
+    let camera = &request.camera;
+    if request.preset != Preset::Stock {
+        if !matches!(camera.start, Start::Rom) {
+            return Err(Error::Missing(format!(
+                "a power-on hold and a loader image open the stock boot; boot {} starts its own way",
+                request.preset.name()
+            )));
+        }
+        if !matches!(camera.flash, Flash::Stock) {
+            return Err(Error::Missing(format!(
+                "a flash image opens the stock boot, not boot {}",
+                request.preset.name()
+            )));
+        }
+    }
+    let firmware = emulator::plan(library, camera)?.firmware;
+    let mut first = camera.cards.first();
+    if request.preset != Preset::Stock && matches!(first.contents, CardContents::Image(_)) {
+        return Err(Error::Missing(
+            "a FujiMod card boot takes the card's files, not a card image".into(),
+        ));
+    }
+    let mut release = None;
+    let mut files = match card_source(request) {
+        CardSource::Given => first.read_files()?,
+        CardSource::Release => {
+            let directory = release::card(state, library, &firmware)?;
+            release = release_tag(state, &firmware);
+            directory_files(&directory)?
+        }
+        CardSource::None => Vec::new(),
     };
-    let release = match card {
-        Some(CardSource::Release) => release_tag(state, &request.firmware),
-        _ => None,
-    };
+    files.sort_by(|left, right| left.0.cmp(&right.0));
+    if !matches!(first.contents, CardContents::Image(_)) {
+        first.contents = Card::with_files(files.clone()).contents;
+    }
     let start = match request.preset {
-        Preset::Stock | Preset::Autostart => Start::Rom,
+        Preset::Stock => camera.start.clone(),
+        Preset::Autostart => Start::Rom,
         Preset::SdCard => Start::Held {
             combination: "sd".into(),
         },
     };
-    let flash = preset_flash(state, library, request, &files)?;
-    Ok((
-        EmulatorRequest {
-            firmware: request.firmware.clone(),
-            files: request.files.clone(),
-            overlays: request.overlays.clone(),
-            start,
-            flash,
-            card: CardInputs {
-                files,
-                present: request.card.present,
-                protected: request.card.protected,
-                transfer_ticks: request.card.transfer_ticks,
-                layout: request.card.layout.clone(),
-                initialization_fault: request.card.initialization_fault.clone(),
-            },
-            policy: request.policy,
-            engine: request.engine,
-            cache: request.cache,
-            run_to_rec: request.run_to_rec,
-            nand_image: request.nand_image.clone(),
-            face_result_profile: request.face_result_profile.clone(),
-            camera_settings: request.camera_settings.clone(),
-            kept: Default::default(),
-        },
-        release,
-    ))
-}
-
-/// The internal flash a preset starts from, as `crates/CAMERAS.md`'s table
-/// states it: every preset starts from the stock flash, which carries the
-/// catalog's reference camera settings; autostart keeps the stage 1 its
-/// installer wrote into that same flash.
-fn preset_flash(
-    state: &StateDir,
-    library: &Library,
-    request: &Request,
-    files: &[(String, Vec<u8>)],
-) -> Result<Flash, Error> {
-    match request.preset {
-        Preset::Stock | Preset::SdCard => Ok(Flash::Stock),
-        Preset::Autostart => autostart::flash(state, library, request, files),
-    }
-}
-
-/// The card source a preset uses, if any.
-fn card_source(request: &Request) -> Option<&CardSource> {
-    match request.preset {
-        Preset::Stock => request.sd_card.as_ref(),
-        Preset::SdCard | Preset::Autostart => {
-            Some(request.sd_card.as_ref().unwrap_or(&CardSource::Release))
-        }
-    }
-}
-
-/// Every file on a card source.
-pub(crate) fn card_files(
-    state: &StateDir,
-    library: &Library,
-    firmware: &str,
-    source: &CardSource,
-) -> Result<Vec<(String, Vec<u8>)>, Error> {
-    let mut files = match source {
-        CardSource::Release => {
-            let directory = release::card(state, library, firmware)?;
-            directory_files(&directory)?
-        }
-        CardSource::Directory(directory) => directory_files(directory)?,
-        CardSource::Files(files) => files.clone(),
+    let flash = match request.preset {
+        Preset::Stock => camera.flash.clone(),
+        Preset::SdCard => Flash::Stock,
+        Preset::Autostart => autostart::flash(state, library, request, &firmware, &files)?,
     };
-    files.sort_by(|left, right| left.0.cmp(&right.0));
-    Ok(files)
+    let mut built = camera.clone();
+    built.firmware = FirmwareChoice::Named(firmware);
+    built.start = start;
+    built.flash = flash;
+    built.cards.sd_card = Some(first);
+    Ok((built, release))
+}
+
+/// Where the first SD card's files come from.
+enum CardSource {
+    /// The files or image the request names.
+    Given,
+    /// The current release's SD card, downloaded once into the state directory.
+    Release,
+    /// A stock boot with no files: a blank card.
+    None,
+}
+
+/// The card source a preset uses.
+fn card_source(request: &Request) -> CardSource {
+    let given = request
+        .camera
+        .cards
+        .sd_card
+        .as_ref()
+        .is_some_and(|card| match &card.contents {
+            CardContents::Files(files) => !files.is_empty(),
+            CardContents::Image(_) => true,
+        });
+    match (request.preset, given) {
+        (_, true) => CardSource::Given,
+        (Preset::Stock, false) => CardSource::None,
+        (Preset::SdCard | Preset::Autostart, false) => CardSource::Release,
+    }
 }
 
 /// The release tag a downloaded card belongs to.

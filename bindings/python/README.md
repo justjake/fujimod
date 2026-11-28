@@ -77,40 +77,44 @@ default. Policy changes require a stopped board.
 guest-time counters, observed mode and menu values, setup status and presses,
 plus an optional failure message.
 
-`Board.open_camera` opens a camera through the shared builder and returns it
-at REC or first-start setup. The firmware's update, boot ROM and reference
-camera come from the source record at
+`Board.open_camera` opens a camera through the shared builder. Its keyword
+arguments are the camera description the MCP server's `camera_open` and the
+command line's `--camera` take, under the same names
+(`catalog/schemas/emulator-camera.generated.schema.json`). `body` is
+required; `firmware` is a version such as `"1.10"`, a firmware identity such
+as `"x70-110"`, or `"none"`, and the body's newest catalog firmware when
+omitted. The firmware's update and boot ROM come from the source record at
 `firmware/<model>/<version>/firmware.json` under `FUJIMOD_FIRMWARE_LIBRARY`,
-or the current directory when it is unset, so the caller names only the
-firmware:
+or the current directory when it is unset:
 
 ```python
-with Board.open_camera(firmware="x70-110", boot="sd-card") as board:
+with Board.open_camera(body="x70", boot="sd-card") as board:
     assert board.status()["status"] == "rec"
 ```
 
-`boot` is `"stock"`, `"sd-card"` or `"autostart"`. `sd_card` names an SD
-card directory: the card to run for the two card boots, or files added to an
-otherwise empty card for a stock boot. Omit it to download the release card into
-the state directory for the two card boots, or add no files for a stock boot.
-`execution_policy` is
-`"exact"` or `"interactive"`. `boot_cache` restores the state directory's saved boot
-when the same inputs were opened before and saves this one; `False` boots from
-scratch and saves nothing. `sd_card_present=False` models an empty slot and
-`sd_card_write_protected=True` asserts the card's write-protect contact;
-`sd_card_transfer_ticks` replaces the catalog's guest ticks per SD data
-transfer. `card_layout` declares a stock card's FAT geometry (`sectors`,
-`label`, `partition_start` and `sectors_per_cluster`) in place of the
-catalog's layout; it applies only to a stock boot with the card present.
-`session.card_state("sd")` reports the contacts and capacity. The
-board is already open, so `boot_to_rec` raises; `status` reports `"rec"`,
-`"running"` before REC or `"stopped"`.
+`boot` is `"stock"` (the default), `"sd-card"` or `"autostart"`. The cards
+are `sd_card`, `sd_card_2` and `cfexpress_card`, each accepted when the body
+declares that slot. A card is a mapping of `present` (default true),
+`write_protected` (default false) and one of `files` (a mapping from the path
+on the card to `{"source": path}` or `{"bytes": data}`), `directory` or
+`image`, plus the rare `layout`, `transfer_ticks` and `initialization_fault`
+of an EXR II card. An omitted `sd_card` is one blank card; the two card boots
+run FujiMod from its files, or from the release card downloaded into the
+state directory when it names none. `settings` names camera settings such as
+`{"language": "en", "setup": "done"}`, written through the firmware's settings
+record. `execution_policy` is `"exact"` or `"interactive"`. `boot_cache`
+restores the state directory's saved boot when the same inputs were opened
+before and saves this one; `False` boots from scratch and saves nothing.
+`session.card_state("sd")` reports the contacts and capacity. The board is
+already open, so `boot_to_rec` raises; `status` reports `"rec"`, `"running"`
+before REC or `"stopped"`.
 
 With `run_to_rec=False` the board returns before its first instruction, with
 the catalog's boot controls already held. Run it with `run(limit=...)` and
 call `release_holds()` once it reports `"rec"`; that releases the held
 controls and connects the controls the loaded firmware expects. The boot cache
-is not used for such an open.
+is not used for such an open. A firmware whose catalog record declares no REC
+readiness facts is returned the same way.
 
 `Board.power_on()` powers the camera off and on again with the internal flash
 and SD card it last had, so installation and card writes survive. The new
@@ -118,19 +122,15 @@ session starts from internal flash with nothing held; `hold_controls=True`
 holds the catalog's SD-boot controls and starts from the card, and
 `fresh_card=True` puts the boot source's files on a new card instead.
 
-`Board.open_camera(update=..., boot_rom=..., flash=..., combination=...)` opens
-the emulator layer instead of a FujiMod preset: `update` and `boot_rom` name
-the firmware's two files in place of the library, `flash` starts from a saved
-internal-flash image, and `combination` holds a catalog power-on combination
-(`sd`, `firmware_update` or `service`). Its SD card is the `sd_card`
-directory's files.
-
-`Board.open_camera(start="loader", image=..., image_sha256=...)` places a
-caller-verified RAM image at address zero and starts the first core at the
-native loader, so the boot ROM never runs; the firmware files come from the
-library unless `update` and `boot_rom` name them.
-`run_to_rec=False` then returns the board with the image in RAM before its
-first instruction.
+`firmware_files={"update": ..., "boot_rom": ...}` names the firmware's files
+in place of the library. `hold`, `loader_image` and `flash_image` open the
+emulator layer with a stock boot: `hold` holds a catalog power-on combination
+(`sd`, `firmware_update` or `service`), `flash_image` starts from a saved
+image of the internal flash's stage-1 blocks, and
+`loader_image={"path": ..., "sha256": ...}` places a caller-verified RAM image
+at address zero and starts the first core at the native loader, so the boot
+ROM never runs. `run_to_rec=False` then returns the board with the image in
+RAM before its first instruction.
 
 The checked identity catalog is available through
 `fujimod.emulator.catalog`. `resolve_reference(body_id, firmware_id)` returns a

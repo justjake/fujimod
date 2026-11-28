@@ -11,6 +11,11 @@
       }
     }
   },
+  "storage_slots": [
+    {
+      "id": "sd_card"
+    }
+  ],
   "connections": [
     {
       "id": "x100v-usb",

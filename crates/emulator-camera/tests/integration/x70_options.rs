@@ -63,7 +63,11 @@ fn an_absent_sd_card_boots_stock_and_is_reported_absent() {
         return;
     };
     let mut request = request(Boot::Stock);
-    request.card.present = false;
+    request
+        .cards
+        .sd_card
+        .get_or_insert_with(Default::default)
+        .present = false;
     let opened = open(&library, request).expect("stock boot without a card");
     assert_eq!(opened.stage, Stage::Rec);
     let state = opened.session().card_state("sd").expect("card state");
@@ -78,7 +82,11 @@ fn a_card_boot_refuses_an_absent_card() {
         return;
     };
     let mut request = request(Boot::SdCard(CardSource::Files(Vec::new())));
-    request.card.present = false;
+    request
+        .cards
+        .sd_card
+        .get_or_insert_with(Default::default)
+        .present = false;
     let error = match open(&library, request) {
         Err(error) => error,
         Ok(_) => panic!("a card boot opened without its card"),
@@ -98,7 +106,11 @@ fn a_write_protected_sd_card_boots_stock_and_is_reported_protected() {
         return;
     };
     let mut request = request(Boot::Stock);
-    request.card.protected = true;
+    request
+        .cards
+        .sd_card
+        .get_or_insert_with(Default::default)
+        .write_protected = true;
     let opened = open(&library, request).expect("stock boot with a protected card");
     assert_eq!(opened.stage, Stage::Rec);
     let state = opened.session().card_state("sd").expect("card state");
@@ -116,7 +128,11 @@ fn sd_card_transfer_ticks_replace_the_catalog_value() {
     assert_eq!(sd_node(&catalog)["model"]["options"]["transfer_ticks"], 100);
 
     let mut request = request(Boot::Stock);
-    request.card.transfer_ticks = Some(17);
+    request
+        .cards
+        .sd_card
+        .get_or_insert_with(Default::default)
+        .transfer_ticks = Some(17);
     let opened = open(&library, request).expect("stock boot with 17 transfer ticks");
     assert_eq!(opened.stage, Stage::Rec);
     assert_eq!(sd_node(&opened)["model"]["options"]["transfer_ticks"], 17);
@@ -129,7 +145,11 @@ fn transfer_ticks_must_be_positive() {
         return;
     };
     let mut request = request(Boot::Stock);
-    request.card.transfer_ticks = Some(0);
+    request
+        .cards
+        .sd_card
+        .get_or_insert_with(Default::default)
+        .transfer_ticks = Some(0);
     let error = match open_unbooted(&library, request) {
         Err(error) => error,
         Ok(_) => panic!("zero transfer ticks opened"),
@@ -164,8 +184,22 @@ fn a_declared_card_layout_formats_the_stock_card() {
     std::fs::create_dir_all(&directory).expect("card layout fixture directory");
     std::fs::write(&file, b"declared layout").expect("card layout fixture file");
     let mut request = request(Boot::Stock);
-    request.card.layout = Some(layout.clone());
-    request.card.files = vec![("LAYOUT.TXT".into(), b"declared layout".to_vec())];
+    request
+        .cards
+        .sd_card
+        .get_or_insert_with(Default::default)
+        .layout = Some(layout.clone());
+    request
+        .cards
+        .sd_card
+        .get_or_insert_with(Default::default)
+        .contents = fujimod_emulator_camera::CardContents::Files(
+        [(
+            "LAYOUT.TXT".to_owned(),
+            fujimod_emulator_camera::CardFile::Bytes(b"declared layout".to_vec()),
+        )]
+        .into(),
+    );
     let opened = open(&library, request);
     let _ = std::fs::remove_dir_all(&directory);
     let opened = opened.expect("stock boot with a declared layout");
@@ -195,7 +229,11 @@ fn a_declared_card_layout_formats_a_held_card_boot() {
     };
     let layout = layout();
     let mut request = request(Boot::SdCard(CardSource::Files(Vec::new())));
-    request.card.layout = Some(layout.clone());
+    request
+        .cards
+        .sd_card
+        .get_or_insert_with(Default::default)
+        .layout = Some(layout.clone());
     request.run_to_rec = false;
     let opened = open(&library, request).expect("card boot with a declared layout");
     assert_eq!(opened.stage, Stage::BootRom);
@@ -212,7 +250,11 @@ fn a_declared_card_layout_is_validated_and_needs_the_card() {
         return;
     };
     let mut bad_cluster = request(Boot::Stock);
-    bad_cluster.card.layout = Some(CardLayout {
+    bad_cluster
+        .cards
+        .sd_card
+        .get_or_insert_with(Default::default)
+        .layout = Some(CardLayout {
         sectors_per_cluster: 3,
         ..layout()
     });
@@ -228,8 +270,16 @@ fn a_declared_card_layout_is_validated_and_needs_the_card() {
     );
 
     let mut absent = request(Boot::Stock);
-    absent.card.present = false;
-    absent.card.layout = Some(layout());
+    absent
+        .cards
+        .sd_card
+        .get_or_insert_with(Default::default)
+        .present = false;
+    absent
+        .cards
+        .sd_card
+        .get_or_insert_with(Default::default)
+        .layout = Some(layout());
     let error = match open(&library, absent) {
         Err(error) => error,
         Ok(_) => panic!("a card layout opened without its card"),
@@ -249,10 +299,10 @@ fn requested_camera_settings_replace_the_runs_own() {
         return;
     };
     let mut request = request(Boot::Stock);
-    request.camera_settings = [("language".to_owned(), "zh-hans".to_owned())].into();
+    request.settings = [("language".to_owned(), "zh-hans".to_owned())].into();
     open_unbooted(&library, request).expect("construct with Simplified Chinese selected");
     let mut request = self::request(Boot::Stock);
-    request.camera_settings = [("language".to_owned(), "no-such-language".to_owned())].into();
+    request.settings = [("language".to_owned(), "no-such-language".to_owned())].into();
     let Err(error) = open_unbooted(&library, request) else {
         panic!("an unknown language value opened");
     };

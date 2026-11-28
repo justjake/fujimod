@@ -1086,6 +1086,7 @@ Body = TypedDict(
         "schema": Required["int"],
         "sensor": NotRequired["SensorAssembly | None"],
         "soc_id": Required["str"],
+        "storage_slots": NotRequired["list[StorageSlot]"],
         "wiring": NotRequired["list[BodyWiring]"],
     },
     total=False,
@@ -3019,8 +3020,6 @@ class FirmwarePreload(TypedDict, total=False):
 
 class FirmwareProfile(TypedDict, total=False):
     boot_layout: NotRequired[FirmwareBootLayout | None]
-    browser_configuration_id: NotRequired[str | None]
-    camera_configuration_id: NotRequired[str | None]
     control_bus_tables_id: NotRequired[str | None]
     cpu: NotRequired[list[FirmwareCpu] | None]
     execution_scope: NotRequired[str | None]
@@ -6539,6 +6538,14 @@ class StatusRegister(TypedDict, total=False):
 
 
 type StillEngineKind = Literal["iifp", "recc", "resz", "reszl", "retch", "mix"]
+
+
+class StorageSlot(TypedDict, total=False):
+    id: Required[StorageSlotId]
+    label: NotRequired[str | None]
+
+
+type StorageSlotId = Literal["sd_card", "sd_card_2", "cfexpress_card"]
 
 
 class TcmState(TypedDict, total=False):

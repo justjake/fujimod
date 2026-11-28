@@ -5124,6 +5124,11 @@
     "write_protect_connection_id": "sd-card-write-protect",
     "controller_id": "sdhci-card-0"
   },
+  "storage_slots": [
+    {
+      "id": "sd_card"
+    }
+  ],
   "control_bus_chips": [
     {
       "id": "secondary-pwic",

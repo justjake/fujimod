@@ -45,7 +45,8 @@ once. ffmpeg messages appear on standard error prefixed with
 `XT5_SCENE ffmpeg:`.
 
 Examples, with `fe` the X-T5 launcher
-(`fujimod-emulator boot --configuration xt5-431 --update FWUP0030.DAT`):
+(`fujimod-emulator boot --camera '{"body": "xt5", "firmware": "4.31"}'`, the firmware from the
+library):
 
 ```sh
 # MacBook camera (device 1)

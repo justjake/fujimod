@@ -10503,6 +10503,47 @@
         }
       ]
     },
+    "StorageSlot": {
+      "additionalProperties": false,
+      "description": "One removable storage slot of a body.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/StorageSlotId",
+          "description": "The slot's name in an open request."
+        },
+        "label": {
+          "description": "The slot's label on the body, when the body labels its slots.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "StorageSlotId": {
+      "description": "The kind and place of a removable storage slot.",
+      "oneOf": [
+        {
+          "const": "sd_card",
+          "description": "The first SD card slot.",
+          "type": "string"
+        },
+        {
+          "const": "sd_card_2",
+          "description": "The second SD card slot.",
+          "type": "string"
+        },
+        {
+          "const": "cfexpress_card",
+          "description": "The CFexpress Type B slot.",
+          "type": "string"
+        }
+      ]
+    },
     "VideoEncoderBackend": {
       "description": "Explicit H.264 compression implementation, selected before construction.",
       "enum": [
@@ -10795,6 +10836,13 @@
     "soc_id": {
       "description": "SoC identity implemented by this body.",
       "type": "string"
+    },
+    "storage_slots": {
+      "description": "The removable storage slots the body has, in the order the camera\nnumbers them.",
+      "items": {
+        "$ref": "#/$defs/StorageSlot"
+      },
+      "type": "array"
     },
     "wiring": {
       "description": "Physical links between named body connections and SoC blocks or parts.",

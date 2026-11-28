@@ -12,41 +12,15 @@ use std::{
     thread::{self, JoinHandle},
 };
 
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct Configuration {
-    configuration: String,
-    body: String,
-    model: String,
-    firmware: String,
-    update_sha256: String,
-    update_bytes: u64,
-}
-
-impl Configuration {
-    fn from_resolved(configuration: &ResolvedConfiguration) -> Result<Self, String> {
-        let run = &configuration.configuration;
-        let update = configuration
-            .reference
-            .firmware
-            .update
-            .as_ref()
-            .ok_or("selected firmware has no update image")?;
-        Ok(Self {
-            configuration: run.id.clone(),
-            body: run.body_id.clone(),
-            model: configuration.reference.body.id.to_uppercase(),
-            firmware: run.firmware_id.clone(),
-            update_sha256: update.sha256.clone(),
-            update_bytes: update.size,
-        })
-    }
-}
-
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct LaunchRequest {
-    configuration: String,
+    /// Catalog body identity.
+    body: String,
+    /// The body's firmware: a version, a firmware identity or `none`; the
+    /// body's newest when omitted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    firmware: Option<String>,
     update: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     boot_rom: Option<PathBuf>,
@@ -85,6 +59,7 @@ struct LauncherCamera {
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct OpenCameraRequest {
+    body: String,
     firmware: String,
     boot: LauncherBoot,
     #[serde(default)]
@@ -142,26 +117,6 @@ impl Drop for Running {
 }
 
 #[tauri::command]
-fn configurations() -> Vec<Configuration> {
-    fujimod_catalog_configuration::RunConfiguration::bundled_ids()
-        .filter_map(|id| {
-            let configuration = ResolvedConfiguration::bundled(id).ok()?;
-            let run = &configuration.configuration;
-            if !matches!(run.start, RunStart::Loader | RunStart::Rom)
-                || run
-                    .preset
-                    .as_ref()
-                    .and_then(|preset| preset.firmware_profile_id.as_ref())
-                    .is_none()
-            {
-                return None;
-            }
-            Configuration::from_resolved(&configuration).ok()
-        })
-        .collect()
-}
-
-#[tauri::command]
 async fn choose_update() -> Option<String> {
     rfd::AsyncFileDialog::new()
         .add_filter("Fujifilm firmware", &["DAT"])
@@ -170,33 +125,51 @@ async fn choose_update() -> Option<String> {
         .map(|file| file.path().display().to_string())
 }
 
-fn checked_update(configuration: &ResolvedConfiguration, update: &str) -> Result<PathBuf, String> {
-    let camera = Configuration::from_resolved(configuration)?;
+/// The model name a launched camera shows.
+fn model(resolved: &ResolvedConfiguration) -> String {
+    resolved.reference.body.id.to_uppercase()
+}
+
+fn checked_update(resolved: &ResolvedConfiguration, update: &str) -> Result<PathBuf, String> {
+    let identity = resolved
+        .reference
+        .firmware
+        .update
+        .as_ref()
+        .ok_or("selected firmware has no update image")?;
     let update = PathBuf::from(update);
     let metadata =
         std::fs::metadata(&update).map_err(|error| format!("{}: {error}", update.display()))?;
-    if metadata.len() != camera.update_bytes {
-        return Err(format!(
+    let refused = || {
+        format!(
             "{} is not the firmware for {}.",
             update.display(),
-            camera.model
-        ));
+            model(resolved)
+        )
+    };
+    if metadata.len() != identity.size {
+        return Err(refused());
     }
     let shipped =
         std::fs::read(&update).map_err(|error| format!("{}: {error}", update.display()))?;
     use sha2::{Digest, Sha256};
-    if format!("{:x}", Sha256::digest(&shipped)) != camera.update_sha256 {
-        return Err(format!(
-            "{} is not the firmware for {}.",
-            update.display(),
-            camera.model
-        ));
+    if format!("{:x}", Sha256::digest(&shipped)) != identity.sha256 {
+        return Err(refused());
     }
     Ok(update)
 }
 
 fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), String> {
-    let mut resolved = ResolvedConfiguration::bundled(&request.configuration)?;
+    let library = Library::without_directory().map_err(|error| error.to_string())?;
+    let firmware = library
+        .select(
+            &request.body,
+            &camera::FirmwareChoice::parse(request.firmware.as_deref()),
+        )
+        .map_err(|error| error.to_string())?;
+    let mut resolved = library
+        .resolved(&firmware, &[])
+        .map_err(|error| error.to_string())?;
     if let Some(engine) = request.engine {
         resolved.override_engine(engine)?;
     }
@@ -206,9 +179,12 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
     ) {
         return Err("This camera cannot start from the firmware file alone.".into());
     }
-    let camera = Configuration::from_resolved(&resolved)?;
     let update = checked_update(&resolved, &request.update)?;
-    let output = output_directory(&camera.configuration)?;
+    let output = output_directory(&resolved.configuration.id)?;
+    let launched_body = resolved.reference.body.id.clone();
+    let launched_model = model(&resolved);
+    let launched_firmware = resolved.reference.firmware.id.clone();
+    let launched_configuration = resolved.configuration.id.clone();
     let room = fujimod_emulator_gui::Room::loopback()?;
     let endpoint = room.endpoint().url.clone();
     let stop = Arc::new(AtomicBool::new(false));
@@ -234,11 +210,14 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
                     settings: None,
                     camera: request.camera,
                     application_plan: request.application_plan,
-                    card_files: Vec::new(),
+                    cards: Default::default(),
                     discovery: false,
                     sd_card_transfer_ticks: None,
                     card_layout: None,
                     card_initialization_fault: None,
+                    camera_settings: Default::default(),
+                    clock_seconds_2000: None,
+                    scene: None,
                 };
                 let mut camera = fujimod_emulator_boot::open_request(resolved, boot_request)
                     .inspect_err(|error| log_session(format!("session: {error}")))?;
@@ -256,7 +235,9 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
             }
             let run = fujimod_emulator_boot::xp5::Run {
                 load_snapshot: request.load_snapshot,
-                boot_rom: request.boot_rom,
+                boot_rom: request
+                    .boot_rom
+                    .map(fujimod_emulator_boot::FirmwareFile::Path),
                 ..fujimod_emulator_boot::xp5::Run::new(
                     resolved.clone(),
                     update,
@@ -275,10 +256,10 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
         .map_err(|error| error.to_string())?;
     let launched = LaunchedCamera {
         id: endpoint.clone(),
-        configuration: camera.configuration,
-        body: camera.body,
-        model: camera.model,
-        firmware: camera.firmware,
+        configuration: launched_configuration,
+        body: launched_body,
+        model: launched_model,
+        firmware: launched_firmware,
         endpoint,
     };
     Ok((
@@ -320,15 +301,27 @@ async fn choose_sd_card() -> Option<String> {
 /// Open a camera through the builder and serve the opened session live.
 fn open_with_builder(request: OpenCameraRequest) -> Result<(LaunchedCamera, Running), String> {
     let library = Library::from_env().map_err(|error| error.to_string())?;
-    let resolved = library
-        .resolved(&request.firmware)
-        .map_err(|error| error.to_string())?;
+    let mut camera_request = camera::EmulatorRequestBase::new(
+        request.body.clone(),
+        camera::FirmwareChoice::parse(Some(request.firmware.as_str())),
+    );
+    let resolved = camera::plan(&library, &camera_request)
+        .map_err(|error| error.to_string())?
+        .resolved;
     let preset = match request.boot {
         LauncherBoot::Stock => camera::Preset::Stock,
         LauncherBoot::SdCard => camera::Preset::SdCard,
         LauncherBoot::Autostart => camera::Preset::Autostart,
     };
-    let sd_card = request.sd_card.map(camera::CardSource::Directory);
+    let sd_card = request
+        .sd_card
+        .as_deref()
+        .map(|directory| {
+            camera::directory_files(directory)
+                .map(camera::Card::with_files)
+                .map_err(|error| error.to_string())
+        })
+        .transpose()?;
     let body = resolved.reference.body.id.clone();
     let model = body.to_uppercase();
     let configuration = resolved.configuration.id.clone();
@@ -338,24 +331,16 @@ fn open_with_builder(request: OpenCameraRequest) -> Result<(LaunchedCamera, Runn
         .execution
         .map(|execution| execution.engine);
     let selection = resolved.reference.clone();
+    camera_request.cards.sd_card = sd_card;
+    camera_request.policy = fujimod_emulator_cpu::ExecutionPolicy::Interactive;
+    camera_request.cache = if request.skip_boot_cache {
+        camera::BootCache::Bypass
+    } else {
+        camera::BootCache::Reuse
+    };
     let camera_request = camera::Request {
-        firmware: request.firmware,
-        files: camera::FirmwareInput::Library,
-        overlays: Vec::new(),
+        camera: camera_request,
         preset,
-        sd_card,
-        policy: fujimod_emulator_cpu::ExecutionPolicy::Interactive,
-        engine: None,
-        cache: if request.skip_boot_cache {
-            camera::BootCache::Bypass
-        } else {
-            camera::BootCache::Reuse
-        },
-        run_to_rec: true,
-        card: Default::default(),
-        nand_image: None,
-        face_result_profile: None,
-        camera_settings: Default::default(),
     };
     let state = StateDir::from_env();
     let room = fujimod_emulator_gui::Room::loopback()?;
@@ -473,7 +458,7 @@ mod tests {
         assert!(!rows.is_empty());
         for row in &rows {
             assert_eq!(row.model, row.body.to_uppercase());
-            assert!(library.resolved(&row.firmware).is_ok());
+            assert!(library.resolved(&row.firmware, &[]).is_ok());
         }
     }
 }
@@ -567,14 +552,25 @@ fn window_launch() -> Result<WindowLaunch, String> {
             .split_once('=')
             .map_or((argument.as_str(), None), |(key, value)| (key, Some(value)));
         match key {
-            "--configuration" => {
+            "--body" => {
                 launch
                     .command
                     .get_or_insert_with(LaunchRequest::default)
-                    .configuration = inline
+                    .body = inline
                     .map(str::to_owned)
                     .or_else(|| arguments.next())
-                    .ok_or("--configuration needs a value")?;
+                    .ok_or("--body needs a value")?;
+            }
+            "--firmware" => {
+                launch
+                    .command
+                    .get_or_insert_with(LaunchRequest::default)
+                    .firmware = Some(
+                    inline
+                        .map(str::to_owned)
+                        .or_else(|| arguments.next())
+                        .ok_or("--firmware needs a value")?,
+                );
             }
             "--update" => {
                 launch
@@ -621,9 +617,9 @@ fn window_launch() -> Result<WindowLaunch, String> {
         }
     }
     if let Some(command) = &launch.command
-        && (command.configuration.is_empty() || command.update.is_empty())
+        && (command.body.is_empty() || command.update.is_empty())
     {
-        return Err("--configuration and --update are given together".into());
+        return Err("--body and --update are given together".into());
     }
     Ok(launch)
 }
@@ -680,7 +676,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            configurations,
             choose_update,
             launch,
             launcher_cameras,

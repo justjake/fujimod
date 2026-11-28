@@ -6,8 +6,36 @@
 #![allow(dead_code)]
 
 use fujimod_camera::{
-    BootCache, CardSource, ExecutionPolicy, FirmwareInput, Library, Preset, Request, StateDir,
+    BootCache, Cards, EmulatorRequestBase, ExecutionPolicy, FirmwareChoice, Library, Preset,
+    Request, StateDir,
 };
+use std::path::PathBuf;
+
+/// Where a test's SD card files come from.
+pub enum CardSource {
+    /// A folder holding an SD card tree.
+    Directory(PathBuf),
+    /// Name and bytes pairs.
+    Files(Vec<(String, Vec<u8>)>),
+}
+
+impl CardSource {
+    /// The first SD card these files make.
+    pub fn card(self) -> fujimod_emulator_camera::Card {
+        let files = match self {
+            Self::Directory(directory) => {
+                fujimod_camera::directory_files(&directory).expect("SD card directory")
+            }
+            Self::Files(files) => files,
+        };
+        fujimod_emulator_camera::Card::with_files(files)
+    }
+}
+
+/// A catalog firmware identity's body: the part before its version.
+pub fn body(firmware: &str) -> &str {
+    firmware.split_once('-').map_or(firmware, |(body, _)| body)
+}
 use fujimod_recovery::Recipe;
 
 pub const FIRMWARE: &str = "x70-110";
@@ -35,19 +63,17 @@ pub fn request(
     run_to_rec: bool,
 ) -> Request {
     Request {
-        firmware: firmware.into(),
-        files: FirmwareInput::Library,
-        overlays: Vec::new(),
+        camera: EmulatorRequestBase {
+            cards: Cards {
+                sd_card: sd_card.map(CardSource::card),
+                ..Default::default()
+            },
+            policy: ExecutionPolicy::Interactive,
+            cache,
+            run_to_rec,
+            ..EmulatorRequestBase::new(body(firmware), FirmwareChoice::Named(firmware.into()))
+        },
         preset,
-        sd_card,
-        policy: ExecutionPolicy::Interactive,
-        engine: None,
-        cache,
-        run_to_rec,
-        card: Default::default(),
-        nand_image: None,
-        face_result_profile: None,
-        camera_settings: Default::default(),
     }
 }
 
@@ -99,7 +125,7 @@ pub fn built_card(library: &Library, firmware: &str) -> Vec<(String, Vec<u8>)> {
         .unwrap_or_else(|error| panic!("{firmware}: recipe: {error}"))
         .unwrap_or_else(|| panic!("{firmware}: no SD card recipe"));
     let update = library
-        .files(firmware)
+        .files(firmware, false)
         .unwrap_or_else(|error| panic!("{firmware}: library files: {error}"))
         .update;
     let mut files: Vec<(String, Vec<u8>)> = recipe

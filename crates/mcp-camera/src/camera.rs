@@ -2,84 +2,45 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
 use fujimod_camera::{
-    CardSource, Library, Preset, Request as CameraRequest, Stage, StateDir, open as open_camera,
+    CameraDescription, Library, Request as CameraOpenRequest, Stage, StateDir, open as open_camera,
     open_unbooted,
 };
 use fujimod_catalog_remote::Facts;
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot as boot;
-use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_session::{Session, checkpoint::Snapshot};
 use fujimod_remote::{BoardRemote, Control, operations};
 use serde_json::{Value, json};
 
-use crate::{OpenBoot, OpenParams};
+use crate::OpenParams;
 
-/// The `Send` part of an open request, moved to the camera's thread.
+/// The `Send` part of a camera to open, moved to the camera's thread.
 pub struct OpenRequest {
-    firmware: String,
-    boot: OpenBoot,
-    sd_card: Option<PathBuf>,
-    snapshot: Option<PathBuf>,
-    execution_policy: Option<String>,
-    boot_cache: bool,
+    camera: CameraDescription,
+    /// Where relative paths in the request resolve from.
+    base: PathBuf,
 }
 
 impl From<OpenParams> for OpenRequest {
     fn from(p: OpenParams) -> Self {
         Self {
-            firmware: p.firmware,
-            boot: p.boot,
-            sd_card: p.sd_card.map(Into::into),
-            snapshot: p.snapshot.map(Into::into),
-            execution_policy: p.execution_policy,
-            boot_cache: p.boot_cache.unwrap_or(true),
+            camera: p.camera,
+            base: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
         }
     }
 }
 
 impl OpenRequest {
-    fn camera_request(&self) -> Result<CameraRequest, String> {
-        let policy = match &self.execution_policy {
-            Some(policy) => ExecutionPolicy::parse(policy)?,
-            None => ExecutionPolicy::Exact,
-        };
-        Ok(CameraRequest {
-            firmware: self.firmware.clone(),
-            files: fujimod_camera::FirmwareInput::Library,
-            overlays: Vec::new(),
-            preset: match self.boot {
-                OpenBoot::Stock => Preset::Stock,
-                OpenBoot::SdCard => Preset::SdCard,
-                OpenBoot::Autostart => Preset::Autostart,
-            },
-            sd_card: self
-                .sd_card
-                .as_ref()
-                .map(|directory| CardSource::Directory(directory.clone())),
-            policy,
-            engine: None,
-            // A named checkpoint is an explicit restore; the boot cache would
-            // otherwise replace it.
-            cache: if self.boot_cache && self.snapshot.is_none() {
-                fujimod_camera::BootCache::Reuse
-            } else {
-                fujimod_camera::BootCache::Bypass
-            },
-            run_to_rec: true,
-            card: Default::default(),
-            nand_image: None,
-            face_result_profile: None,
-            camera_settings: Default::default(),
-        })
+    fn camera_request(&self) -> Result<CameraOpenRequest, String> {
+        CameraOpenRequest::from_description(&self.camera, &self.base)
+            .map_err(|error| error.to_string())
     }
 
-    fn boot_name(&self) -> &'static str {
-        match self.boot {
-            OpenBoot::Stock => "stock",
-            OpenBoot::SdCard => "sd-card",
-            OpenBoot::Autostart => "autostart",
-        }
+    fn snapshot(&self) -> Option<PathBuf> {
+        self.camera
+            .snapshot
+            .as_deref()
+            .map(|path| fujimod_emulator_camera::description::resolve(&self.base, path))
     }
 }
 
@@ -147,8 +108,10 @@ impl Camera {
         let state = StateDir::from_env();
         let started = std::time::Instant::now();
         let camera_request = request.camera_request()?;
-        let policy = camera_request.policy;
-        let opened = match &request.snapshot {
+        let policy = camera_request.camera.policy;
+        let preset = camera_request.preset;
+        let snapshot = request.snapshot();
+        let opened = match &snapshot {
             Some(snapshot) => {
                 let mut opened = open_unbooted(&library, &state, camera_request)
                     .map_err(|error| error.to_string())?;
@@ -169,6 +132,8 @@ impl Camera {
         let stage = opened.stage;
         let release = opened.release.clone();
         let opened_cached = opened.cached;
+        let firmware = opened.firmware.clone();
+        let rec_unobserved = opened.rec_unobserved.clone();
         let emulator_opened = opened.camera;
         let mut camera = Self {
             session: emulator_opened.camera.session,
@@ -190,17 +155,15 @@ impl Camera {
             summary["controls_error"] = json!(error);
         }
         summary["opened"] = json!({
-            "firmware": request.firmware.clone(),
-            "boot": request.boot_name(),
+            "body": request.camera.body.clone(),
+            "firmware": firmware,
+            "boot": preset.name(),
             "cached": opened_cached,
-            "sd_card": request
-                .sd_card
-                .as_ref()
-                .map(|path| path.display().to_string())
-                .or(release),
-            "snapshot": request.snapshot.as_ref().map(|path| path.display().to_string()),
+            "release": release,
+            "snapshot": snapshot.as_ref().map(|path| path.display().to_string()),
             "execution_policy": policy.name(),
             "stage": stage.name(),
+            "rec_unobserved": rec_unobserved,
             "wall_seconds": started.elapsed().as_secs_f64(),
         });
         Ok((camera, (summary, png)))
@@ -626,92 +589,86 @@ impl Camera {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
+    use fujimod_camera::{ExecutionPolicy, Preset};
 
     fn x70_is_openable() -> bool {
         Library::from_env()
             .is_ok_and(|library| library.firmwares().iter().any(|row| row.id == "x70-110"))
     }
 
-    fn request(boot: OpenBoot, sd_card: Option<PathBuf>) -> OpenRequest {
+    fn request(document: Value) -> OpenRequest {
         OpenRequest {
-            firmware: "x70-110".into(),
-            boot,
-            sd_card,
-            snapshot: None,
-            execution_policy: None,
-            boot_cache: false,
+            camera: serde_json::from_value(document).unwrap(),
+            base: PathBuf::from("/requests"),
+        }
+    }
+
+    fn x70(boot: &str) -> OpenRequest {
+        request(json!({"body": "x70", "firmware": "1.10", "boot": boot, "boot_cache": false}))
+    }
+
+    #[test]
+    fn a_stock_boot_with_a_card_directory_reads_its_files() {
+        let directory =
+            std::env::temp_dir().join(format!("fujimod-mcp-card-{}", std::process::id()));
+        std::fs::create_dir_all(directory.join("DCIM")).unwrap();
+        std::fs::write(directory.join("DCIM/A.TXT"), b"a").unwrap();
+        let built = request(json!({
+            "body": "x70",
+            "sd_card": {"directory": directory.display().to_string()}
+        }))
+        .camera_request()
+        .unwrap();
+        assert_eq!(built.preset, Preset::Stock);
+        let fujimod_emulator_camera::CardContents::Files(files) =
+            built.camera.cards.first().contents
+        else {
+            panic!("a directory card holds files");
+        };
+        assert_eq!(files.keys().collect::<Vec<_>>(), ["DCIM/A.TXT"]);
+        assert_eq!(built.camera.policy, ExecutionPolicy::Exact);
+        std::fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    fn the_card_presets_parse_and_a_missing_card_uses_the_release() {
+        for (boot, preset) in [
+            ("sd-card", Preset::SdCard),
+            ("autostart", Preset::Autostart),
+            ("stock", Preset::Stock),
+        ] {
+            let built = x70(boot).camera_request().unwrap();
+            assert_eq!(built.preset, preset);
+            assert!(built.camera.cards.sd_card.is_none());
+            assert_eq!(built.camera.body, "x70");
         }
     }
 
     #[test]
-    fn a_stock_boot_with_a_card_directory_adds_files() {
-        let built = request(OpenBoot::Stock, Some(PathBuf::from("/tmp/example-card")))
-            .camera_request()
-            .unwrap();
-        assert_eq!(built.preset, Preset::Stock);
-        assert!(matches!(
-            built.sd_card,
-            Some(CardSource::Directory(ref path)) if path == Path::new("/tmp/example-card")
-        ));
-        assert_eq!(built.policy, ExecutionPolicy::Exact);
-    }
-
-    #[test]
-    fn an_sd_card_boot_without_a_directory_uses_the_release() {
-        let built = request(OpenBoot::SdCard, None).camera_request().unwrap();
-        assert_eq!(built.preset, Preset::SdCard);
-        assert!(built.sd_card.is_none());
-    }
-
-    #[test]
-    fn an_sd_card_boot_uses_the_directory() {
-        let directory = PathBuf::from("/tmp/example-card");
-        let built = request(OpenBoot::SdCard, Some(directory.clone()))
-            .camera_request()
-            .unwrap();
-        assert_eq!(built.preset, Preset::SdCard);
-        assert!(matches!(
-            built.sd_card,
-            Some(CardSource::Directory(path)) if path == directory
-        ));
-    }
-
-    #[test]
-    fn an_autostart_without_a_directory_uses_the_release() {
-        let built = request(OpenBoot::Autostart, None).camera_request().unwrap();
-        assert_eq!(built.preset, Preset::Autostart);
-        assert!(built.sd_card.is_none());
-    }
-
-    #[test]
-    fn an_autostart_uses_the_directory() {
-        let directory = PathBuf::from("/tmp/example-card");
-        let built = request(OpenBoot::Autostart, Some(directory.clone()))
-            .camera_request()
-            .unwrap();
-        assert_eq!(built.preset, Preset::Autostart);
-        assert!(matches!(
-            built.sd_card,
-            Some(CardSource::Directory(path)) if path == directory
-        ));
+    fn relative_paths_resolve_from_the_request_base() {
+        let built = request(json!({"body": "x70", "snapshot": "rec.snapshot"}));
+        assert_eq!(
+            built.snapshot(),
+            Some(PathBuf::from("/requests/rec.snapshot"))
+        );
+        assert_eq!(
+            built.camera_request().unwrap().camera.cache,
+            fujimod_camera::BootCache::Bypass
+        );
     }
 
     #[test]
     fn the_execution_policy_is_parsed() {
-        let mut request = request(OpenBoot::Stock, None);
-        request.execution_policy = Some("interactive".into());
+        let built = request(json!({"body": "x70", "execution_policy": "interactive"}));
         assert_eq!(
-            request.camera_request().unwrap().policy,
+            built.camera_request().unwrap().camera.policy,
             ExecutionPolicy::Interactive
         );
-        request.execution_policy = Some("fast".into());
         assert!(
-            request
-                .camera_request()
-                .err()
-                .unwrap()
-                .contains("unknown CPU execution policy")
+            serde_json::from_value::<CameraDescription>(
+                json!({"body": "x70", "execution_policy": "fast"})
+            )
+            .is_err()
         );
     }
 
@@ -722,7 +679,7 @@ mod tests {
             return;
         }
         let started = std::time::Instant::now();
-        let (mut camera, (summary, _)) = Camera::open(request(OpenBoot::Stock, None)).unwrap();
+        let (mut camera, (summary, _)) = Camera::open(x70("stock")).unwrap();
         assert_eq!(summary["opened"]["stage"], "REC");
         assert_eq!(summary["opened"]["boot"], "stock");
         assert_eq!(summary["opened"]["firmware"], "x70-110");
@@ -736,8 +693,8 @@ mod tests {
             .unwrap();
         drop(camera);
 
-        let mut restored = request(OpenBoot::Stock, None);
-        restored.snapshot = Some(file.clone());
+        let mut restored = x70("stock");
+        restored.camera.snapshot = Some(file.display().to_string());
         let (restored, (summary, _)) = Camera::open(restored).unwrap();
         assert_eq!(summary["opened"]["stage"], "REC");
         assert_eq!(summary["opened"]["snapshot"], file.display().to_string());
@@ -752,7 +709,7 @@ mod tests {
             eprintln!("skipped: the library holds no openable x70-110");
             return;
         }
-        let (mut camera, _) = Camera::open(request(OpenBoot::Stock, None)).unwrap();
+        let (mut camera, _) = Camera::open(x70("stock")).unwrap();
         let started = std::time::Instant::now();
         let moved = camera.set("aperture_ring", "5.6", 100).unwrap();
         assert_eq!(moved["control"], "aperture_ring");

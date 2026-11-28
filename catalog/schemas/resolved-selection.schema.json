@@ -3939,6 +3939,13 @@
           "description": "SoC identity implemented by this body.",
           "type": "string"
         },
+        "storage_slots": {
+          "description": "The removable storage slots the body has, in the order the camera\nnumbers them.",
+          "items": {
+            "$ref": "#/$defs/StorageSlot"
+          },
+          "type": "array"
+        },
         "wiring": {
           "description": "Physical links between named body connections and SoC blocks or parts.",
           "items": {
@@ -13134,20 +13141,6 @@
             }
           ],
           "description": "Declared boot layout."
-        },
-        "browser_configuration_id": {
-          "description": "Declared browser configuration id.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "camera_configuration_id": {
-          "description": "Declared native camera configuration id.",
-          "type": [
-            "string",
-            "null"
-          ]
         },
         "control_bus_tables_id": {
           "description": "Declared control bus tables id.",
@@ -24647,6 +24640,47 @@
         {
           "const": "mix",
           "description": "The MIX engine.",
+          "type": "string"
+        }
+      ]
+    },
+    "StorageSlot": {
+      "additionalProperties": false,
+      "description": "One removable storage slot of a body.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/StorageSlotId",
+          "description": "The slot's name in an open request."
+        },
+        "label": {
+          "description": "The slot's label on the body, when the body labels its slots.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "StorageSlotId": {
+      "description": "The kind and place of a removable storage slot.",
+      "oneOf": [
+        {
+          "const": "sd_card",
+          "description": "The first SD card slot.",
+          "type": "string"
+        },
+        {
+          "const": "sd_card_2",
+          "description": "The second SD card slot.",
+          "type": "string"
+        },
+        {
+          "const": "cfexpress_card",
+          "description": "The CFexpress Type B slot.",
           "type": "string"
         }
       ]

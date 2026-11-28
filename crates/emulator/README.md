@@ -8,18 +8,18 @@ report.
 
 ```sh
 cargo build --locked --release -p fujimod-emulator-cli --bin fujimod-emulator
-target/release/fujimod-emulator boot \
-  --configuration x70-110-rec \
-  --update /path/to/FPUPDATE.DAT \
-  --boot-rom /path/to/bootrom.bin \
-  --screenshot /path/to/lcd.png
+target/release/fujimod-emulator boot --screenshot /path/to/lcd.png --camera '{
+  "body": "x70",
+  "firmware": "1.10",
+  "firmware_files": {"update": "/path/to/FPUPDATE.DAT", "boot_rom": "/path/to/bootrom.bin"}
+}'
 ```
 
-The ID resolves a checked run configuration, which selects the body and
-firmware identities and supplies the execution policy and scene inputs. The
-selected pair must have a supported native runtime. Use `--overlay ID` to apply
-a named variant; repeated overlays are applied in command-line order. Unsupported
-start entries or physical inputs are refused during preparation.
+The body and firmware select the firmware's run configuration, which supplies
+the execution policy and scene inputs; its processor decides the startup path
+(`crates/emulator-camera/README.md`). `--camera` may also be a file path or
+`-` for standard input, and `--actions` a list of timed inputs. Unsupported start entries or physical inputs are
+refused during preparation.
 
 Firmware and ROM
 size and SHA-256 must match the selected catalog entry. Supplying your own

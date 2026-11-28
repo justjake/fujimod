@@ -15,13 +15,15 @@
 //! A saved boot is reused only when its checkpoint imports and restores into a
 //! freshly built session and the session still reports REC. Anything else
 //! boots the camera and replaces the entry.
-use crate::{Flash, Library, OpenError, Opened, Request, Stage, Start, StateDir};
+use crate::{
+    CardContents, CardFile, Flash, Library, OpenError, Opened, Plan, Request, Stage, Start,
+    StateDir,
+};
 use fujimod_catalog_configuration::RunEngine;
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot as boot;
 use sha2::{Digest, Sha256};
 use std::{
-    collections::BTreeMap,
     fs,
     io::Write,
     path::{Path, PathBuf},
@@ -74,11 +76,8 @@ pub(crate) struct Key {
 }
 
 impl Key {
-    pub(crate) fn new(
-        state: &StateDir,
-        request: &Request,
-        resolved: &ResolvedConfiguration,
-    ) -> Result<Self, OpenError> {
+    pub(crate) fn new(state: &StateDir, request: &Request, plan: &Plan) -> Result<Self, OpenError> {
+        let resolved = &plan.resolved;
         let start = match &request.start {
             Start::Rom => "stock".to_owned(),
             Start::Held { combination } => format!("held-{combination}"),
@@ -87,10 +86,10 @@ impl Key {
         let policy = request.policy.name();
         let engine = engine_name(resolved);
         let slot = format!("{start}-{policy}-{engine}");
-        let key = identity(request, resolved)?;
+        let key = identity(request, plan)?;
         let file = format!("{}{slot}-{key}.snapshot.zst", prefix());
         Ok(Self {
-            directory: state.boot_cache().join(&request.firmware),
+            directory: state.boot_cache().join(&plan.firmware),
             slot,
             file,
         })
@@ -115,7 +114,7 @@ impl Key {
 pub(crate) fn restore(
     library: &Library,
     request: &Request,
-    resolved: &ResolvedConfiguration,
+    plan: &Plan,
     key: &Key,
 ) -> Result<Option<Opened>, OpenError> {
     clean(&key.directory);
@@ -127,7 +126,7 @@ pub(crate) fn restore(
     let Ok(bytes) = zstd::decode_all(stored.as_slice()) else {
         return Ok(None);
     };
-    let mut opened = crate::open::construct(library, request.clone(), resolved.clone())?;
+    let mut opened = crate::open::construct(library, request.clone(), plan.clone())?;
     let restored = opened
         .session()
         .import_snapshot(&bytes)
@@ -275,7 +274,8 @@ fn name(engine: RunEngine) -> String {
 }
 
 /// Hash the inputs that decide what the boot reaches.
-fn identity(request: &Request, resolved: &ResolvedConfiguration) -> Result<String, OpenError> {
+fn identity(request: &Request, plan: &Plan) -> Result<String, OpenError> {
+    let resolved = &plan.resolved;
     let mut hash = Sha256::new();
     let mut part = |bytes: &[u8]| {
         hash.update((bytes.len() as u64).to_le_bytes());
@@ -284,7 +284,7 @@ fn identity(request: &Request, resolved: &ResolvedConfiguration) -> Result<Strin
     part(b"fujimod-emulator-camera boot cache");
     part(env!("CARGO_PKG_VERSION").as_bytes());
     part(&FORMAT.to_le_bytes());
-    part(request.firmware.as_bytes());
+    part(plan.firmware.as_bytes());
     let firmware = &resolved.reference.firmware;
     part(
         firmware
@@ -307,7 +307,7 @@ fn identity(request: &Request, resolved: &ResolvedConfiguration) -> Result<Strin
         part(b"overlay");
         part(overlay.as_bytes());
     }
-    for (name, value) in &request.camera_settings {
+    for (name, value) in &request.settings {
         part(b"camera-setting");
         part(name.as_bytes());
         part(value.as_bytes());
@@ -349,39 +349,75 @@ fn identity(request: &Request, resolved: &ResolvedConfiguration) -> Result<Strin
         }
         None => part(b"catalog-nand"),
     }
-    part(&[request.card.present as u8, request.card.protected as u8]);
-    match request.card.transfer_ticks {
-        Some(ticks) => {
-            part(b"transfer-ticks");
-            part(&ticks.to_le_bytes());
-        }
-        None => part(b"catalog-transfer-ticks"),
+    if let Some(seconds) = request.clock_seconds_2000 {
+        part(b"clock");
+        part(&seconds.to_le_bytes());
     }
-    if let Some(layout) = &request.card.layout {
-        part(b"card-layout");
-        let bytes = serde_json::to_vec(layout)
-            .map_err(|failure| OpenError::at(Stage::BootRom, format!("card layout: {failure}")))?;
-        part(&bytes);
-    }
-    if let Some(fault) = &request.card.initialization_fault {
-        part(b"card-initialization-fault");
-        let bytes = serde_json::to_vec(fault).map_err(|failure| {
-            OpenError::at(
-                Stage::BootRom,
-                format!("card initialization fault: {failure}"),
-            )
+    if let Some(scene) = &request.scene {
+        part(b"scene");
+        let bytes = std::fs::read(scene).map_err(|failure| {
+            OpenError::at(Stage::BootRom, format!("{}: {failure}", scene.display()))
         })?;
-        part(&bytes);
+        part(&Sha256::digest(&bytes));
     }
-    let card: BTreeMap<&str, &[u8]> = request
-        .card
-        .files
-        .iter()
-        .map(|(name, bytes)| (name.as_str(), bytes.as_slice()))
-        .collect();
-    for (name, bytes) in card {
-        part(name.as_bytes());
-        part(bytes);
+    for (slot, card) in [
+        ("sd_card", Some(request.cards.first())),
+        ("sd_card_2", request.cards.sd_card_2.clone()),
+        ("cfexpress_card", request.cards.cfexpress_card.clone()),
+    ] {
+        let Some(card) = card else { continue };
+        part(slot.as_bytes());
+        part(&[card.present as u8, card.write_protected as u8]);
+        match card.transfer_ticks {
+            Some(ticks) => {
+                part(b"transfer-ticks");
+                part(&ticks.to_le_bytes());
+            }
+            None => part(b"catalog-transfer-ticks"),
+        }
+        if let Some(layout) = &card.layout {
+            part(b"card-layout");
+            let bytes = serde_json::to_vec(layout).map_err(|failure| {
+                OpenError::at(Stage::BootRom, format!("card layout: {failure}"))
+            })?;
+            part(&bytes);
+        }
+        if let Some(fault) = &card.initialization_fault {
+            part(b"card-initialization-fault");
+            let bytes = serde_json::to_vec(fault).map_err(|failure| {
+                OpenError::at(
+                    Stage::BootRom,
+                    format!("card initialization fault: {failure}"),
+                )
+            })?;
+            part(&bytes);
+        }
+        match &card.contents {
+            CardContents::Image(path) => {
+                part(b"card-image");
+                let bytes = std::fs::read(path).map_err(|failure| {
+                    OpenError::at(Stage::BootRom, format!("{}: {failure}", path.display()))
+                })?;
+                part(&Sha256::digest(&bytes));
+            }
+            CardContents::Files(files) => {
+                for (name, file) in files {
+                    part(name.as_bytes());
+                    match file {
+                        CardFile::Bytes(bytes) => part(bytes),
+                        CardFile::Source(path) => {
+                            let bytes = std::fs::read(path).map_err(|failure| {
+                                OpenError::at(
+                                    Stage::BootRom,
+                                    format!("{}: {failure}", path.display()),
+                                )
+                            })?;
+                            part(&bytes);
+                        }
+                    }
+                }
+            }
+        }
     }
     Ok(format!("{:x}", hash.finalize())[..16].to_owned())
 }

@@ -26,6 +26,11 @@
       "xt30-thermal-10"
     ]
   },
+  "storage_slots": [
+    {
+      "id": "sd_card"
+    }
+  ],
   "connections": [
     {
       "id": "controls-gpio-0-11",

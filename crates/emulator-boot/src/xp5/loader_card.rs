@@ -51,6 +51,8 @@ pub(crate) struct LoaderCard {
     /// Caller files for the formatted volume when no image is given, by name.
     pub assets: BTreeMap<String, Vec<u8>>,
     pub write_back: Option<WriteBack>,
+    /// Whether the card's write-protect contact is asserted.
+    pub protected: bool,
 }
 
 /// Where the image came from and what it held, to write back only the changed sectors.
@@ -61,11 +63,31 @@ pub(crate) struct WriteBack {
 }
 
 impl LoaderCard {
+    /// The card a host puts in `slot`: none when it is absent, an empty in-memory card when it
+    /// names no image or files, else the image or files it names.
+    pub fn insert(slot: u64, card: &crate::media::CardInsert) -> Result<Option<Self>, String> {
+        if !card.present {
+            return Ok(None);
+        }
+        let mut loaded = match Self::load(slot, card.image.as_deref(), &card.files)? {
+            Some(loaded) => loaded,
+            None => Self {
+                slot,
+                card: None,
+                assets: BTreeMap::new(),
+                write_back: None,
+                protected: false,
+            },
+        };
+        loaded.protected = card.write_protected;
+        Ok(Some(loaded))
+    }
+
     /// `None` when the run names no card for `slot`: it stays as the manifest declares it.
     pub fn load(
         slot: u64,
         image: Option<&Path>,
-        files: &[(String, PathBuf)],
+        files: &[(String, crate::media::CardFile)],
     ) -> Result<Option<Self>, String> {
         if image.is_none() && files.is_empty() {
             return Ok(None);
@@ -92,6 +114,7 @@ impl LoaderCard {
                 card: None,
                 assets,
                 write_back: None,
+                protected: false,
             }));
         };
         let loaded = CardImage::load(path)?;
@@ -110,6 +133,7 @@ impl LoaderCard {
                 path: path.to_owned(),
                 original,
             }),
+            protected: false,
         }))
     }
 
@@ -122,7 +146,7 @@ impl LoaderCard {
             .find(|slot| slot.base == base)
             .ok_or_else(|| format!("the boot manifest declares no SD slot at {base:#x}"))?;
         slot.present = true;
-        slot.protected = false;
+        slot.protected = self.protected;
         if self.card.is_none() {
             let prefix = if base == SLOT {
                 String::new()
@@ -249,7 +273,7 @@ label = "NO NAME"
         std::fs::create_dir_all(&directory).unwrap();
         let file = directory.join("note.txt");
         std::fs::write(&file, b"hello").unwrap();
-        let card = LoaderCard::load(SLOT, None, &[("NOTE.TXT".into(), file.clone())])
+        let card = LoaderCard::load(SLOT, None, &[("NOTE.TXT".into(), file.clone().into())])
             .unwrap()
             .unwrap();
         assert!(card.write_back.is_none());
@@ -287,7 +311,7 @@ label = "NO NAME"
         std::fs::create_dir_all(&directory).unwrap();
         let file = directory.join("note.txt");
         std::fs::write(&file, b"second").unwrap();
-        let files = [("NOTE.TXT".to_string(), file)];
+        let files = [("NOTE.TXT".to_string(), file.into())];
         let first = LoaderCard::load(SLOT, None, &files).unwrap().unwrap();
         let second = LoaderCard::load(SLOT_2, None, &files).unwrap().unwrap();
         // Both cards may hold a file of the same name: the assets do not collide.
@@ -326,6 +350,7 @@ label = "NO NAME"
             card: None,
             assets: BTreeMap::new(),
             write_back: None,
+            protected: false,
         };
         let mut state = state();
         state.sd.clear();

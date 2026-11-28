@@ -105,6 +105,11 @@
       "kind": "dram"
     }
   ],
+  "storage_slots": [
+    {
+      "id": "sd_card"
+    }
+  ],
   "connections": [
     {
       "id": "focus-actuator-bus",

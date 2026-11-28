@@ -1,0 +1,413 @@
+{
+  "$defs": {
+    "BootPreset": {
+      "description": "How a camera starts with FujiMod.",
+      "oneOf": [
+        {
+          "const": "stock",
+          "description": "The firmware installed in internal flash.",
+          "type": "string"
+        },
+        {
+          "const": "sd-card",
+          "description": "FujiMod loaded from the SD card by the boot ROM; the card is\n`sd_card`, or the current release card when it names no contents.",
+          "type": "string"
+        },
+        {
+          "const": "autostart",
+          "description": "FujiMod started from the SD card's autostart installer in internal\nflash.",
+          "type": "string"
+        }
+      ]
+    },
+    "CardFile": {
+      "anyOf": [
+        {
+          "description": "A host file.",
+          "properties": {
+            "source": {
+              "description": "Host path of the file.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "source"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Bytes the host already holds.",
+          "properties": {
+            "bytes": {
+              "description": "The file's bytes, base64-encoded.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "bytes"
+          ],
+          "type": "object"
+        }
+      ],
+      "description": "One file on a card: a host file, or its bytes in base64."
+    },
+    "CardLayout": {
+      "additionalProperties": false,
+      "description": "A declared FAT geometry for a freshly formatted card.",
+      "properties": {
+        "label": {
+          "description": "One to eleven ASCII bytes.",
+          "type": "string"
+        },
+        "partition_start": {
+          "description": "First sector of the FAT partition.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sectors": {
+          "description": "Sectors on the blank card.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sectors_per_cluster": {
+          "description": "Sectors per FAT cluster: a power of two from 1 to 128.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sectors",
+        "label",
+        "partition_start",
+        "sectors_per_cluster"
+      ],
+      "type": "object"
+    },
+    "ExecutionPolicyName": {
+      "description": "A CPU execution policy.",
+      "oneOf": [
+        {
+          "const": "exact",
+          "description": "Deterministic: runs compare instruction for instruction.",
+          "type": "string"
+        },
+        {
+          "const": "interactive",
+          "description": "Faster where the result cannot differ.",
+          "type": "string"
+        }
+      ]
+    },
+    "FirmwareFiles": {
+      "additionalProperties": false,
+      "description": "The firmware's two files as host paths.",
+      "properties": {
+        "boot_rom": {
+          "description": "The boot ROM capture, for a firmware whose start runs it.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "update": {
+          "description": "The stock update file.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "update"
+      ],
+      "type": "object"
+    },
+    "LoaderImage": {
+      "additionalProperties": false,
+      "description": "A RAM image the native loader starts from.",
+      "properties": {
+        "path": {
+          "description": "Host path of the image.",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "SHA-256 of the image, which the open checks.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "RunFaceResultProfile": {
+      "description": "Closed selection of external face detector results.",
+      "enum": [
+        "empty",
+        "box64x20",
+        "box172x120"
+      ],
+      "type": "string"
+    },
+    "StorageCard": {
+      "additionalProperties": false,
+      "description": "A card in one of the body's storage slots.",
+      "properties": {
+        "directory": {
+          "description": "Host path of a folder whose tree becomes the card's files.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "files": {
+          "additionalProperties": {
+            "$ref": "#/$defs/CardFile"
+          },
+          "description": "Files on a freshly formatted card, by their full path on the card.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "image": {
+          "description": "Host path of a raw card image, read without being written.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "initialization_fault": {
+          "description": "The modeled SD host's initialization fault, as the device model names\nit."
+        },
+        "layout": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CardLayout"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "FAT geometry for a freshly formatted card, in place of the run's."
+        },
+        "present": {
+          "default": true,
+          "description": "Whether the card is in the slot at power-on. Omitted, true.",
+          "type": "boolean"
+        },
+        "transfer_ticks": {
+          "description": "Guest ticks the modeled host charges for each data transfer.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "write_protected": {
+          "default": false,
+          "description": "Whether the card's write-protect switch is set. Omitted, false.",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/emulator-camera.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "One camera to open.",
+  "properties": {
+    "application_plan": {
+      "description": "Host path of the application startup plan an X-Processor 4 or\nX-Processor Pro firmware starts from.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "body": {
+      "description": "Catalog body identity, for example `xh2s`.",
+      "type": "string"
+    },
+    "boot": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BootPreset"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "How the camera starts with FujiMod. Omitted, `stock`."
+    },
+    "boot_cache": {
+      "description": "Restore a saved boot with the same inputs, and save this one. Omitted,\ntrue.",
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "cfexpress_card": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StorageCard"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The card in the CFexpress Type B slot, on a body that has one."
+    },
+    "date": {
+      "description": "The camera clock at power-on, `YYYY-MM-DDTHH:MM:SS` local time.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "engine": {
+      "description": "Scheduler engine: `unicorn` or `hypervisor`. Omitted, the run's engine.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "execution_policy": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ExecutionPolicyName"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "CPU execution policy. Omitted, `exact`."
+    },
+    "face_result_profile": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RunFaceResultProfile"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "External face detector results in place of the passive face bank:\n`empty`, `box64x20` or `box172x120`."
+    },
+    "firmware": {
+      "description": "The body's firmware: a version such as `7.30`, a firmware identity\nsuch as `xh2s-730`, or `none` for an empty flash. Omitted, the newest\nfirmware the catalog has for the body.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "firmware_files": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FirmwareFiles"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The firmware's update and boot ROM as host files, in place of the\nfirmware library's."
+    },
+    "flash_image": {
+      "description": "Host path of a saved image of the internal flash's stage-1 blocks.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "hold": {
+      "description": "Hold a power-on combination from the body's controls, such as `sd`,\n`firmware_update` or `service`, from power-on. A `stock` boot only.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "loader_image": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LoaderImage"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Start at the native loader with a RAM image at address zero, in place\nof the boot ROM. A `stock` boot only."
+    },
+    "nand_image": {
+      "description": "Host path of a saved committed internal-flash image, restored before\nthe first instruction.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "overlays": {
+      "description": "Catalog overlays of the firmware's run configuration.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "run_to_rec": {
+      "description": "Run to REC before returning. Omitted, true; false returns before the\nfirst instruction with the power-on holds applied.",
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "scene": {
+      "description": "Host path of a scene document the sensor sees, in place of the run's\ndeclared scene.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sd_card": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StorageCard"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The card in the first SD slot. Omitted, one empty SD card is inserted."
+    },
+    "sd_card_2": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StorageCard"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The card in the second SD slot, on a body that has one."
+    },
+    "settings": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Named camera settings the firmware's settings record writes before the\nfirst instruction, such as `{\"language\": \"en\", \"setup\": \"done\"}`.",
+      "type": "object"
+    },
+    "snapshot": {
+      "description": "Host path of a checkpoint file to restore instead of booting.",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "body"
+  ],
+  "title": "CameraDescription",
+  "type": "object"
+}

@@ -851,6 +851,7 @@ mod tests {
             microcontroller: None,
             power_control: None,
             card_slot: None,
+            storage_slots: Vec::new(),
             control_bus_chips: vec![],
             connections: vec![],
             parts: vec![],

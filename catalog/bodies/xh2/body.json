@@ -80,6 +80,16 @@
       }
     ]
   },
+  "storage_slots": [
+    {
+      "id": "cfexpress_card",
+      "label": "1"
+    },
+    {
+      "id": "sd_card",
+      "label": "2"
+    }
+  ],
   "connections": [
     {
       "id": "sensor-power-enable",

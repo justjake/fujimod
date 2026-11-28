@@ -1886,20 +1886,6 @@
           ],
           "description": "Declared boot layout."
         },
-        "browser_configuration_id": {
-          "description": "Declared browser configuration id.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "camera_configuration_id": {
-          "description": "Declared native camera configuration id.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "control_bus_tables_id": {
           "description": "Declared control bus tables id.",
           "type": [

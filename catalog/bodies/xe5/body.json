@@ -127,6 +127,11 @@
       "kind": "dram"
     }
   ],
+  "storage_slots": [
+    {
+      "id": "sd_card"
+    }
+  ],
   "connections": [
     {
       "id": "power-controller-spi8-bus",

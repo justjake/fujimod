@@ -88,33 +88,7 @@ class emulator:
             instruction_rate: tuple[int, int] | None = None,
         ) -> emulator.Board: ...
         @staticmethod
-        def open_camera(
-            *,
-            firmware: str,
-            boot: str = ...,
-            sd_card: str | PathLike[str] | None = ...,
-            execution_policy: str = ...,
-            boot_cache: bool = ...,
-            run_to_rec: bool = ...,
-            sd_card_present: bool = ...,
-            sd_card_write_protected: bool = ...,
-            sd_card_transfer_ticks: SupportsIndex | None = ...,
-            card_layout: str | None = ...,
-            start: str = ...,
-            image: str | PathLike[str] | None = ...,
-            image_sha256: str | None = ...,
-            update: str | PathLike[str] | None = ...,
-            boot_rom: str | PathLike[str] | None = ...,
-            flash: str | PathLike[str] | None = ...,
-            combination: str | None = ...,
-            sd_card_files: Mapping[str, bytes] | None = ...,
-            image_bytes: bytes | None = ...,
-            nand: bytes | None = ...,
-            face_result_profile: str | None = ...,
-            overlays: Sequence[str] | None = ...,
-            sd_card_initialization_fault: str | None = ...,
-            camera_settings: Mapping[str, str] | None = ...,
-        ) -> emulator.Board: ...
+        def open_camera(camera: str) -> emulator.Board: ...
         def release_holds(self, /) -> None: ...
         def power_on(
             self,

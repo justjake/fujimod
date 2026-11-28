@@ -25,7 +25,7 @@ pub struct Startup {
     pub discovery: bool,
     pub quantum: Option<usize>,
     pub card_image: Option<PathBuf>,
-    pub card_files: Vec<(String, PathBuf)>,
+    pub card_files: Vec<(String, crate::media::CardFile)>,
     /// Settings to place in the plan's NOR journal before boot (XP4); empty places nothing.
     pub camera_settings: BTreeMap<String, String>,
 }

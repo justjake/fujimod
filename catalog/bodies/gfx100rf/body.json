@@ -44,6 +44,11 @@
       }
     ]
   },
+  "storage_slots": [
+    {
+      "id": "sd_card"
+    }
+  ],
   "parts": [
     "gfx100rf-serial-nor"
   ],

@@ -1688,7 +1688,7 @@ label = "NO NAME"
         let card = super::super::loader_card::LoaderCard::load(
             super::super::loader_card::SLOT,
             None,
-            &[("FWUP0036.DAT".into(), file)],
+            &[("FWUP0036.DAT".into(), file.into())],
         )
         .unwrap()
         .unwrap();

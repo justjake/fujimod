@@ -27,11 +27,9 @@ pub struct Startup {
     pub update: crate::FirmwareFile,
     pub manifest: Option<PathBuf>,
     pub boot_rom: Option<crate::FirmwareFile>,
-    pub card_image: Option<PathBuf>,
-    pub card_files: Vec<(String, PathBuf)>,
-    /// The loader start's card in SD slot 2: a raw image, or files for an in-memory volume.
-    pub second_card_image: Option<PathBuf>,
-    pub second_card_files: Vec<(String, PathBuf)>,
+    /// Cards by SD slot: 1, and 2 on a body with a second slot. A slot without
+    /// an entry stays as the boot manifest declares it.
+    pub cards: BTreeMap<u8, crate::media::CardInsert>,
     pub scene: Option<PathBuf>,
     pub output: Option<PathBuf>,
     pub mode: Mode,
@@ -51,6 +49,23 @@ pub fn device_windows_json(configuration_id: &str) -> Result<String, String> {
     serde_json::to_string(&state.device).map_err(|error| error.to_string())
 }
 
+/// Whether an XP5 start of `firmware` reads the boot ROM: a ROM start always, an SD card or
+/// setup start unless the firmware declares the catalog hand-off it can start from instead, and
+/// a loader start never.
+pub(crate) fn boot_rom_use(firmware: &str, start: RunStart) -> crate::BootRomUse {
+    match start {
+        RunStart::Loader => crate::BootRomUse::Unused,
+        RunStart::Rom => crate::BootRomUse::Required,
+        RunStart::SdCard if rom_start::Handoff::for_firmware(firmware).is_some() => {
+            crate::BootRomUse::Optional
+        }
+        RunStart::Setup if rom_start::SetupHandoff::for_firmware(firmware).is_some() => {
+            crate::BootRomUse::Optional
+        }
+        RunStart::SdCard | RunStart::Setup => crate::BootRomUse::Required,
+    }
+}
+
 pub(crate) struct RunFacts {
     pub firmware: firmware::Firmware,
     pub state: manifest::BootState,
@@ -68,10 +83,7 @@ pub(super) fn open_startup(
         update,
         manifest,
         boot_rom: rom_path,
-        card_image: sd_image,
-        card_files,
-        second_card_image,
-        second_card_files,
+        cards,
         scene,
         output: run_directory,
         mode,
@@ -79,6 +91,13 @@ pub(super) fn open_startup(
         camera_settings,
         flash_seeds,
     } = startup;
+    if let Some(slot) = cards.keys().find(|slot| !matches!(slot, 1 | 2)) {
+        return Err(format!("XP5 bodies have SD card slots 1 and 2, not {slot}"));
+    }
+    let first_card = cards.get(&1).cloned().unwrap_or_default();
+    let second_card = cards.get(&2);
+    let sd_image = first_card.image.clone();
+    let card_files = crate::media::read_files(&first_card.files)?;
     let start = configuration.configuration.start;
     if start == RunStart::SdCard
         && sd_image.is_none()
@@ -115,8 +134,13 @@ pub(super) fn open_startup(
     }
     let mut loader = Vec::new();
     let rom = if matches!(start, RunStart::Rom | RunStart::SdCard | RunStart::Setup) {
-        if second_card_image.is_some() || !second_card_files.is_empty() {
+        if second_card.is_some() {
             return Err("a card in SD slot 2 needs the loader start".into());
+        }
+        if !first_card.present || first_card.write_protected {
+            return Err(
+                "a ROM, SD card or setup start always has a writable card in slot 1".into(),
+            );
         }
         let mut setup_handoff = false;
         let start = match (rom_path, start) {
@@ -124,8 +148,8 @@ pub(super) fn open_startup(
                 setup_handoff = true;
                 loader.extend(loader_card::LoaderCard::load(
                     loader_card::SLOT,
-                    sd_image.as_deref(),
-                    &card_files,
+                    first_card.image.as_deref(),
+                    &first_card.files,
                 )?);
                 for card in &loader {
                     card.apply(&mut state)?;
@@ -161,16 +185,12 @@ pub(super) fn open_startup(
             return Err("a boot ROM requires a ROM or SD card startup".into());
         }
         // The loader start's cards, inserted before the board is built (loader_card.rs).
-        loader.extend(loader_card::LoaderCard::load(
-            loader_card::SLOT,
-            sd_image.as_deref(),
-            &card_files,
-        )?);
-        loader.extend(loader_card::LoaderCard::load(
-            loader_card::SLOT_2,
-            second_card_image.as_deref(),
-            &second_card_files,
-        )?);
+        if let Some(card) = cards.get(&1) {
+            loader.extend(loader_card::LoaderCard::insert(loader_card::SLOT, card)?);
+        }
+        if let Some(card) = second_card {
+            loader.extend(loader_card::LoaderCard::insert(loader_card::SLOT_2, card)?);
+        }
         for card in &loader {
             card.apply(&mut state)?;
         }

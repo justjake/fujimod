@@ -2910,6 +2910,11 @@
     "detect_connection_id": "sd-card-detect",
     "write_protect_connection_id": "sd-card-write-protect"
   },
+  "storage_slots": [
+    {
+      "id": "sd_card"
+    }
+  ],
   "control_bus_chips": [
     {
       "id": "device-0",

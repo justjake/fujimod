@@ -7,14 +7,13 @@
 use crate::support;
 use support::{FIRMWARE, library, request, state};
 
-use fujimod_camera::{
-    BootCache, CardSource, Error, Library, Opened, Preset, Request, Stage, StateDir, open,
-};
+use fujimod_camera::{BootCache, Error, Library, Opened, Preset, Request, Stage, StateDir, open};
 use std::{
     fs,
     path::{Path, PathBuf},
     time::{Duration, Instant, SystemTime},
 };
+use support::CardSource;
 
 /// The saved boots of one slot, sorted.
 fn saved(directory: &Path, slot: &str) -> Vec<PathBuf> {

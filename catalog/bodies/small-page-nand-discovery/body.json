@@ -259,6 +259,11 @@
       }
     }
   },
+  "storage_slots": [
+    {
+      "id": "sd_card"
+    }
+  ],
   "control_bus_chips": [
     {
       "id": "device-0",

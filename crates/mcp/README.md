@@ -27,8 +27,10 @@ install a software Vulkan driver (Mesa's lavapipe).
 
 ## Camera module
 
-`camera_open` takes a catalog firmware id and a boot. The firmware update,
-boot ROM and reference camera sections come from its source record under
+`camera_open` takes a camera `name` and `camera`, the camera description every
+front door takes: a catalog `body`, optionally its `firmware`, and a boot. The
+firmware update, boot ROM and reference camera sections come from its source
+record under
 `FUJIMOD_FIRMWARE_LIBRARY`, or the current directory when it is unset. It
 restores the library's saved boot for the same
 inputs when it holds one, boots to REC otherwise, or restores a checkpoint
@@ -39,9 +41,12 @@ To SD boot an X70 1.10 from its current release card:
 
 ```json
 {
-  "firmware": "x70-110",
-  "boot": "sd-card",
-  "execution_policy": "interactive"
+  "camera": {
+    "body": "x70",
+    "firmware": "1.10",
+    "boot": "sd-card",
+    "execution_policy": "interactive"
+  }
 }
 ```
 
@@ -49,10 +54,12 @@ Give `sd_card` to boot a FujiMod tree from a directory instead:
 
 ```json
 {
-  "firmware": "x70-110",
-  "boot": "sd-card",
-  "sd_card": "path/to/sd-card",
-  "execution_policy": "interactive"
+  "camera": {
+    "body": "x70",
+    "boot": "sd-card",
+    "sd_card": {"directory": "path/to/sd-card"},
+    "execution_policy": "interactive"
+  }
 }
 ```
 
@@ -60,9 +67,7 @@ For autostart, let the card's installer write internal flash once:
 
 ```json
 {
-  "firmware": "x70-110",
-  "boot": "autostart",
-  "execution_policy": "interactive"
+  "camera": {"body": "x70", "boot": "autostart", "execution_policy": "interactive"}
 }
 ```
 

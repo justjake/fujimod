@@ -102,6 +102,11 @@
       }
     }
   },
+  "storage_slots": [
+    {
+      "id": "sd_card"
+    }
+  ],
   "connections": [
     {
       "id": "flash-storage",

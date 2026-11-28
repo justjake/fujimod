@@ -24,6 +24,11 @@
       }
     ]
   },
+  "storage_slots": [
+    {
+      "id": "sd_card"
+    }
+  ],
   "parts": [
     "xs20-serial-nor"
   ],

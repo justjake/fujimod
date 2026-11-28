@@ -907,6 +907,64 @@ fn session_quantum(session: &Session) -> Result<usize, String> {
         .ok_or_else(|| "configuration declares no positive scheduler quantum".into())
 }
 
+/// The startup path a run configuration's processor opens through.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StartupPath {
+    /// EXR II: the board is built from declared startup inputs or the body's
+    /// device list, and starts at the boot ROM.
+    Exr2,
+    /// X-Processor 5: the shared session's boot manifest and its start kind.
+    Xp5,
+    /// X-Processor 4 and X-Processor Pro: an application startup plan.
+    Application,
+}
+
+/// Which startup path a configuration opens through, or why none can open it
+/// yet.
+pub fn startup_path(resolved: &ResolvedConfiguration) -> Result<StartupPath, String> {
+    if is_exr2_run(resolved) {
+        return Ok(StartupPath::Exr2);
+    }
+    let soc = resolved.reference.soc.id.as_str();
+    match (resolved.configuration.inputs.as_ref(), soc) {
+        (Some(RunInputs::Xp5(_)), _) => Ok(StartupPath::Xp5),
+        (Some(RunInputs::Xp4(_)) | None, "xp4" | "xpp") => Ok(StartupPath::Application),
+        (None, "exr2") => Err(format!(
+            "body {} has no device list yet",
+            resolved.reference.body.id
+        )),
+        _ => Err(format!(
+            "{} cannot be opened as a camera",
+            resolved.configuration.id
+        )),
+    }
+}
+
+/// Whether a startup reads the firmware's boot ROM.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BootRomUse {
+    /// The start runs the boot ROM.
+    Required,
+    /// The start runs the boot ROM when one is given, and a catalog hand-off
+    /// otherwise.
+    Optional,
+    /// The start does not run the boot ROM and refuses one.
+    Unused,
+}
+
+/// Whether a configuration's start reads the boot ROM.
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub fn boot_rom_use(resolved: &ResolvedConfiguration) -> Result<BootRomUse, String> {
+    Ok(match startup_path(resolved)? {
+        StartupPath::Exr2 => BootRomUse::Required,
+        StartupPath::Application => BootRomUse::Unused,
+        StartupPath::Xp5 => xp5::boot_rom_use(
+            &resolved.configuration.firmware_id,
+            resolved.configuration.start,
+        ),
+    })
+}
+
 /// The files a host has for a camera. [`open_request`] uses the ones the
 /// configuration's processor needs and refuses a missing one, so a host never
 /// selects startup inputs by processor generation.
@@ -919,9 +977,11 @@ pub struct Request {
     pub settings: Option<std::path::PathBuf>,
     /// Directory of the camera's NAND sections, for a run whose settings name a camera.
     pub camera: Option<std::path::PathBuf>,
-    /// The application startup plan of an X-Processor Pro body.
+    /// The application startup plan of an X-Processor 4 or X-Processor Pro body.
     pub application_plan: Option<std::path::PathBuf>,
-    pub card_files: Vec<(String, std::path::PathBuf)>,
+    /// Cards by SD slot (1, and 2 on a body with a second slot). A slot
+    /// without an entry keeps the card the run declares.
+    pub cards: BTreeMap<u8, media::CardInsert>,
     pub discovery: bool,
     /// Guest ticks the modeled SD card host charges for each data transfer.
     /// Absence keeps the run's catalog value.
@@ -930,82 +990,121 @@ pub struct Request {
     pub card_layout: Option<CardLayout>,
     /// The modeled SD host's initialization fault, in place of none.
     pub card_initialization_fault: Option<serde_json::Value>,
+    /// Named camera settings the firmware's settings record writes before the
+    /// first instruction (XP5 user profile, XP4 journal). EXR II runs take
+    /// theirs through the run's power-on settings.
+    pub camera_settings: BTreeMap<String, String>,
+    /// The EXR II camera clock at power-on, in seconds since 2000.
+    pub clock_seconds_2000: Option<u32>,
+    /// A scene document the sensor sees, in place of the run's.
+    pub scene: Option<std::path::PathBuf>,
 }
 
 /// Open any configuration `open` supports from a host's files.
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
-pub fn open_request(resolved: ResolvedConfiguration, request: Request) -> Result<Camera, String> {
+pub fn open_request(
+    mut resolved: ResolvedConfiguration,
+    request: Request,
+) -> Result<Camera, String> {
+    let path = startup_path(&resolved)?;
+    if request.clock_seconds_2000.is_some() && path != StartupPath::Exr2 {
+        return Err(format!(
+            "the camera clock of {} is not modeled yet",
+            resolved.reference.soc.id
+        ));
+    }
+    if request.scene.is_some() && path == StartupPath::Application {
+        return Err("an application-profile start takes no scene document yet".into());
+    }
     // EXR II cards are formatted after the board opens; other starts build
     // their loader card from the files.
-    if (request.sd_card_transfer_ticks.is_some() || request.card_layout.is_some())
-        && !is_exr2_run(&resolved)
+    if (request.sd_card_transfer_ticks.is_some()
+        || request.card_layout.is_some()
+        || request.card_initialization_fault.is_some())
+        && path != StartupPath::Exr2
     {
         return Err("SD card options apply only to EXR II runs".into());
     }
-    let mut card_after_open = Vec::new();
-    // A run whose body profile exports its native construction carries the
-    // reset values as catalog data, so it may declare no startup inputs.
-    let inputs = if is_exr2_run(&resolved) {
-        StartupInputs::Exr2 {
-            options: Options {
-                update: request.update,
-                boot_rom: request.boot_rom.ok_or("this camera needs its boot ROM")?,
-                nand: request.nand,
-                settings: request.settings,
-                clock_seconds_2000: None,
-                preferred_languages: Vec::new(),
-                camera: request.camera,
-                access_point: None,
-                capability_reply: None,
-                sd_card_transfer_ticks: request.sd_card_transfer_ticks,
-                card_layout: request.card_layout.clone(),
-                card_initialization_fault: request.card_initialization_fault.clone(),
-            },
-            mode: {
-                card_after_open = request.card_files;
-                discovery_mode(request.discovery)
-            },
-        }
-    } else {
-        match resolved.configuration.inputs.as_ref() {
-            Some(RunInputs::Xp5(_)) => StartupInputs::Xp5(xp5::Startup {
-                update: request.update,
-                manifest: None,
-                boot_rom: request.boot_rom,
-                card_image: None,
-                card_files: request.card_files,
-                second_card_image: None,
-                second_card_files: Vec::new(),
-                scene: None,
-                output: None,
-                mode: discovery_mode(request.discovery),
-                quantum: None,
-                camera_settings: Default::default(),
-                flash_seeds: Vec::new(),
-            }),
-            _ if resolved.reference.soc.id == "xpp" => {
-                StartupInputs::Application(application::Startup {
-                    update: request.update,
-                    plan: request
-                        .application_plan
-                        .ok_or("this camera needs its application startup plan")?,
-                    discovery: request.discovery,
-                    quantum: None,
-                    card_image: None,
-                    card_files: request.card_files,
-                    camera_settings: Default::default(),
-                })
-            }
-            _ => {
+    let mut cards = request.cards;
+    let mut card_after_open = None;
+    let inputs = match path {
+        StartupPath::Exr2 => {
+            if let Some(slot) = cards.keys().find(|slot| **slot != 1) {
                 return Err(format!(
-                    "{} cannot be opened as a camera",
-                    resolved.configuration.id
+                    "body {} has one SD card slot, not slot {slot}",
+                    resolved.reference.body.id
                 ));
             }
+            if !request.camera_settings.is_empty() {
+                return Err(
+                    "EXR II camera settings are the run's power-on settings, not startup files"
+                        .into(),
+                );
+            }
+            card_after_open = cards.remove(&1);
+            if let Some(scene) = &request.scene {
+                host::set_exr2_scene(&mut resolved, scene)?;
+            }
+            StartupInputs::Exr2 {
+                options: Options {
+                    update: request.update,
+                    boot_rom: request.boot_rom.ok_or("this camera needs its boot ROM")?,
+                    nand: request.nand,
+                    settings: request.settings,
+                    clock_seconds_2000: request.clock_seconds_2000,
+                    preferred_languages: Vec::new(),
+                    camera: request.camera,
+                    access_point: None,
+                    capability_reply: None,
+                    sd_card_transfer_ticks: request.sd_card_transfer_ticks,
+                    card_layout: request.card_layout.clone(),
+                    card_initialization_fault: request.card_initialization_fault.clone(),
+                },
+                mode: discovery_mode(request.discovery),
+            }
+        }
+        StartupPath::Xp5 => StartupInputs::Xp5(xp5::Startup {
+            update: request.update,
+            manifest: None,
+            boot_rom: request.boot_rom,
+            cards,
+            scene: request.scene,
+            output: None,
+            mode: discovery_mode(request.discovery),
+            quantum: None,
+            camera_settings: request.camera_settings,
+            flash_seeds: Vec::new(),
+        }),
+        StartupPath::Application => {
+            if let Some(slot) = cards.keys().find(|slot| **slot != 1) {
+                return Err(format!(
+                    "body {} has one SD card slot, not slot {slot}",
+                    resolved.reference.body.id
+                ));
+            }
+            let card = cards.remove(&1).unwrap_or_default();
+            if !card.present || card.write_protected {
+                return Err(
+                    "an application-profile start always has a writable card in its slot".into(),
+                );
+            }
+            StartupInputs::Application(application::Startup {
+                update: request.update,
+                plan: request
+                    .application_plan
+                    .ok_or("this camera needs its application startup plan")?,
+                discovery: request.discovery,
+                quantum: None,
+                card_image: card.image,
+                card_files: card.files,
+                camera_settings: request.camera_settings,
+            })
         }
     };
     let mut camera = open(resolved, inputs)?;
-    media::attach(&mut camera.session, None, &card_after_open)?;
+    if let Some(card) = card_after_open {
+        media::insert(&mut camera.session, &card)?;
+    }
     Ok(camera)
 }
 

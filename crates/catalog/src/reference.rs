@@ -1477,6 +1477,10 @@ pub struct Body {
     /// Optional removable-card slot and its body-specific contacts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub card_slot: Option<CardSlotAssembly>,
+    /// The removable storage slots the body has, in the order the camera
+    /// numbers them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub storage_slots: Vec<StorageSlot>,
     /// Physical control-bus devices installed in this body.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub control_bus_chips: Vec<ControlBusChip>,
@@ -2078,6 +2082,57 @@ pub struct CardSlotAssembly {
         tsify(type = "string | null")
     )]
     pub controller_id: Option<String>,
+}
+
+/// One removable storage slot of a body.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct StorageSlot {
+    /// The slot's name in an open request.
+    pub id: StorageSlotId,
+    /// The slot's label on the body, when the body labels its slots.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "string | null")
+    )]
+    pub label: Option<String>,
+}
+
+/// The kind and place of a removable storage slot.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub enum StorageSlotId {
+    /// The first SD card slot.
+    SdCard,
+    /// The second SD card slot.
+    #[serde(rename = "sd_card_2")]
+    SdCard2,
+    /// The CFexpress Type B slot.
+    CfexpressCard,
+}
+
+impl StorageSlotId {
+    /// The slot's name in an open request.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::SdCard => "sd_card",
+            Self::SdCard2 => "sd_card_2",
+            Self::CfexpressCard => "cfexpress_card",
+        }
+    }
 }
 
 /// Display orientation relative to the camera body.
@@ -5506,6 +5561,7 @@ mod layout_tests {
             microcontroller: None,
             power_control: None,
             card_slot: None,
+            storage_slots: Vec::new(),
             control_bus_chips: vec![],
             connections: vec![],
             parts: vec![],

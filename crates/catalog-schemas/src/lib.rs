@@ -43,6 +43,18 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         ),
     );
     documents.insert(
+        "emulator-camera.generated.schema.json",
+        schema::<fujimod_catalog_run_inputs::CameraDescription>(
+            fujimod_catalog_run_inputs::camera::CAMERA_SCHEMA_URI,
+        ),
+    );
+    documents.insert(
+        "emulator-actions.generated.schema.json",
+        schema::<fujimod_catalog_run_inputs::Actions>(
+            fujimod_catalog_run_inputs::camera::ACTIONS_SCHEMA_URI,
+        ),
+    );
+    documents.insert(
         "emulator-rehearsal.generated.schema.json",
         schema::<fujimod_catalog::rehearsal::Rehearsal>(
             fujimod_catalog::rehearsal::REHEARSAL_SCHEMA_URI,

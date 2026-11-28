@@ -140,6 +140,7 @@ export default function App() {
     try {
       await startCamera(
         await bridge.openCamera({
+          body: cameras().find((camera) => camera.firmware === firmware())?.body ?? '',
           firmware: firmware(),
           boot: boot(),
           sdCard: boot() === 'stock' ? undefined : sdCard() || undefined,

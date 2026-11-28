@@ -1,14 +1,9 @@
-export interface RunConfiguration {
-  configuration: string;
-  body: string;
-  model: string;
-  firmware: string;
-  updateSha256: string;
-  updateBytes: number;
-}
 export type RunEngine = 'unicorn' | 'hypervisor';
 export interface LaunchRequest {
-  configuration: string;
+  /** Catalog body identity. */
+  body: string;
+  /** A version, a firmware identity or `none`; the body's newest when omitted. */
+  firmware?: string;
   update: string;
   engine?: RunEngine;
   endpoint?: string;
@@ -21,6 +16,7 @@ export interface LauncherCamera {
   version: string;
 }
 export interface OpenCameraRequest {
+  body: string;
   firmware: string;
   boot: BootChoice;
   sdCard?: string;
@@ -35,7 +31,6 @@ export interface LaunchedCamera {
   endpoint: string;
 }
 export interface DesktopBridge {
-  configurations(): Promise<RunConfiguration[]>;
   chooseUpdate(): Promise<string | undefined>;
   launch(request: LaunchRequest): Promise<LaunchedCamera>;
   launcherCameras(): Promise<LauncherCamera[]>;
