@@ -13,6 +13,7 @@ find_package(Git REQUIRED)
 set(DYNARMIC_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/dynarmic-source")
 set(DYNARMIC_PATCHES
     "${CMAKE_CURRENT_SOURCE_DIR}/patches/a32-decoder-fixed-bits.patch"
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/a32-predicated-alu.patch"
     "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-embedder.patch"
     "${CMAKE_CURRENT_SOURCE_DIR}/patches/x64-exact-budget.patch")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${DYNARMIC_PATCHES})
