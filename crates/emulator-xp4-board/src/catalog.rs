@@ -1139,6 +1139,47 @@ mod tests {
     }
 
     #[test]
+    fn gfx_selected_mask_word_uses_only_selected_profile() {
+        let resolved = ResolvedConfiguration::bundled("gfx100s-213-cpu-entry").unwrap();
+        let catalog = Catalog::new(&resolved).unwrap();
+        let blocks = catalog.register_blocks().unwrap();
+        let expected = [0xfff3_00a0u64, 0xfff3_10a0];
+        let mut words: Vec<_> = blocks
+            .iter()
+            .filter(|b| expected.contains(&b["base"].as_u64().unwrap()))
+            .collect();
+        words.sort_by_key(|word| word["base"].as_u64().unwrap());
+        assert_eq!(
+            words
+                .iter()
+                .map(|word| word["base"].as_u64().unwrap())
+                .collect::<Vec<_>>(),
+            expected
+        );
+        for word in &words {
+            assert_eq!(word["size"], 4);
+            assert_eq!(word["idle"], json!([]));
+            assert_eq!(word["fixed"], json!([]));
+            assert_eq!(word["commands"], json!([]));
+            assert!(word["job"].is_null() && word["frames"].is_null());
+        }
+        let other = xt3().register_blocks().unwrap();
+        assert!(
+            !other
+                .iter()
+                .any(|b| expected.contains(&b["base"].as_u64().unwrap()))
+        );
+        let fallback = catalog.register_storage().unwrap();
+        for address in expected {
+            assert!(
+                !fallback
+                    .iter()
+                    .any(|&(a, b)| a < address + 4 && b > address)
+            );
+        }
+    }
+
+    #[test]
     fn xt3_processor_fields_come_from_its_blocks() {
         let mut fields = xt3().processor_fields().unwrap();
         fields.extend(xt3().body_fields().unwrap());
