@@ -4,9 +4,9 @@
 //! power-off: the stock request that cuts power with a wake deadline, how the
 //! request reaches the stock sender, and what the stock power-off writes to
 //! arm the power controller's alarm. An X-Processor 4 body instead publishes
-//! the message request its core hands to the processor that acts on it; that
-//! image holds no power-off, so the document carries none, and states that no
-//! camera run has qualified the path. The document holds addresses, sizes and
+//! the message request its core hands to the processor that acts on it, the
+//! stock power-off that request reaches where the image holds one, and whether
+//! a camera run has qualified the path. The document holds addresses, sizes and
 //! hashes, never firmware bytes.
 use fujimod_catalog_bulk::CodeCheck;
 use serde::{Deserialize, Serialize};
@@ -19,7 +19,7 @@ pub const RESTART_SCHEMA_URI: &str = "https://fujimod.com/schemas/restart.genera
 pub const WAKE_DEADLINE_SCHEMA: u32 = 2;
 
 /// Document version for a request that leaves the core for another processor,
-/// with no power-off the image can prove.
+/// with the power-off it reaches published only where the image holds it.
 pub const XP4_WAKE_DEADLINE_SCHEMA: u32 = 3;
 
 /// Located restart for one firmware.
@@ -111,8 +111,8 @@ pub struct RestartMechanism {
     pub runtime_qualified: Option<bool>,
     /// Where REC idle is observed.
     pub ui: RecIdle,
-    /// What the stock power-off does with the request. Schema 3 publishes none:
-    /// that image holds no power-off to describe.
+    /// What the stock power-off does with the request. Schema 3 publishes one
+    /// only where the image holds the power-off the queued request reaches.
     pub power_off: Option<PowerOff>,
     /// Optional stock timer ABI for an autonomous deferred restart. This is
     /// present only when its locator qualified a callback timer on the same
@@ -739,9 +739,6 @@ impl FirmwareRestart {
         if m.kind != Some(RestartKind::Xp4WakeDeadline) {
             return fail("an X-Processor 4 restart names its mechanism");
         }
-        if m.power_off.is_some() {
-            return fail("this image publishes no power-off the request reaches");
-        }
         if m.parameter_storage.is_some() {
             return fail("this document publishes no parameter storage");
         }
@@ -884,6 +881,29 @@ impl FirmwareRestart {
             return fail(
                 "the clock needs a complete bus writer or a live shadow reader and absence reason",
             );
+        }
+        if let Some(power_off) = &m.power_off {
+            // The power-off arms the alarm with the seconds left until the
+            // queued deadline, so it carries no fixed interval and none of the
+            // saved-deadline facts of a request restart.
+            if power_off.entry == 0 || power_off.halt == 0 || power_off.power_cut == 0 {
+                return fail("the power-off publishes its entry, halt and power cut");
+            }
+            if power_off.fixed_interval.is_some()
+                || power_off.deadline_parameter.is_some()
+                || power_off.rollover_parameter.is_some()
+                || power_off.boot_flag.is_some()
+            {
+                return fail("a message power-off arms its alarm from the queued deadline alone");
+            }
+            if power_off.request_deadline_offset != Some(deadline.payload_offset) {
+                return fail("the power-off reads the deadline the queue carries");
+            }
+            if power_off.alarm.seconds.is_empty()
+                || power_off.alarm.seconds.contains(&power_off.alarm.enable)
+            {
+                return fail("the power-off alarm needs seconds registers apart from its enable");
+            }
         }
         self.validate_optional_mechanisms()
     }
