@@ -3,5 +3,12 @@
   "schema": 1,
   "id": "xpro3",
   "soc_id": "xp4",
-  "dram_bytes": 536870912
+  "dram_bytes": 536870912,
+  "hardware": {
+    "profiles": {
+      "xpro3-discovery": {
+        "dram_basis": "This discovery profile makes no independent DRAM capacity qualification; a run configuration may declare a software address-space bound."
+      }
+    }
+  }
 }
