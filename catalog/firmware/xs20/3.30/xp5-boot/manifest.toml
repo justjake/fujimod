@@ -1,0 +1,115 @@
+# DRAFT for X-S20 3.30: copied unchanged from X-T5 4.31 (same XP5 SoC, identical loader
+# region 0x40000..0xc0000 and identical Linux DTB). Addresses in comments are X-T5's.
+# Cold OS boot: EL3 -> EL1t handoff at 0x5847c, after stock 0x58420..0x58478.
+version = 1
+firmware = "xs20-330"
+load_firmware = true
+# Host execution only: the M4 pair computes (the IBIS servo, the lens link) far more than it
+# waits in delay loops, so it runs in block execution. The guest state is the same either way.
+mprofile_block_execution = true
+
+# Device windows: xt5-431.d/*.toml, merged in filename order.
+
+[[ram]]
+base = 0
+size = 0x40000000
+
+# Linux 256 MiB, then the shared arenas, through 0x60000000: the application's
+# memory map (0x2df35d8) maps 0x40000000+0x10000000, 0x50000000+0xff00000 and
+# 0x5ff00000+0x100000, and the supplied Linux DTB declares memory@40000000 size
+# 0x10000000. The body's dram_bytes ends at the same address. Installed capacity
+# is unmeasured (camera-needs.md 1.19).
+[[ram]]
+base = 0x40000000
+size = 0x20000000
+
+# The firmware uses DRAM up to 0x80000000, past the body's 0x60000000: the still
+# subject-detection arena is 0x7ec00000+0x1400000 (0x2d5ceb8; the AI task 0x2de0b50
+# clears it), the stock early page tables identity-map 0x40000000..0x80000000
+# (non-executable), and the drain classifier 0x14c9914 drains
+# 0x60000000..0x7fffffff with a read of 0x60000000. The body's drain peripheral
+# moves to 0x80000000 only so that it does not overlap the new RAM. Installed
+# capacity is unmeasured.
+[dram]
+limit = 0xc0000000
+bus_drain = 0xc0000000
+
+[[ram]]
+base = 0x60000000
+size = 0x20000000
+
+# DRAM channel 2: the half-press boost (0x13adb58 mode 5) trains channels 2/3 and then maps
+# 0x80000000 + 1 GiB with 0x14c9a18 (0x13adf50; table 0x18f24f8). The still sequence writes there
+# 0.19 s after S2 (0xbb00f6b0).
+# Movie mode clears DRAM channel 2 from its first page (CPU1 memset 0x14ca7a8 from 0x2de0cf8 writes
+# 0x80001000 when the STILL/MOVIE switch moves to MOVIE), so the whole channel is RAM. The bus drain
+# moves past it to 0xc0000000.
+[[ram]]
+base = 0x80000000
+size = 0x40000000
+
+# DRAM channel 3: table 0x18f24f8 gives 0x1c0000000 + 1 GiB (entries: 0+1G, 0x40000000+1G,
+# 0x80000000+1G, 0x1c0000000+1G). Playback needs it: playcont (stream-00f20274, code base
+# 0x4e70000) opens its picture database at 0x572dad0 with 0x5731120(..., heap 0x1df800000,
+# size 0xc000000), which passes the heap to SQLite (0x5790a90 -> sqlite3_config 0x574c7ac,
+# SQLITE_CONFIG_HEAP = 8). memsys3 init 0x5733b1c then writes the first block header at
+# 0x1df800004 (0x5733b60) about 1 s after PLAY. The main image also uses fixed addresses in this
+# channel (0x1d6fc0000, 0x1d70c0000, 0x1d86c0000).
+# As for channel 2, the first 16 KiB granule stays with the 4-byte bus-drain read window at
+# 0x1c0000000 (manifest.d/20-storage.toml).
+[[ram]]
+base = 0x1c0004000
+size = 0x3fffc000
+
+# M-core SRAM: stock 13f7b58 copies flash f01c0000 here before reset release.
+[[ram]]
+base = 0xfa200000
+size = 0x100000
+
+# DDR PHY register and firmware space, RAM in every start mode. The first half-press (S1) DMA-copies
+# the PHY firmware (0x10000 bytes from 0x10c0800) to 0xfb4a0000 and writes PHY registers at
+# 0xfb400000 + 2*reg. The mailbox pages above each region are stubs (manifest.d/48-ddr-phy.toml).
+[[ram]]
+base = 0xfb000000
+size = 0x1a0000
+
+[[ram]]
+base = 0xfb400000
+size = 0x1a0000
+
+# Boot SRAM, 256 KiB. The SoC profile maps it only for ROM/SD starts, but the application keeps the AE
+# statistics banks here (0xff800000 and 0xff8075a0, 0x75a0 bytes each; planes at 0xff80eb40; counter
+# 0xff82c008). The statistics model writes its frames into this RAM (no imaging-statistics window).
+[[ram]]
+base = 0xff800000
+size = 0x40000
+
+# Both slots are empty by default. A loader run with --card-image or --card-file inserts a card in
+# slot 1 (0xff9b0000): present becomes true and the slot's host gains irq = 262
+# (crates/emulator-boot/src/xp5/loader_card.rs). The formatted volume below is then the card only
+# for --card-file without an image.
+[[sd]]
+base = 0xff9b0000
+present = false
+protected = false
+files = []
+[sd.format]
+sectors = 0x3b9e000
+max_dirty_sectors = 65536
+partition_start = 8192
+sectors_per_cluster = 64
+label = "NO NAME"
+
+[[sd]]
+base = 0xff9b4000
+present = false
+protected = false
+files = []
+[sd.format]
+sectors = 0x3b9e000
+max_dirty_sectors = 65536
+partition_start = 8192
+sectors_per_cluster = 64
+label = "NO NAME"
+
+# Stock 5847c replaces SP_EL1/SP_EL0 from 0xa6000/0xb6000 before use.

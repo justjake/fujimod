@@ -7,5 +7,236 @@
   "update": {
     "size": 109365264,
     "sha256": "ca1c02452f8eb7763a5a4d2b042665dd10156d63dfa63b8da316e0385889ea8b"
+  },
+  "layouts": {
+    "profiles": {
+      "xs20-330": {
+        "cpu": [
+          {
+            "cpsr": 964,
+            "id": 0,
+            "pc": 361596,
+            "regs": {
+              "x19": 0,
+              "x20": 21860748,
+              "x21": 99920
+            },
+            "running": true,
+            "sysregs": {
+              "CPACR_EL1": 3145728,
+              "ICC_IGRPEN0_EL1": 1,
+              "ICC_IGRPEN1_EL1": 1,
+              "ICC_PMR_EL1": 255,
+              "SCTLR_EL1": 818939904,
+              "SP_EL0": 696320,
+              "SP_EL1": 696320,
+              "VBAR_EL1": 366592
+            }
+          },
+          {
+            "cpsr": 964,
+            "id": 1,
+            "pc": 361596,
+            "regs": {
+              "x19": 1,
+              "x20": 21860748,
+              "x21": 99920
+            },
+            "running": true,
+            "sysregs": {
+              "CPACR_EL1": 3145728,
+              "ICC_IGRPEN0_EL1": 1,
+              "ICC_IGRPEN1_EL1": 1,
+              "ICC_PMR_EL1": 255,
+              "SCTLR_EL1": 818939904,
+              "SP_EL0": 712704,
+              "SP_EL1": 712704,
+              "VBAR_EL1": 366592
+            }
+          },
+          {
+            "cpsr": 964,
+            "id": 2,
+            "pc": 361596,
+            "regs": {
+              "x19": 2,
+              "x20": 21860748,
+              "x21": 99920
+            },
+            "running": true,
+            "sysregs": {
+              "CPACR_EL1": 3145728,
+              "ICC_IGRPEN0_EL1": 1,
+              "ICC_IGRPEN1_EL1": 1,
+              "ICC_PMR_EL1": 255,
+              "SCTLR_EL1": 818939904,
+              "SP_EL0": 729088,
+              "SP_EL1": 729088,
+              "VBAR_EL1": 366592
+            }
+          },
+          {
+            "cpsr": 964,
+            "id": 3,
+            "pc": 361596,
+            "regs": {
+              "x19": 3,
+              "x20": 21860748,
+              "x21": 99920
+            },
+            "running": true,
+            "sysregs": {
+              "CPACR_EL1": 3145728,
+              "ICC_IGRPEN0_EL1": 1,
+              "ICC_IGRPEN1_EL1": 1,
+              "ICC_PMR_EL1": 255,
+              "SCTLR_EL1": 818939904,
+              "SP_EL0": 745472,
+              "SP_EL1": 745472,
+              "VBAR_EL1": 366592
+            }
+          }
+        ],
+        "flash_image": {
+          "dat_origin": 628,
+          "xor": 255
+        },
+        "gic_initial": {
+          "0x0": 7
+        },
+        "gic_redistributor_initial": [
+          {
+            "core": 0,
+            "offset": 20,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "core": 1,
+            "offset": 20,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "core": 2,
+            "offset": 20,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "core": 3,
+            "offset": 20,
+            "size": 4,
+            "value": 0
+          }
+        ],
+        "limits": [],
+        "preload": [
+          {
+            "address": 17563648,
+            "dat_offset": 1704564,
+            "length": 2048,
+            "sha256": "6f1175972a0cecf84cea6c68dee1755a631c5910503ac805ddfef7bfd5c17620"
+          },
+          {
+            "address": 99920,
+            "word_size": 4,
+            "words": [
+              65534,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535
+            ]
+          },
+          {
+            "address": 100000,
+            "size": 4,
+            "value": 1398031684
+          },
+          {
+            "address": 100128,
+            "size": 4,
+            "value": 1398031684
+          },
+          {
+            "address": 100256,
+            "size": 4,
+            "value": 32770
+          },
+          {
+            "address": 100260,
+            "size": 4,
+            "value": 1
+          },
+          {
+            "address": 100264,
+            "size": 8,
+            "value": 6244803833302614016
+          },
+          {
+            "address": 100372,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "address": 100376,
+            "word_size": 4,
+            "words": [
+              0,
+              0,
+              0,
+              98304,
+              0
+            ]
+          },
+          {
+            "address": 101404,
+            "size": 4,
+            "value": 1
+          },
+          {
+            "address": 101408,
+            "size": 4,
+            "value": 30
+          },
+          {
+            "address": 101412,
+            "size": 4,
+            "value": 1
+          },
+          {
+            "address": 101416,
+            "size": 4,
+            "value": 257
+          },
+          {
+            "address": 101420,
+            "size": 4,
+            "value": 2145056
+          },
+          {
+            "address": 101424,
+            "size": 4,
+            "value": 0
+          }
+        ]
+      }
+    }
   }
 }

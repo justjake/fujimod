@@ -1,0 +1,104 @@
+# X-S20 physical keys: MENU/OK and DISP/BACK are bands on ADC channel 13 and the
+# focus-stick directions are bands on ADC channel 14 (kind-1 rows of scanner table
+# 0x1c44990). The key model is built from the body's catalog ladders
+# (fujimod/catalog/bodies/xs20/controls.json) and the run configuration's key-free
+# values (fujimod/configurations/emulator/xs20-330/run.json: the ADC block samples),
+# not from this manifest. Keys without a rung are refused.
+[[device]]
+base = 0xff904000
+size = 0x1000
+kind = "pin-control"
+
+[[device]]
+base = 0xff905000
+size = 0x1000
+kind = "soc-temperature"
+
+[[device]]
+base = 0xff906000
+size = 0x1000
+kind = "adc"
+[device.options]
+# The firmware caches channel n at 0x2069a08 + 2 * n. Channel 0: 2713 is the X-T5
+# thermistor reading (24.9 C there); the X-S20 conversion is UNVERIFIED. 4095 is above
+# every key band on channels 13 and 14 (MENU/OK 0..961, DISP/BACK 962..2393, focus
+# stick up to 3685), so no key is held, and puts the mode dial on channel 8 at P
+# (band 3579..4095). The other channels' meaning at 4095 is UNVERIFIED.
+samples = [2713, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095]
+
+[[device]]
+base = 0xff907000
+size = 0x1000
+kind = "gpio"
+[device.options]
+# EL1 handoff assumption: the two active-low panel selects on SSP5, GPIO 12.8 (LCD,
+# descriptor 4) and 12.10 (EVF, descriptors 8 and 9), start inactive (output latch 1).
+# The application drives 12.8 before each LCD transfer (0x1438cbc) but no code before
+# the first one drives 12.10, so with a zero latch both panels would be selected
+# (hvf-board.md, "Panel serial"). Whether the reset image or a pull-up sets this is
+# NOT established (camera-needs.md, 1.16).
+initial_outputs = [{ port = 12, levels = 0x500 }]
+# Run input: nothing in the hot shoe. 0x1416ba4 samples GPIO 11.4 (0x1381388(0xb0004))
+# and, after 17 equal samples, sets the accessory flag 0x24e61ac to (level == 1) and
+# posts 0x2f (attached) or 0x82f (removed); with the flag set, 0x140e5f4/0x140eab8
+# open SSP3 client 14 (descriptor 0x18e7e80: instance 3, select 11.4) for the external
+# flash ("flashext", 0x140cc80). So 11.4 reads 0 without an accessory. The default
+# pad level is 1, which would attach a flash nobody modeled (hvf-board.md, "Hot shoe").
+initial_inputs = [{ port = 11, pin = 4, high = false }]
+# Shutter release: S1 (half press) is GPIO 0.0 and S2 (full press) is GPIO 0.1, both active
+# low. The key scanner does not poll them for a press; it registers interrupt ids 0x74 and 0x75
+# (records 1 and 2 of table 0x18ea918) and handler 0x140789c posts the key event. Drive them
+# with `--gpio 0:0=0@MS` (press) and `--gpio 0:0=1@MS` (release).
+input_irqs = [{ port = 0, pin = 0, line = 116, active_high = false }, { port = 0, pin = 1, line = 117, active_high = false }]
+# Sensor power drive is sensed back on GPIO 4.4 (body.json gpio_feedback: sensor-power-enable
+# -> sensor-power-sense).
+feedback = [{ port = 4, register = 0, bit = 4, input_port = 4, input_pin = 4 }]
+
+[[device]]
+base = 0xff90b000
+size = 0x1000
+kind = "gpio-port3"
+
+[[device]]
+base = 0xff918000
+size = 0x1000
+kind = "spi-controller"
+[device.options]
+source_hz = 48000000
+# Power controller on SPI8, chip select GPIO 15.15 active-high (descriptor 19
+# virtual input (seconds since 2000-01-01), not a captured value, and source_hz
+# is the X100VI value, UNVERIFIED (hvf-board.md, "Values that are inherited or
+# unverified").
+[[device.options.endpoints]]
+select = { port = 15, pin = 15, active_high = true }
+[device.options.endpoints.part]
+kind = "power-controller"
+rtc_seconds = 0x325ffea2
+rtc_valid = true
+
+# I2C instance 1 at ff925000 (four controllers at ff924000 + n*0x1000,
+# 0x18e9248 and descriptors 0x18ea918, hvf-board.md "I2C controllers"). The
+# targets are the ones the former battery-i2c kind answered, inherited from
+# the X100VI board: fuel gauge 0x36, retained power registers 0x66/0x68 and
+# the TMD2772-class eye sensor 0x39. Every other client of bus 1 in the
+# driver's table 0x18e9258 (0x60 from 0x13d8168, 0x6a from 0x13e34a4, ...) is
+# not acknowledged. byte_ns is a functional latency, not a bus rate.
+[[device]]
+kind = "i2c-controller"
+base = 0xff925000
+size = 0x1000
+[device.options]
+interrupt = 289
+byte_ns = 1000000
+[[device.options.targets]]
+address = 0x36
+part = { kind = "fuel-gauge" }
+[[device.options.targets]]
+address = 0x39
+part = { kind = "tmd2772-proximity" }
+[[device.options.targets]]
+address = 0x66
+part = { kind = "retained-registers" }
+[[device.options.targets]]
+address = 0x68
+part = { kind = "retained-registers" }

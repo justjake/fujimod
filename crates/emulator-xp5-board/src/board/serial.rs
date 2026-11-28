@@ -56,6 +56,11 @@ pub(super) enum Part {
         #[serde(default)]
         motion: Option<fujimod_emulator_parts_io::lsm6ds::Motion>,
     },
+    Icm42688ConfigurationRegisters {
+        temperature: i16,
+        #[serde(default)]
+        motion: Option<fujimod_emulator_parts_io::icm42688::Motion>,
+    },
     FramedCommandPeer {
         initial_frame: u32,
     },
@@ -437,6 +442,13 @@ fn endpoint(
             temperature,
             motion,
         } => Box::new(fujimod_emulator_parts_io::lsm6ds::Registers::new(
+            temperature,
+            motion,
+        )),
+        Part::Icm42688ConfigurationRegisters {
+            temperature,
+            motion,
+        } => Box::new(fujimod_emulator_parts_io::icm42688::Registers::new(
             temperature,
             motion,
         )),

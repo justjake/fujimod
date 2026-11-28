@@ -1,0 +1,8 @@
+# Tables19ef080/19eedf0 identify17 precise banks inside this envelope.
+# Factory registers those banks only; holes and unknown offsets still stop.
+# Explicit panel-pll windows in the display fragment override four banks.
+# PLL words/dividers start zero by session assumption; no rate/lock-time claim.
+[[device]]
+base = 0xffa00000
+size = 0x20000
+kind = "clock-banks"
