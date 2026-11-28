@@ -77,10 +77,10 @@ addopts = "--strict-config --strict-markers --continue-on-collection-errors -ra"
 [dependency-groups]
 dev = [
   "pillow>=12.3",
-  "playwright>=1.64.1",
-  "pyodide-py>=314.0.7",
+  "playwright>=1.65.2",
+  "pyodide-py>=314.0.8",
   "pytest>=9.2.0",
-  "pytest-asyncio>=1.4.1",
-  "ruff>=0.17.3",
-  "ty>=0.0.94",
+  "pytest-asyncio>=1.5.0",
+  "ruff>=0.17.6",
+  "ty>=0.0.109",
 ]
