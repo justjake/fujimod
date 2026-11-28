@@ -1,5 +1,6 @@
 //! Every integration test of this crate, linked into one test binary.
 
+mod catalog_plans;
 mod exr2_stock_rec;
 mod support;
 mod x70_image;

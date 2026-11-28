@@ -151,21 +151,23 @@ it restores into a freshly built session that still reports REC.
   cache deletes leftover temporary files and saves from other builder
   versions.
 - Any open can skip the cache: MCP `boot_cache: false`, CLI
-  `--no-boot-cache`, the desktop launcher's Boot from scratch.
+  `"boot_cache": false`, the desktop launcher's Boot from scratch.
 - Tests of the cache itself use a scratch state directory under `/tmp`.
 
 ## Callers
 
-- MCP `camera_open` takes `firmware`, `boot` (`stock`, `sd-card`,
-  `autostart`), an SD card folder and options. `camera_set` moves a dial,
+- MCP `camera_open` takes the camera description (`body`, optionally `firmware`,
+  `boot`: `stock`, `sd-card` or `autostart`, cards and options; see
+  [emulator-camera](emulator-camera/README.md)). `camera_set` moves a dial,
   switch, ring or lever to a catalog position and returns once the firmware
   observes the new pose.
 - The desktop launcher lists the library's cameras and opens Stock, SD card
   or Autostart; `--endpoint` still connects to a session another host serves.
-- The CLI `open` takes `--firmware ID --boot stock|sd-card|autostart
-  [--sd-card DIR] [--execution-policy interactive|exact] [--gui]`.
-- The Python binding's `Board.open_camera` takes the same choices, or files,
-  flash, SD card files and a combination for the emulator layer.
+- The CLI `open --camera CAMERA [--gui]` takes the same description as a
+  file, standard input or inline JSON.
+- The Python binding's `Board.open_camera` takes the same description as
+  keyword arguments; a power-on hold, a RAM image or a flash image opens the emulator
+  layer.
 - The website keeps its interface and calls the same layers inside its Wasm
   module.
 

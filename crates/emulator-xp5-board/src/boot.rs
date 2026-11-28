@@ -11,7 +11,7 @@ use fujimod_catalog::{
     soc::BlockDevice,
 };
 use fujimod_catalog_configuration::RunEngine;
-use fujimod_catalog_configuration::application_inputs::ApplicationRunScene;
+use fujimod_catalog_configuration::application::ApplicationRunScene;
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator::board::aprofile::generic_timer;
 use fujimod_emulator::board::{
@@ -560,11 +560,10 @@ pub fn windows_from_blocks(
     resolved: &fujimod_catalog_resolution::ResolvedConfiguration,
     memory: &RunMemory,
 ) -> Result<Vec<DeviceWindow>, String> {
-    use fujimod_catalog_configuration::application_inputs::ApplicationBlockInput;
+    use fujimod_catalog_configuration::application::ApplicationBlockInput;
 
     let selection = &resolved.reference;
     let inputs = resolved
-        .configuration
         .inputs
         .as_ref()
         .and_then(|inputs| match inputs {
@@ -583,7 +582,6 @@ pub fn windows_from_blocks(
         _ => None,
     });
     let part_inputs = resolved
-        .configuration
         .inputs
         .as_ref()
         .and_then(|inputs| match inputs {
@@ -737,8 +735,15 @@ pub fn windows_from_blocks(
 type FlashInput<'a> = (
     &'a str,
     &'a Option<u8>,
-    &'a Vec<fujimod_catalog_configuration::application_inputs::FlashSeed>,
+    &'a Vec<fujimod_catalog_configuration::application::FlashSeed>,
 );
+
+/// The body's hardware facts beyond its parts and wiring.
+fn body_hardware(
+    selection: &ResolvedSelection,
+) -> Option<&fujimod_catalog::assembly::BodyHardware> {
+    selection.body.hardware.as_ref()
+}
 
 /// The bring-up register file answers of a block's registers that do not read back their last write.
 fn stub_registers(block: &fujimod_catalog::reference::SocBlock) -> toml::Value {
@@ -1127,10 +1132,10 @@ fn lens_wire(
 fn serial_endpoints(
     selection: &ResolvedSelection,
     block: &fujimod_catalog::reference::SocBlock,
-    part_inputs: &[fujimod_catalog_configuration::application_inputs::ApplicationPartInput],
+    part_inputs: &[fujimod_catalog_configuration::application::ApplicationPartInput],
 ) -> Result<Vec<toml::Value>, String> {
     use fujimod_catalog::assembly::PeripheralPart;
-    use fujimod_catalog_configuration::application_inputs::ApplicationPartInput as Input;
+    use fujimod_catalog_configuration::application::ApplicationPartInput as Input;
     let integer = |value: i64| toml::Value::Integer(value);
     let mut endpoints = Vec::new();
     let attachments = selection
@@ -1389,11 +1394,11 @@ fn block_window(
     flash: Option<FlashInput<'_>>,
     flash_image: Option<&fujimod_catalog::firmware::FlashImage>,
     samples: Option<&[u16]>,
-    gpio_input: Option<&fujimod_catalog_configuration::application_inputs::ApplicationBlockInput>,
+    gpio_input: Option<&fujimod_catalog_configuration::application::ApplicationBlockInput>,
     run: &fujimod_catalog_configuration::RunConfiguration,
     ticks_per_second: u64,
     presented_jedec: Option<u32>,
-    part_inputs: &[fujimod_catalog_configuration::application_inputs::ApplicationPartInput],
+    part_inputs: &[fujimod_catalog_configuration::application::ApplicationPartInput],
     memory: &RunMemory,
 ) -> Result<Option<(&'static str, toml::Table)>, String> {
     let mut options = toml::Table::new();
@@ -1530,7 +1535,7 @@ fn block_window(
             pad_model,
             ..
         } => {
-            use fujimod_catalog_configuration::application_inputs::ApplicationBlockInput;
+            use fujimod_catalog_configuration::application::ApplicationBlockInput;
             let table = |pairs: Vec<(&str, toml::Value)>| {
                 toml::Value::Table(
                     pairs
@@ -1715,12 +1720,14 @@ fn block_window(
             match connectors.as_slice() {
                 [] => {}
                 [connector] => {
-                    let connected = part_inputs.iter().find_map(|input| match input {
-                        fujimod_catalog_configuration::application_inputs::ApplicationPartInput::HdmiSink {
+                    let connected = part_inputs.iter().find_map(|input| {
+                        match input {
+                        fujimod_catalog_configuration::application::ApplicationPartInput::HdmiSink {
                             part_id,
                             connected,
                         } if part_id == &connector.id => Some(*connected),
                         _ => None,
+                    }
                     });
                     options.insert(
                         "sink_connected".into(),
@@ -1817,7 +1824,9 @@ fn block_window(
         BlockDevice::Renderer { .. } => "renderer",
         BlockDevice::ImagingPhy { .. } => "imaging-phy",
         BlockDevice::ImagingInput { .. } => {
-            if run.idle_status_blocks.contains(&block.id) {
+            if body_hardware(selection)
+                .is_some_and(|hardware| hardware.idle_status_blocks.contains(&block.id))
+            {
                 options.insert("idle_status".into(), toml::Value::Boolean(true));
             }
             "imaging-input"
@@ -1969,7 +1978,10 @@ fn block_window(
         BlockDevice::Pl022 { .. } if port_device(selection, block)?.is_some() => {
             port_device(selection, block)?.expect("checked above")
         }
-        BlockDevice::Pl022 { source_hz, .. } if run.polled_serial_blocks.contains(&block.id) => {
+        BlockDevice::Pl022 { source_hz, .. }
+            if body_hardware(selection)
+                .is_some_and(|hardware| hardware.polled_serial_blocks.contains(&block.id)) =>
+        {
             options.insert("source_hz".into(), integer(*source_hz));
             let endpoints = serial_endpoints(selection, block, part_inputs)?;
             if !endpoints.is_empty() {
@@ -1999,7 +2011,9 @@ fn block_window(
             if let Some(line) = irq("irq") {
                 options.insert("gic_line".into(), integer(u64::from(line)));
             }
-            if run.unobserved_interrupt_blocks.contains(&block.id) {
+            if body_hardware(selection)
+                .is_some_and(|hardware| hardware.unobserved_interrupt_blocks.contains(&block.id))
+            {
                 options.insert(
                     "companion_irq_unconnected".into(),
                     toml::Value::Boolean(true),
@@ -2179,9 +2193,9 @@ fn block_window(
             if let Some(address) = address_high {
                 controller.insert("address_high".into(), integer(*address));
             }
-            if let Some(steps) = run
-                .sd_clock_steps
-                .iter()
+            if let Some(steps) = body_hardware(selection)
+                .into_iter()
+                .flat_map(|hardware| &hardware.sd_clock_steps)
                 .find(|steps| steps.block_id == block.id)
             {
                 let mut dividers = toml::Table::new();
@@ -2342,9 +2356,9 @@ fn block_window(
             if !targets.is_empty() {
                 options.insert("targets".into(), toml::Value::Array(targets));
             }
-            if let Some(time) = run
-                .bus_byte_times
-                .iter()
+            if let Some(time) = body_hardware(selection)
+                .into_iter()
+                .flat_map(|hardware| &hardware.bus_byte_times)
                 .find(|time| time.block_id == block.id)
             {
                 options.insert(

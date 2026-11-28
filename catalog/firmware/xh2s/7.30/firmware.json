@@ -4,6 +4,9 @@
   "id": "xh2s-730",
   "body_id": "xh2s",
   "version": "7.30",
+  "start": {
+    "kind": "setup"
+  },
   "update": {
     "size": 110302568,
     "sha256": "87c566c1ff6343e4c7463a4ef968183f41d1f24cc63d610433d3a387b13f731b"

@@ -105,7 +105,7 @@ pub struct Run {
     pub load_snapshot: Option<PathBuf>,
     pub save_snapshot: Option<PathBuf>,
     /// The original update file.
-    pub update: PathBuf,
+    pub update: crate::FirmwareFile,
     pub manifest: Option<PathBuf>,
     pub watch_pcs: Option<String>,
     /// Physical ranges `ADDR:LEN[,ADDR:LEN...]` whose writes are logged to stderr.
@@ -115,17 +115,11 @@ pub struct Run {
     pub dump: Option<String>,
     pub hash: Option<String>,
     /// The boot ROM, for a configuration that starts from it.
-    pub boot_rom: Option<PathBuf>,
-    /// A raw SD card image in place of the in-memory volume. ROM and SD starts load it read-only;
-    /// the loader start puts it in slot 1 and writes changed sectors back at the end of the run.
-    pub card_image: Option<PathBuf>,
-    /// Files on the SD card, as `(name, path)`: the startup card of a ROM or SD start, or the
-    /// slot-1 card of the loader start.
-    pub card_files: Vec<(String, PathBuf)>,
-    /// The loader start's card in SD slot 2: a raw image (changed sectors are written back at
-    /// the end of the run) or files for an in-memory volume.
-    pub second_card_image: Option<PathBuf>,
-    pub second_card_files: Vec<(String, PathBuf)>,
+    pub boot_rom: Option<crate::FirmwareFile>,
+    /// Cards by SD slot (1, and 2 on a body with a second slot). A ROM or SD start takes its
+    /// startup card from slot 1 and loads an image read-only; the loader start inserts each card
+    /// and writes an image's changed sectors back at the end of the run.
+    pub cards: std::collections::BTreeMap<u8, crate::media::CardInsert>,
     /// Scripted key presses: `t=SECONDS:KEY;...` (a leading `-` on KEY releases it).
     pub keys: Option<String>,
     pub gpio: Option<String>,
@@ -165,7 +159,7 @@ impl Run {
     /// A boot of `update` with no caller inputs, recording into `output`.
     pub fn new(
         configuration: ResolvedConfiguration,
-        update: PathBuf,
+        update: impl Into<crate::FirmwareFile>,
         execution_policy: ExecutionPolicy,
         output: PathBuf,
     ) -> Self {
@@ -173,7 +167,7 @@ impl Run {
             configuration,
             load_snapshot: None,
             save_snapshot: None,
-            update,
+            update: update.into(),
             manifest: None,
             watch_pcs: None,
             watch_writes: None,
@@ -182,10 +176,7 @@ impl Run {
             dump: None,
             hash: None,
             boot_rom: None,
-            card_image: None,
-            card_files: Vec::new(),
-            second_card_image: None,
-            second_card_files: Vec::new(),
+            cards: Default::default(),
             keys: None,
             gpio: None,
             hdmi_connect_at_ms: None,
@@ -270,10 +261,7 @@ impl RunHost {
             dump,
             hash,
             boot_rom: rom_path,
-            card_image: sd_image,
-            card_files,
-            second_card_image,
-            second_card_files,
+            cards,
             keys: key_script,
             gpio: gpio_spec,
             hdmi_connect_at_ms,
@@ -367,13 +355,10 @@ impl RunHost {
         }
         timed_pokes.sort_by_key(|(at_ms, _)| *at_ms);
         let request = Startup {
-            update: update.into(),
+            update,
             manifest,
-            boot_rom: rom_path.map(Into::into),
-            card_image: sd_image,
-            card_files,
-            second_card_image,
-            second_card_files,
+            boot_rom: rom_path,
+            cards,
             scene,
             output: Some(run_directory.clone()),
             mode,

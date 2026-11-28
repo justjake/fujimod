@@ -8,7 +8,7 @@
 
 use crate::graph::{self, ProcessorStart};
 use fujimod_catalog::{
-    profiles::{BlockOverride, BodyProfile, RegisterIdleBits, RegisterLayouts},
+    profiles::{BlockOverride, BodyBoard, RegisterIdleBits, RegisterLayouts},
     reference::{
         AProfileState, Body, ConnectionSignal, MemoryKind, MemoryRegion, RegionSize, Soc, SocBlock,
     },
@@ -100,24 +100,14 @@ fn flat_reference(reference: [u32; 3]) -> [u32; 3] {
     [reference[1]; 3]
 }
 
-/// The selected body hardware profile of a resolved run.
-fn body_profile(resolved: &ResolvedConfiguration) -> Result<&BodyProfile, String> {
-    let choice = resolved
-        .configuration
-        .preset
-        .as_ref()
-        .and_then(|preset| preset.hardware_selection.as_ref())
-        .ok_or("X-Processor Pro assembly requires a hardware selection")?;
-    let body = &resolved.reference.body;
-    body.hardware
-        .as_ref()
-        .and_then(|hardware| hardware.profiles.get(&choice.body_profile_id))
-        .ok_or_else(|| {
-            format!(
-                "body {} has no hardware profile {}",
-                body.id, choice.body_profile_id
-            )
-        })
+/// The body's board.
+fn body_board(resolved: &ResolvedConfiguration) -> Result<&BodyBoard, String> {
+    resolved.board().ok_or_else(|| {
+        format!(
+            "body {} declares no board for X-Processor Pro assembly",
+            resolved.reference.body.id
+        )
+    })
 }
 
 /// The device model of a block, after the selected body's overrides; the last
@@ -870,7 +860,7 @@ fn gic_node(soc: &Soc) -> Result<Value, String> {
 /// Command-dial encoder nodes of the selected body profile. Each declaration
 /// names a body connection whose two GPIO signals are the dial's phase pads, so
 /// the pads come from the body record and only the edge pacing is model policy.
-fn encoder_nodes(body: &Body, profile: &BodyProfile) -> Result<Vec<Value>, String> {
+fn encoder_nodes(body: &Body, profile: &BodyBoard) -> Result<Vec<Value>, String> {
     let mut out = Vec::new();
     for declaration in profile.encoders.iter().flatten() {
         let connection = body
@@ -1643,11 +1633,11 @@ pub fn assemble(resolved: &ResolvedConfiguration, inputs: &Inputs<'_>) -> Result
         ));
     }
     let reset = resolved
-        .hardware_inputs()?
-        .ok_or("X-Processor Pro assembly requires hardware inputs")?
-        .reset;
+        .hardware_inputs()
+        .cloned()
+        .ok_or("X-Processor Pro assembly requires hardware inputs")?;
     let body = &selection.body;
-    let profile = body_profile(resolved)?;
+    let profile = body_board(resolved)?;
     let maps = block_register_layouts(&selection.soc, &profile.block_overrides)?;
     let gic = gic_node(&selection.soc)?;
     let (numerator, denominator) = reset
@@ -1835,7 +1825,7 @@ mod tests {
             let resolved = ResolvedConfiguration::bundled(configuration).unwrap();
             let maps = block_register_layouts(
                 &resolved.reference.soc,
-                &body_profile(&resolved).unwrap().block_overrides,
+                &body_board(&resolved).unwrap().block_overrides,
             )
             .unwrap();
             assert_eq!(
@@ -2058,12 +2048,12 @@ mod tests {
         let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
         let maps = block_register_layouts(
             &resolved.reference.soc,
-            &body_profile(&resolved).unwrap().block_overrides,
+            &body_board(&resolved).unwrap().block_overrides,
         )
         .unwrap();
         let selection = &resolved.reference;
         let banks = ram_banks(&selection.soc.memory_regions);
-        let reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        let reset = resolved.hardware_inputs().unwrap().clone();
         let unit = reset.live_view_image.as_ref().unwrap().unit;
         let (starts, assets) = (starts(), assets());
         let built = |reset: &HardwareReset| {
@@ -2152,12 +2142,12 @@ mod tests {
         let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
         let maps = block_register_layouts(
             &resolved.reference.soc,
-            &body_profile(&resolved).unwrap().block_overrides,
+            &body_board(&resolved).unwrap().block_overrides,
         )
         .unwrap();
         let selection = &resolved.reference;
         let banks = ram_banks(&selection.soc.memory_regions);
-        let mut reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        let mut reset = resolved.hardware_inputs().unwrap().clone();
         let image = reset.live_view_image.as_mut().unwrap();
         let unit = image.unit;
         image.film = None;
@@ -2211,7 +2201,7 @@ mod tests {
         let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
         let maps = block_register_layouts(
             &resolved.reference.soc,
-            &body_profile(&resolved).unwrap().block_overrides,
+            &body_board(&resolved).unwrap().block_overrides,
         )
         .unwrap();
         let selection = &resolved.reference;
@@ -2233,7 +2223,7 @@ mod tests {
                 &inputs,
             )
         };
-        let mut reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        let mut reset = resolved.hardware_inputs().unwrap().clone();
         let image = SensorImage {
             width: 2,
             height: 1,
@@ -2275,7 +2265,7 @@ mod tests {
     ) -> Result<Vec<Value>, String> {
         let maps = block_register_layouts(
             &resolved.reference.soc,
-            &body_profile(resolved).unwrap().block_overrides,
+            &body_board(resolved).unwrap().block_overrides,
         )
         .unwrap();
         let selection = &resolved.reference;
@@ -2315,7 +2305,7 @@ mod tests {
     #[test]
     fn a_rendered_sensor_picture_keeps_the_declared_film_and_still_references() {
         let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
-        let reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        let reset = resolved.hardware_inputs().unwrap().clone();
         let unit = reset.live_view_image.as_ref().unwrap().unit;
         let developer = reset.still_development.as_ref().unwrap().developer;
         let without = picture_test(&resolved, &reset, None).unwrap();
@@ -2346,7 +2336,7 @@ mod tests {
     #[test]
     fn a_camera_raw_sensor_picture_takes_the_wall_radiance_and_flat_gains() {
         let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
-        let reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        let reset = resolved.hardware_inputs().unwrap().clone();
         let unit = reset.live_view_image.as_ref().unwrap().unit;
         let developer = reset.still_development.as_ref().unwrap().developer;
         let radiance = reset
@@ -2405,7 +2395,7 @@ mod tests {
             light: SensorImageLight::CameraRaw,
             ..picture()
         };
-        let mut reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        let mut reset = resolved.hardware_inputs().unwrap().clone();
         let film = reset
             .live_view_image
             .as_mut()
@@ -2418,7 +2408,7 @@ mod tests {
             picture_test(&resolved, &reset, Some(&raw)).err().unwrap(),
             "a camera-raw sensor picture needs a declared camera-raw radiance"
         );
-        let mut reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        let mut reset = resolved.hardware_inputs().unwrap().clone();
         let film = reset
             .live_view_image
             .as_mut()
@@ -2441,10 +2431,10 @@ mod tests {
         let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
         let maps = block_register_layouts(
             &resolved.reference.soc,
-            &body_profile(&resolved).unwrap().block_overrides,
+            &body_board(&resolved).unwrap().block_overrides,
         )
         .unwrap();
-        let reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        let reset = resolved.hardware_inputs().unwrap().clone();
         let (starts, assets) = (starts(), assets());
         let inputs = Inputs {
             starts: &starts,
@@ -2475,10 +2465,10 @@ mod tests {
         let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
         let maps = block_register_layouts(
             &resolved.reference.soc,
-            &body_profile(&resolved).unwrap().block_overrides,
+            &body_board(&resolved).unwrap().block_overrides,
         )
         .unwrap();
-        let mut reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        let mut reset = resolved.hardware_inputs().unwrap().clone();
         reset.sensor_frame = Some(SensorFrame {
             basis: "test".into(),
             profile: "declared".into(),
@@ -2517,10 +2507,10 @@ mod tests {
         let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
         let maps = block_register_layouts(
             &resolved.reference.soc,
-            &body_profile(&resolved).unwrap().block_overrides,
+            &body_board(&resolved).unwrap().block_overrides,
         )
         .unwrap();
-        let mut reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        let mut reset = resolved.hardware_inputs().unwrap().clone();
         reset.live_view_image.as_mut().unwrap().film = None;
         reset.still_development = Some(StillDevelopment {
             basis: "test".into(),
@@ -2613,25 +2603,7 @@ mod tests {
             node(&assembly.devices, "statistics")["buffers"][0][1],
             json!(vec![0u32; 80])
         );
-        // A run without a hardware selection has no SoC profile to assemble from.
-        let mut resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
-        resolved
-            .configuration
-            .preset
-            .as_mut()
-            .unwrap()
-            .hardware_selection = None;
         let (starts, assets) = (starts(), assets());
-        let inputs = Inputs {
-            starts: &starts,
-            sub_cpu_registers: &[],
-            assets: &assets,
-            sensor_image: None,
-        };
-        assert_eq!(
-            assemble(&resolved, &inputs).err().unwrap(),
-            "X-Processor Pro assembly requires a hardware selection"
-        );
         // Profile-header registers need the declared sub-CPU; with it they are appended.
         let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
         let inputs = Inputs {

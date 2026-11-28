@@ -1,6 +1,7 @@
 """The camera builder's open through the Python bindings."""
 
 import hashlib
+import inspect
 import json
 import os
 from pathlib import Path
@@ -48,29 +49,32 @@ def release_card() -> Path:
 
 def test_open_camera_refuses_unknown_options() -> None:
     with pytest.raises(ValueError, match="boot"):
-        Board.open_camera(firmware="x70-110", boot="sd")  # ty: ignore[invalid-argument-type]  # deliberately invalid
+        Board.open_camera(body="x70", boot="sd")  # ty: ignore[invalid-argument-type]  # deliberately invalid
     with pytest.raises(ValueError, match="execution_policy"):
-        Board.open_camera(firmware="x70-110", execution_policy="fast")  # ty: ignore[invalid-argument-type]  # deliberately invalid
+        Board.open_camera(body="x70", execution_policy="fast")  # ty: ignore[invalid-argument-type]  # deliberately invalid
     with pytest.raises(TypeError, match="boot_cache"):
-        Board.open_camera(firmware="x70-110", boot_cache=1)  # ty: ignore[invalid-argument-type]  # deliberately invalid
+        Board.open_camera(body="x70", boot_cache=1)  # ty: ignore[invalid-argument-type]  # deliberately invalid
     with pytest.raises(TypeError, match="run_to_rec"):
-        Board.open_camera(firmware="x70-110", run_to_rec=1)  # ty: ignore[invalid-argument-type]  # deliberately invalid
-    with pytest.raises(TypeError, match="sd_card_present"):
-        Board.open_camera(firmware="x70-110", sd_card_present="yes")  # ty: ignore[invalid-argument-type]  # deliberately invalid
-    with pytest.raises(TypeError, match="sd_card_write_protected"):
-        Board.open_camera(firmware="x70-110", sd_card_write_protected=None)  # ty: ignore[invalid-argument-type]  # deliberately invalid
-    with pytest.raises(ValueError, match="sd_card_transfer_ticks"):
-        Board.open_camera(firmware="x70-110", sd_card_transfer_ticks=0)
+        Board.open_camera(body="x70", run_to_rec=1)  # ty: ignore[invalid-argument-type]  # deliberately invalid
+    with pytest.raises(ValueError, match="boolean"):
+        Board.open_camera(body="x70", sd_card={"present": "yes"})
+    with pytest.raises(RuntimeError, match="transfer ticks"):
+        Board.open_camera(body="x70", sd_card={"transfer_ticks": 0})
     with pytest.raises(ValueError, match="autostart"):
-        Board.open_camera(firmware="x70-110", boot="autostart", run_to_rec=False)
-    with pytest.raises(ValueError, match="present"):
-        Board.open_camera(firmware="x70-110", boot="sd-card", sd_card_present=False)
+        Board.open_camera(body="x70", boot="autostart", run_to_rec=False)
+    with pytest.raises(RuntimeError, match="X-H2 firmware, not X-H2S"):
+        Board.open_camera(body="xh2s", firmware="xh2-530")
+    with pytest.raises(RuntimeError, match="no sd_card_2 slot"):
+        Board.open_camera(body="x70", sd_card_2={})
+    with pytest.raises(RuntimeError, match="CFexpress is not modeled yet"):
+        Board.open_camera(body="xh2s", cfexpress_card={})
 
 
 def test_the_x70_stock_boot_opens_to_rec() -> None:
     library()
     with Board.open_camera(
-        firmware="x70-110",
+        body="x70",
+        firmware="1.10",
         boot="stock",
         execution_policy="interactive",
         boot_cache=False,
@@ -87,9 +91,9 @@ def test_the_x70_stock_boot_opens_to_rec() -> None:
 def test_the_x70_release_card_opens_to_rec() -> None:
     card = release_card()
     with Board.open_camera(
-        firmware="x70-110",
+        body="x70",
         boot="sd-card",
-        sd_card=card,
+        sd_card={"directory": card},
         execution_policy="interactive",
     ) as board:
         assert board.status()["status"] == "rec"
@@ -107,9 +111,9 @@ def held_positions(board: Board) -> dict[str, object]:
 def test_the_x70_card_boot_can_stop_before_the_first_instruction() -> None:
     card = release_card()
     with Board.open_camera(
-        firmware="x70-110",
+        body="x70",
         boot="sd-card",
-        sd_card=card,
+        sd_card={"directory": card},
         execution_policy="interactive",
         run_to_rec=False,
     ) as board:
@@ -143,11 +147,12 @@ def test_the_x70_card_boot_can_stop_before_the_first_instruction() -> None:
 def test_an_absent_sd_card_boots_and_reports_the_slot_empty() -> None:
     library()
     with Board.open_camera(
-        firmware="x70-110",
+        body="x70",
+        firmware="1.10",
         boot="stock",
         execution_policy="interactive",
         boot_cache=False,
-        sd_card_present=False,
+        sd_card={"present": False},
     ) as board:
         assert board.status()["status"] == "rec"
         state = board.session.card_state("sd")
@@ -158,11 +163,12 @@ def test_an_absent_sd_card_boots_and_reports_the_slot_empty() -> None:
 def test_a_write_protected_sd_card_boots_and_reports_protection() -> None:
     library()
     with Board.open_camera(
-        firmware="x70-110",
+        body="x70",
+        firmware="1.10",
         boot="stock",
         execution_policy="interactive",
         boot_cache=False,
-        sd_card_write_protected=True,
+        sd_card={"write_protected": True},
     ) as board:
         assert board.status()["status"] == "rec"
         state = board.session.card_state("sd")
@@ -173,19 +179,18 @@ def test_a_write_protected_sd_card_boots_and_reports_protection() -> None:
 def test_sd_card_transfer_ticks_slow_the_card_boot() -> None:
     card = release_card()
     default = Board.open_camera(
-        firmware="x70-110",
+        body="x70",
         boot="sd-card",
-        sd_card=card,
+        sd_card={"directory": card},
         execution_policy="interactive",
         boot_cache=False,
     )
     slow = Board.open_camera(
-        firmware="x70-110",
+        body="x70",
         boot="sd-card",
-        sd_card=card,
+        sd_card={"directory": card, "transfer_ticks": 20_000},
         execution_policy="interactive",
         boot_cache=False,
-        sd_card_transfer_ticks=20_000,
     )
     try:
         assert default.status()["status"] == "rec"
@@ -205,46 +210,46 @@ def test_a_declared_card_layout_formats_the_stock_card() -> None:
         "sectors_per_cluster": 32,
     }
     with Board.open_camera(
-        firmware="x70-110",
+        body="x70",
+        firmware="1.10",
         boot="stock",
         execution_policy="interactive",
         boot_cache=False,
-        card_layout=layout,
+        sd_card={"layout": layout},
     ) as board:
         assert board.status()["status"] == "rec"
         state = board.session.card_state("sd")
         assert state["capacity_bytes"] == layout["sectors"] * 512
     card = release_card()
     with Board.open_camera(
-        firmware="x70-110",
+        body="x70",
         boot="sd-card",
-        sd_card=card,
+        sd_card={"directory": card, "layout": layout},
         execution_policy="interactive",
         boot_cache=False,
-        card_layout=layout,
     ) as board:
         assert board.status()["status"] == "rec"
         state = board.session.card_state("sd")
         assert state["capacity_bytes"] == layout["sectors"] * 512
-    with pytest.raises(ValueError, match="sectors_per_cluster"):
-        Board.open_camera(firmware="x70-110", card_layout={"sectors": 8_388_608})
-    with pytest.raises(TypeError, match="integer"):
-        Board.open_camera(firmware="x70-110", card_layout={**layout, "sectors": "big"})
-    with pytest.raises(ValueError, match="card present"):
-        Board.open_camera(firmware="x70-110", sd_card_present=False, card_layout=layout)
-    with pytest.raises(ValueError, match="cluster size"):
+    with pytest.raises(ValueError, match="missing field"):
+        Board.open_camera(body="x70", sd_card={"layout": {"sectors": 8_388_608}})
+    with pytest.raises(ValueError, match="invalid type"):
+        Board.open_camera(body="x70", sd_card={"layout": {**layout, "sectors": "big"}})
+    with pytest.raises(RuntimeError, match="card present"):
+        Board.open_camera(body="x70", sd_card={"present": False, "layout": layout})
+    with pytest.raises(RuntimeError, match="cluster size"):
         Board.open_camera(
-            firmware="x70-110",
-            card_layout={**layout, "sectors_per_cluster": 3},
+            body="x70",
+            sd_card={"layout": {**layout, "sectors_per_cluster": 3}},
         )
 
 
 def test_the_x70_powers_on_with_its_flash_and_card_kept() -> None:
     card = release_card()
     with Board.open_camera(
-        firmware="x70-110",
+        body="x70",
         boot="sd-card",
-        sd_card=card,
+        sd_card={"directory": card},
         execution_policy="interactive",
     ) as board:
         assert board.status()["status"] == "rec"
@@ -262,7 +267,7 @@ def test_a_stock_boot_cannot_power_on_holding_card_controls() -> None:
     library()
     with (
         Board.open_camera(
-            firmware="x70-110",
+            body="x70",
             boot="stock",
             execution_policy="interactive",
             boot_cache=False,
@@ -279,50 +284,47 @@ def test_a_verified_image_starts_at_the_loader(tmp_path: Path) -> None:
     path.write_bytes(image)
     digest = hashlib.sha256(image).hexdigest()
     with Board.open_camera(
-        firmware="x70-110",
+        body="x70",
+        firmware="1.10",
         boot="stock",
         execution_policy="interactive",
         run_to_rec=False,
-        start="loader",
-        image=path,
-        image_sha256=digest,
+        loader_image={"path": path, "sha256": digest},
     ) as board:
         assert board.status()["instructions"] == 0
         assert board.read_physical(0, len(image)) == image
         assert board.cpus[0].reg_read("Pc") == 0
     with pytest.raises(RuntimeError, match="sha256"):
         Board.open_camera(
-            firmware="x70-110",
-            boot="stock",
+            body="x70",
             run_to_rec=False,
-            start="loader",
-            image=path,
-            image_sha256="0" * 64,
+            loader_image={"path": path, "sha256": "0" * 64},
         )
-    with pytest.raises(ValueError, match="start"):
-        Board.open_camera(firmware="x70-110", start="boot")  # ty: ignore[invalid-argument-type]  # deliberately invalid
-    with pytest.raises(ValueError, match="requires image"):
-        Board.open_camera(firmware="x70-110", start="loader")
-    with pytest.raises(ValueError, match="image requires"):
-        Board.open_camera(firmware="x70-110", image=path, image_sha256=digest)
+    with pytest.raises(TypeError, match="loader_image"):
+        Board.open_camera(body="x70", loader_image={"path": path})
+    with pytest.raises(ValueError, match="alternative starts"):
+        Board.open_camera(
+            body="x70", hold="sd", loader_image={"path": path, "sha256": digest}
+        )
 
 
 def test_a_camera_opens_from_named_files_and_card_bytes() -> None:
     directory = root()
     update, boot_rom = x70_files(directory)
     with Board.open_camera(
-        firmware="x70-110",
+        body="x70",
+        firmware="1.10",
         boot="stock",
         execution_policy="interactive",
         boot_cache=False,
-        update=update,
-        boot_rom=boot_rom,
-        sd_card_files={"NOTE.TXT": b"written from memory"},
+        firmware_files={"update": update, "boot_rom": boot_rom},
+        sd_card={"files": {"NOTE.TXT": {"bytes": b"written from memory"}}},
     ) as board:
         assert board.status()["status"] == "rec"
-    with pytest.raises(ValueError, match="not both"):
+    with pytest.raises(ValueError, match="alternatives"):
         Board.open_camera(
-            firmware="x70-110", sd_card=directory, sd_card_files={"NOTE.TXT": b"x"}
+            body="x70",
+            sd_card={"directory": directory, "files": {"NOTE.TXT": {"bytes": b"x"}}},
         )
 
 
@@ -332,27 +334,25 @@ def test_a_camera_opened_from_named_files_powers_on_from_them(
     directory = root()
     update, boot_rom = x70_files(directory)
     with Board.open_camera(
-        firmware="x70-110",
+        body="x70",
+        firmware="1.10",
         boot="stock",
         execution_policy="interactive",
         boot_cache=False,
-        update=update,
-        boot_rom=boot_rom,
+        firmware_files={"update": update, "boot_rom": boot_rom},
     ) as board:
         monkeypatch.delenv("FUJIMOD_FIRMWARE_LIBRARY")
         board.power_on()
         assert board.status()["status"] == "rec"
 
 
-def test_a_loader_image_opens_from_bytes() -> None:
-    library()
-    image = b"fujimod loader image"
-    with Board.open_camera(
-        firmware="x70-110",
-        execution_policy="interactive",
-        run_to_rec=False,
-        start="loader",
-        image=image,
-    ) as board:
-        assert board.status()["instructions"] == 0
-        assert board.read_physical(0, len(image)) == image
+def test_the_x70_request_document_matches_the_shared_schema() -> None:
+    schema = json.loads(
+        (
+            Path(__file__).resolve().parents[3]
+            / "catalog/schemas/emulator-camera.generated.schema.json"
+        ).read_text()
+    )
+    assert schema["required"] == ["body"]
+    names = set(inspect.signature(Board.open_camera).parameters)
+    assert names == set(schema["properties"])

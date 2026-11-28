@@ -39,10 +39,10 @@ fn declared_hardware_profiles_decode_and_validate() {
 fn hardware_graph_requires_closed_nodes_and_complete_ordering() {
     let mut value: serde_json::Value =
         serde_json::from_str(include_str!("../../../../catalog/bodies/xm1/body.json")).unwrap();
-    let graph = &mut value["hardware"]["profiles"]["xm1-rec"]["graph"];
+    let graph = &mut value["hardware"]["board"]["graph"];
     graph["devices"][0]["kind"] = "invented-device".into();
     assert!(serde_json::from_value::<Body>(value.clone()).is_err());
-    let graph = &mut value["hardware"]["profiles"]["xm1-rec"]["graph"];
+    let graph = &mut value["hardware"]["board"]["graph"];
     graph["devices"][0]["kind"] = "BootControls".into();
     graph["attachment_order"].as_array_mut().unwrap().pop();
     let body: Body = serde_json::from_value(value).unwrap();
@@ -50,30 +50,59 @@ fn hardware_graph_requires_closed_nodes_and_complete_ordering() {
 }
 
 #[test]
-fn x70_loader_profiles_connect_window_analysis_completion() {
+fn x70_board_connects_window_analysis_completion() {
     let value: serde_json::Value =
         serde_json::from_str(include_str!("../../../../catalog/bodies/x70/body.json")).unwrap();
-    for name in ["x70", "x70-rec-usb", "x70-110-browser-usb"] {
-        let profile = &value["hardware"]["profiles"][name];
-        let devices = profile["graph"]["devices"].as_array().unwrap();
-        assert_eq!(
-            devices
-                .iter()
-                .filter(|d| d["kind"] == "WindowAnalysisControl")
-                .count(),
-            1,
-            "{name} must complete window-analysis requests"
-        );
-        assert!(
-            !devices
-                .iter()
-                .any(|d| d["kind"] == "RawConversionRegisters")
-        );
-        assert_eq!(
-            profile["controllers"]["window_analysis"]["ticks_per_window"],
-            1000
-        );
-    }
+    let board = &value["hardware"]["board"];
+    let devices = board["graph"]["devices"].as_array().unwrap();
+    assert_eq!(
+        devices
+            .iter()
+            .filter(|d| d["kind"] == "WindowAnalysisControl")
+            .count(),
+        1,
+        "the board must complete window-analysis requests"
+    );
+    assert!(
+        !devices
+            .iter()
+            .any(|d| d["kind"] == "RawConversionRegisters")
+    );
+    assert_eq!(
+        board["controllers"]["window_analysis"]["ticks_per_window"],
+        1000
+    );
+}
+
+#[test]
+fn a_construction_node_input_is_checked_with_its_body() {
+    let mut body = body("xe2");
+    body.validate("xe2").unwrap();
+    let board = body.hardware.as_mut().unwrap().board.as_mut().unwrap();
+    let Some(fujimod_catalog_run_inputs::RunNativeDeviceInputs::Adc(adc)) =
+        board.native_device_inputs.get_mut("adc")
+    else {
+        panic!("ADC input");
+    };
+    adc.samples[0] = 1024;
+    assert!(body.validate("xe2").is_err());
+}
+
+#[test]
+fn resting_inputs_declare_no_session_choices() {
+    let mut body = body("x70");
+    body.validate("x70").unwrap();
+    let Some(fujimod_catalog_run_inputs::RunInputs::Exr2(inputs)) =
+        body.hardware.as_mut().unwrap().inputs.as_mut()
+    else {
+        panic!("X70 resting inputs");
+    };
+    inputs.usb.connected = true;
+    assert!(
+        body.validate("x70")
+            .unwrap_err()
+            .contains("camera description")
+    );
 }
 
 fn body(id: &str) -> Body {

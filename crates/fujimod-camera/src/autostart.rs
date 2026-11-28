@@ -548,13 +548,14 @@ pub(crate) fn flash(
     state: &fujimod_emulator_camera::StateDir,
     library: &fujimod_emulator_camera::Library,
     request: &crate::Request,
+    firmware: &str,
     files: &[(String, Vec<u8>)],
 ) -> Result<fujimod_emulator_camera::Flash, crate::Error> {
-    let path = crate::flash_path(state, &request.firmware, files);
+    let path = crate::flash_path(state, firmware, files);
     match std::fs::read(&path) {
         Ok(bytes) => Ok(fujimod_emulator_camera::Flash::Image(bytes)),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            let installed = install_flash(state, library, request, files)?;
+            let installed = install_flash(state, library, request, firmware, files)?;
             if let Some(directory) = path.parent() {
                 std::fs::create_dir_all(directory).map_err(|error| {
                     crate::Error::Missing(format!("{}: {error}", directory.display()))
@@ -577,35 +578,36 @@ fn install_flash(
     state: &fujimod_emulator_camera::StateDir,
     library: &fujimod_emulator_camera::Library,
     request: &crate::Request,
+    firmware: &str,
     files: &[(String, Vec<u8>)],
 ) -> Result<Vec<u8>, crate::Error> {
     let menus = stock_menus(files)?;
+    let camera = &request.camera;
     let mut opened = fujimod_emulator_camera::open(
         library,
         state,
         fujimod_emulator_camera::Request {
-            firmware: request.firmware.clone(),
-            files: request.files.clone(),
-            overlays: request.overlays.clone(),
+            firmware: fujimod_emulator_camera::FirmwareChoice::Named(firmware.into()),
             start: fujimod_emulator_camera::Start::Held {
                 combination: "sd".into(),
             },
             flash: fujimod_emulator_camera::Flash::Stock,
-            card: fujimod_emulator_camera::CardInputs {
-                files: menus,
+            cards: fujimod_emulator_camera::Cards {
+                sd_card: Some(fujimod_emulator_camera::Card::with_files(menus)),
                 ..Default::default()
             },
-            policy: request.policy,
-            engine: request.engine,
             cache: fujimod_emulator_camera::BootCache::Bypass,
             run_to_rec: true,
             nand_image: None,
             face_result_profile: None,
-            camera_settings: Default::default(),
+            settings: Default::default(),
+            clock_seconds_2000: None,
+            scene: None,
             kept: Default::default(),
+            ..camera.clone()
         },
     )?;
-    let nand = library.nand_boot(&request.firmware)?;
+    let nand = library.nand_boot(firmware)?;
     Ok(install(&mut opened, nand)?)
 }
 

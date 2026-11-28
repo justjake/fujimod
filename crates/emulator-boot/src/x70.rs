@@ -1795,28 +1795,19 @@ fn gpio_levels(
     Ok((levels, output_values))
 }
 
-/// The body hardware profile a run selects, if it selects one.
-fn hardware_profiles<'a>(
-    selection: &'a ResolvedSelection,
-    configuration: &RunConfiguration,
-) -> Option<&'a fujimod_catalog::profiles::BodyProfile> {
-    let choice = configuration.preset.as_ref()?.hardware_selection.as_ref()?;
-    selection
-        .body
-        .hardware
-        .as_ref()?
-        .profiles
-        .get(&choice.body_profile_id)
+/// The body's board.
+fn board(selection: &ResolvedSelection) -> Option<&fujimod_catalog::profiles::BodyBoard> {
+    selection.body.hardware.as_ref()?.board.as_ref()
 }
 
-/// A connected cable with selected hardware profiles: the USB endpoint engine
-/// (layout from the body profile, interrupt lines from the SoC profile) and
-/// the secondary bus's cable-powered register replies.
+/// A connected cable: the USB endpoint engine (layout from the body's board,
+/// interrupt lines from the SoC) and the secondary bus's cable-powered
+/// register replies.
 fn apply_connected_usb(
     recipe: &mut Value,
     name: &str,
     selection: &ResolvedSelection,
-    body: &fujimod_catalog::profiles::BodyProfile,
+    body: &fujimod_catalog::profiles::BodyBoard,
 ) -> Result<(), String> {
     /// The largest single endpoint DMA the controller model accepts.
     const DMA_LIMIT: u32 = 1 << 20;
@@ -2132,6 +2123,7 @@ fn apply_run_inputs(
 pub(super) fn assemble(
     selection: &ResolvedSelection,
     configuration: &RunConfiguration,
+    start: RunStart,
     dram_address_space_limit_bytes: u64,
     inputs: &Exr2RunInputs,
     scene_input: &Exr2RunScene,
@@ -2139,9 +2131,8 @@ pub(super) fn assemble(
     if selection.soc.id != "exr2"
         || selection.body.id != "x70"
         || selection.firmware.id != "x70-110"
-        || configuration.id != "x70-110-rec"
         || configuration.purpose != RunPurpose::RomBoot
-        || configuration.start != RunStart::Rom
+        || start != RunStart::Rom
     {
         return Err(
             "X70 native boot implementation does not support this selected identity".into(),
@@ -2239,7 +2230,7 @@ pub(super) fn assemble(
             browser.is_some(),
         )?;
         if inputs.usb.connected
-            && let Some(body) = hardware_profiles(selection, configuration)
+            && let Some(body) = board(selection)
         {
             apply_connected_usb(&mut recipe, rule.name, selection, body)?;
         }

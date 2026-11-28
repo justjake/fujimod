@@ -4,6 +4,9 @@
   "id": "xh2-530",
   "body_id": "xh2",
   "version": "5.30",
+  "start": {
+    "kind": "loader"
+  },
   "update": {
     "size": 110302544,
     "sha256": "be47168cb075ef726e67cb4bb08175a896047a3b0de2bcb6e65333b22cfcb203"

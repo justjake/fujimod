@@ -4,28 +4,38 @@
   "id": "gfx100s",
   "soc_id": "xp4",
   "hardware": {
-    "profiles": {
-      "gfx100s-discovery": {
-        "block_overrides": [
-          {
-            "block_id": "register-fff300a0",
-            "device": {
-              "model": "register_block",
-              "idle_bits": [],
-              "basis": "The software reads and writes a channel mask word. Zero initial state is a declared stand-in; IRQ routing and transfer behavior are not modeled."
-            }
-          },
-          {
-            "block_id": "register-fff310a0",
-            "device": {
-              "model": "register_block",
-              "idle_bits": [],
-              "basis": "The software reads and writes a channel mask word. Zero initial state is a declared stand-in; IRQ routing and transfer behavior are not modeled."
-            }
+    "board": {
+      "block_overrides": [
+        {
+          "block_id": "register-fff300a0",
+          "device": {
+            "model": "register_block",
+            "idle_bits": [],
+            "basis": "The software reads and writes a channel mask word. Zero initial state is a declared stand-in; IRQ routing and transfer behavior are not modeled."
           }
-        ],
-        "dram_basis": "Installed DRAM capacity is unknown; this profile makes no body-level capacity claim."
-      }
+        },
+        {
+          "block_id": "register-fff310a0",
+          "device": {
+            "model": "register_block",
+            "idle_bits": [],
+            "basis": "The software reads and writes a channel mask word. Zero initial state is a declared stand-in; IRQ routing and transfer behavior are not modeled."
+          }
+        }
+      ],
+      "dram_basis": "Installed DRAM capacity is unknown; this profile makes no body-level capacity claim."
     }
-  }
+  },
+  "storage_slots": [
+    {
+      "id": "sd_card",
+      "label": "1",
+      "basis": "GFX100S specifications: two SD card slots (UHS-II)."
+    },
+    {
+      "id": "sd_card_2",
+      "label": "2",
+      "basis": "GFX100S specifications: two SD card slots (UHS-II)."
+    }
+  ]
 }

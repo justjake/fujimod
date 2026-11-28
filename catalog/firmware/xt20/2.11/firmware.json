@@ -4,6 +4,9 @@
   "id": "xt20-211",
   "body_id": "xt20",
   "version": "2.11",
+  "start": {
+    "kind": "loader"
+  },
   "update": {
     "size": 53543984,
     "sha256": "b37faf524e6e2c72410e615a48feff05d6d2236f73f5cc6027c25863d7d48fad"

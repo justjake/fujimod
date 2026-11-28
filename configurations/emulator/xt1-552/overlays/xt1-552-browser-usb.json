@@ -10,10 +10,7 @@
       "limits": [
         "The USB cable starts disconnected. Cable state and four-tick endpoint timing are declared emulator inputs; device behavior is not physically qualified."
       ],
-      "usb_connected": false,
-      "hardware_selection": {
-        "body_profile_id": "xt1-service-transports"
-      }
+      "usb_connected": false
     }
   }
 }

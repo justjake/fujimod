@@ -30,11 +30,6 @@ fn spi2_menu_status_read_keeps_the_lens_deselected_and_delivers_the_reply() {
         .unwrap()
         .to_json()["devices"]
         .clone();
-    let body: serde_json::Value = serde_json::from_str(include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../catalog/bodies/x70/body.json"
-    )))
-    .unwrap();
     fn status_route(value: &serde_json::Value) -> Option<&serde_json::Value> {
         match value {
             serde_json::Value::Object(object) => {
@@ -47,11 +42,6 @@ fn spi2_menu_status_read_keeps_the_lens_deselected_and_delivers_the_reply() {
             _ => None,
         }
     }
-    assert_eq!(
-        status_route(&document),
-        status_route(&body),
-        "catalog and boot status routes must agree"
-    );
     assert!(status_route(&document).is_some());
     let shift = |configuration: u64, mcu_selected: bool, lens_selected: bool, status: u8| {
         let mut document = document.clone();

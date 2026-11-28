@@ -1886,20 +1886,6 @@
           ],
           "description": "Declared boot layout."
         },
-        "browser_configuration_id": {
-          "description": "Declared browser configuration id.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "camera_configuration_id": {
-          "description": "Declared native camera configuration id.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "control_bus_tables_id": {
           "description": "Declared control bus tables id.",
           "type": [
@@ -3658,6 +3644,88 @@
       ],
       "type": "object"
     },
+    "RunDramAddressSpace": {
+      "additionalProperties": false,
+      "description": "Run-specific software-visible DRAM mapping extent and its evidence basis.",
+      "properties": {
+        "basis": {
+          "description": "Source and limits for this modeled mapping extent.",
+          "type": "string"
+        },
+        "limit_bytes": {
+          "description": "Exclusive mapped DRAM address-space extent in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "limit_bytes",
+        "basis"
+      ],
+      "type": "object"
+    },
+    "RunStart": {
+      "description": "A supported firmware start entry.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Reset through the selected firmware's real boot ROM.",
+          "properties": {
+            "kind": {
+              "const": "rom",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Enter through the selected firmware's loader entry.",
+          "properties": {
+            "kind": {
+              "const": "loader",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Enter through a removable-card boot entry.",
+          "properties": {
+            "kind": {
+              "const": "sd_card",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Enter the firmware's boot-setup stage from internal flash, in place of the boot ROM.",
+          "properties": {
+            "kind": {
+              "const": "setup",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "Scanout": {
       "additionalProperties": false,
       "description": "A located framebuffer and its live selection pointer.",
@@ -3761,6 +3829,17 @@
       ],
       "description": "Boot ROM content and its physical load address, when applicable."
     },
+    "dram_address_space": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RunDramAddressSpace"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The DRAM address space the firmware's own memory plan reaches, for a\nbody whose installed capacity is unknown."
+    },
     "generated_facts": {
       "anyOf": [
         {
@@ -3814,6 +3893,17 @@
       "format": "uint32",
       "minimum": 0,
       "type": "integer"
+    },
+    "start": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RunStart"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "How the firmware starts: the entry a camera opens it through."
     },
     "update": {
       "anyOf": [

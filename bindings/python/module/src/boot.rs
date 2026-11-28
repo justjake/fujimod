@@ -18,9 +18,7 @@ impl Boot for CatalogBoot {
             &inputs.configuration_id,
             &inputs.overlays,
         )?;
-        if !inputs.flash_seeds.is_empty()
-            && !matches!(resolved.configuration.inputs, Some(RunInputs::Xp5(_)))
-        {
+        if !inputs.flash_seeds.is_empty() && !matches!(resolved.inputs, Some(RunInputs::Xp5(_))) {
             return Err("flash seeds require an XP5 run configuration".into());
         }
         if let Some(engine) = inputs.engine {
@@ -61,16 +59,13 @@ impl Boot for CatalogBoot {
             if inputs.second_card_image.is_some() || !inputs.second_card_files.is_empty() {
                 return Err("a card in SD slot 2 requires an XP5 run configuration".into());
             }
-            let plan = inputs
-                .application_plan
-                .ok_or("application startup needs an application plan")?;
             let startup = boot::application::Startup {
                 update: inputs.update.into(),
-                plan,
+                plan: inputs.application_plan,
                 discovery: inputs.discovery,
                 quantum: inputs.quantum,
                 card_image: inputs.card_image,
-                card_files: inputs.card_files,
+                card_files: card_files(inputs.card_files),
                 camera_settings: Default::default(),
             };
             let mut camera = boot::open(resolved, boot::StartupInputs::Application(startup))?;
@@ -91,7 +86,7 @@ impl Boot for CatalogBoot {
             Mode::Strict
         };
         #[cfg(not(target_arch = "wasm32"))]
-        if matches!(resolved.configuration.inputs, Some(RunInputs::Xp5(_))) {
+        if matches!(resolved.inputs, Some(RunInputs::Xp5(_))) {
             if inputs.nand.is_some()
                 || inputs.settings.is_some()
                 || inputs.clock_seconds_2000.is_some()
@@ -108,10 +103,23 @@ impl Boot for CatalogBoot {
                     update: inputs.update.into(),
                     manifest: inputs.manifest,
                     boot_rom: inputs.boot_rom.map(Into::into),
-                    card_image: inputs.card_image,
-                    card_files: inputs.card_files,
-                    second_card_image: inputs.second_card_image,
-                    second_card_files: inputs.second_card_files,
+                    cards: [
+                        (1, inputs.card_image, inputs.card_files),
+                        (2, inputs.second_card_image, inputs.second_card_files),
+                    ]
+                    .into_iter()
+                    .filter(|(_, image, files)| image.is_some() || !files.is_empty())
+                    .map(|(slot, image, files)| {
+                        (
+                            slot,
+                            boot::media::CardInsert {
+                                image,
+                                files: card_files(files),
+                                ..Default::default()
+                            },
+                        )
+                    })
+                    .collect(),
                     scene: inputs.scene,
                     output: None,
                     mode,
@@ -186,7 +194,7 @@ impl Boot for CatalogBoot {
         boot::media::attach(
             &mut session,
             inputs.card_image.as_deref(),
-            &inputs.card_files,
+            &card_files(inputs.card_files),
         )?;
         Ok(Opened::Graph(Box::new(session)))
     }
@@ -263,4 +271,13 @@ pub(crate) fn xpp_definition(
     .map_err(fujimod_python_base::error)?;
     serde_json::to_string(&definition)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+}
+
+/// Host card files as the startup paths take them.
+#[cfg(not(target_arch = "wasm32"))]
+fn card_files(files: Vec<(String, std::path::PathBuf)>) -> Vec<(String, boot::media::CardFile)> {
+    files
+        .into_iter()
+        .map(|(name, path)| (name, path.into()))
+        .collect()
 }

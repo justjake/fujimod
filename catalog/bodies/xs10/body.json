@@ -5,10 +5,418 @@
   "soc_id": "xp4",
   "dram_bytes": 1073741824,
   "hardware": {
-    "profiles": {
-      "xs10-discovery": {
-        "dram_basis": "Read from a running X-S10 3.11: 0x0..0x40000000 holds distinct, unaliased data, and its live L1 table maps exactly that 1 GiB."
+    "board": {
+      "dram_basis": "Read from a running X-S10 3.11: 0x0..0x40000000 holds distinct, unaliased data, and its live L1 table maps exactly that 1 GiB."
+    },
+    "reset_inputs": {
+      "adc_input": {
+        "ambient_celsius": 25,
+        "basis": "Declared catalog input.",
+        "samples": [
+          2048,
+          0,
+          0,
+          4095,
+          0,
+          0,
+          0,
+          0,
+          2048,
+          0,
+          2048,
+          0
+        ],
+        "thermal_channels": [
+          0,
+          8,
+          10
+        ]
+      },
+      "gpio_input": {
+        "basis": "Declared catalog input.",
+        "levels": [
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "kernel_unit": "kernel",
+      "loader_handoff": {
+        "address": 10485760,
+        "basis": "Synthetic cold loader input in a free RAM gap; kernel entry bypasses boot ROM. The manufacturer word 0x20 matches the loader handoff copy at 0x82cfc + 0x5cc in RAM read from a running X-S10 3.11; the cold boot reason and every other word stay synthetic.",
+        "fill": 0,
+        "size": 1488,
+        "words": [
+          {
+            "name": "cold boot reason",
+            "offset": 320,
+            "value": 4
+          },
+          {
+            "name": "NOR manufacturer",
+            "offset": 1484,
+            "value": 32
+          }
+        ]
+      },
+      "processed_frame_input": {
+        "basis": "Declared catalog input.",
+        "frame_period_ticks": 900900,
+        "luma": 128
+      },
+      "sensor_input": {
+        "basis": "Declared catalog input.",
+        "frame_active_ticks": 450450,
+        "frame_period_ticks": 900900,
+        "statistics_scene": {
+          "black_level": 1024,
+          "luma": 2048,
+          "name": "functional uniform gray",
+          "samples_per_cell": 1024,
+          "signal_shift": 2
+        }
+      },
+      "serial_flash": {
+        "basis": "64 MiB NOR with manufacturer 0x20, as in the loader handoff of a running X-S10 3.11, whose flash aperture repeats after 64 MiB. The memory-type and capacity bytes (0xbb, 0x20) are unmeasured; the manufacturer is also declared in the loader handoff.",
+        "contents": "registered-update",
+        "geometry": {
+          "basis": "Declared catalog input.",
+          "erase_bytes": 65536,
+          "erase_ticks": 4096,
+          "page_bytes": 256,
+          "page_ticks": 512
+        },
+        "jedec_id": 2145056
+      },
+      "spi_inputs": {
+        "1": {
+          "basis": "Declared catalog input.",
+          "level": "low",
+          "power_checksum_registers": {
+            "basis": "Four-byte checksum transport; synthetic status inputs and unset RTC. Registers 2 and 14 read 0x0000 and 0x0011, physical service-mode samples stable over five seconds (register 14 with the headphone field clear); writes to them refuse. Stored words initially read zero. Clock loads preserve retained validity. Control reads retain the load strobe through the declared set window, refuse the unresolved interval, then clear it. After fresh writes to every retained word, the declared validity update latches without a clock reload or persistence effect. Independent control operations and alarm enables refuse.",
+            "chip_select": {
+              "active_high": true,
+              "pin": 5,
+              "port": 12
+            },
+            "disable_writes": [
+              {
+                "register": 25,
+                "value": 0
+              }
+            ],
+            "inputs": {
+              "0": 0,
+              "14": 17,
+              "16": 0,
+              "2": 0
+            },
+            "retained_registers": [
+              42,
+              43,
+              44,
+              45
+            ],
+            "rtc": {
+              "commit_value": 514,
+              "control": 36,
+              "initial_control": 0,
+              "initial_seconds": 0,
+              "read_high": 35,
+              "read_low": 34,
+              "retained_valid_mask": 1,
+              "stage_high": 30,
+              "stage_low": 29,
+              "strobe": {
+                "clear_from_ticks": 5940000,
+                "mask": 512,
+                "set_through_ticks": 9720
+              },
+              "ticks_per_second": 54000000,
+              "valid_mask": 2
+            }
+          }
+        },
+        "2": {
+          "basis": "Declared catalog input.",
+          "level": "low"
+        },
+        "3": {
+          "basis": "Declared catalog input.",
+          "level": "low"
+        },
+        "4": {
+          "basis": "Declared catalog input.",
+          "level": "low"
+        },
+        "5": {
+          "basis": "Declared catalog input.",
+          "level": "low"
+        }
+      },
+      "temperature_input": {
+        "basis": "Declared catalog input.",
+        "millicelsius": 25000
       }
+    },
+    "inputs": {
+      "kind": "xp4",
+      "ticks_per_second": 54000000,
+      "blocks": [
+        {
+          "kind": "adc",
+          "block_id": "adc",
+          "samples": [
+            2048,
+            0,
+            0,
+            4095,
+            0,
+            0,
+            0,
+            0,
+            2048,
+            0,
+            2048,
+            0
+          ]
+        },
+        {
+          "kind": "gpio",
+          "block_id": "gpio",
+          "levels": [
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "outputs": []
+        },
+        {
+          "kind": "temperature",
+          "block_id": "temperature",
+          "millicelsius": 25000
+        },
+        {
+          "kind": "flash",
+          "block_id": "flash-aperture",
+          "part_id": "xs10-serial-nor",
+          "source": "firmware_update",
+          "erased_tail": null,
+          "seeds": []
+        },
+        {
+          "kind": "serial_line",
+          "block_id": "spi1",
+          "idle_high": false
+        },
+        {
+          "kind": "serial_line",
+          "block_id": "spi4",
+          "idle_high": false
+        },
+        {
+          "kind": "serial_line",
+          "block_id": "spi5",
+          "idle_high": false
+        }
+      ],
+      "parts": [
+        {
+          "kind": "register_words",
+          "part_id": "xs10-power-registers",
+          "registers": [
+            {
+              "register": 0,
+              "value": 0
+            },
+            {
+              "register": 2,
+              "value": 0
+            },
+            {
+              "register": 14,
+              "value": 17
+            },
+            {
+              "register": 16,
+              "value": 0
+            }
+          ],
+          "rtc_ticks_per_second": 54000000
+        }
+      ],
+      "timings": [
+        {
+          "kind": "delay",
+          "block_ids": [
+            "adc"
+          ],
+          "operation": "sample",
+          "ticks": 16
+        },
+        {
+          "kind": "delay",
+          "block_ids": [
+            "temperature"
+          ],
+          "operation": "sample",
+          "ticks": 5000
+        },
+        {
+          "kind": "delay",
+          "block_ids": [
+            "sd-host-0",
+            "sd-host-clock-1",
+            "sd-host-1",
+            "sd-host-clock-3"
+          ],
+          "operation": "settle",
+          "ticks": 8
+        },
+        {
+          "kind": "delay",
+          "block_ids": [
+            "sensor-command"
+          ],
+          "operation": "command",
+          "ticks": 5400
+        },
+        {
+          "kind": "delay",
+          "block_ids": [
+            "imaging-receiver"
+          ],
+          "operation": "reset",
+          "ticks": 8
+        },
+        {
+          "kind": "delay",
+          "block_ids": [
+            "input-buffer"
+          ],
+          "operation": "reset",
+          "ticks": 8
+        },
+        {
+          "kind": "delay",
+          "block_ids": [
+            "control-group-ff701000",
+            "control-group-ff701200",
+            "control-group-ff701400",
+            "control-group-ff701600",
+            "control-group-ff701800",
+            "control-group-ff701a00",
+            "control-group-ff701c00",
+            "control-group-ff702000",
+            "control-group-ff702200",
+            "control-request-ff702400",
+            "control-request-ff702600",
+            "control-request-ff702800",
+            "control-request-ff702a00"
+          ],
+          "operation": "acknowledge",
+          "ticks": 8
+        },
+        {
+          "kind": "delay",
+          "block_ids": [
+            "lcdc0"
+          ],
+          "operation": "pixel",
+          "ticks": 2
+        },
+        {
+          "kind": "delay",
+          "block_ids": [
+            "lcdc1"
+          ],
+          "operation": "pixel",
+          "ticks": 2
+        },
+        {
+          "kind": "delay",
+          "block_ids": [
+            "movdc0"
+          ],
+          "operation": "reset",
+          "ticks": 8
+        },
+        {
+          "kind": "delay",
+          "block_ids": [
+            "movdc1"
+          ],
+          "operation": "reset",
+          "ticks": 8
+        },
+        {
+          "kind": "parent_clock",
+          "block_ids": [
+            "spi1"
+          ],
+          "ticks_per_parent": 1
+        },
+        {
+          "kind": "parent_clock",
+          "block_ids": [
+            "spi4"
+          ],
+          "ticks_per_parent": 1
+        },
+        {
+          "kind": "parent_clock",
+          "block_ids": [
+            "spi5"
+          ],
+          "ticks_per_parent": 1
+        },
+        {
+          "kind": "delay",
+          "block_ids": [
+            "serial-flash"
+          ],
+          "operation": "command",
+          "ticks": 8
+        },
+        {
+          "kind": "throughput",
+          "block_id": "dma",
+          "setup_ticks": 16,
+          "bytes_per_tick": 16
+        },
+        {
+          "kind": "storage_programming",
+          "part_id": "xs10-serial-nor",
+          "erase_ticks": 4096,
+          "page_ticks": 512
+        }
+      ]
     },
     "serial_attachments": [
       {
@@ -24,6 +432,12 @@
       "thermal-10"
     ]
   },
+  "storage_slots": [
+    {
+      "id": "sd_card",
+      "basis": "X-S10 specifications: one SD card slot (UHS-I)."
+    }
+  ],
   "connections": [
     {
       "id": "flash-storage",

@@ -4,6 +4,13 @@
   "id": "x100v-301",
   "body_id": "x100v",
   "version": "3.01",
+  "start": {
+    "kind": "loader"
+  },
+  "dram_address_space": {
+    "limit_bytes": 536870912,
+    "basis": "Declared 512 MiB execution bound within the captured X100V 3.01 stock address window; physical DRAM density is not asserted."
+  },
   "update": {
     "size": 50137164,
     "sha256": "18351a9a552c06ec9c70483abca1b74ab2a29fa139f19aef244e178045323591"

@@ -1,4 +1,5 @@
-//! The reference catalog of SoCs, parts, bodies and firmware and their hardware profiles.
+//! The reference catalog of SoCs, parts, bodies and firmware and their hardware descriptions.
+pub mod application_startup;
 pub mod assembly;
 pub mod boot_identity;
 pub mod boot_patch;
@@ -12,6 +13,7 @@ pub mod nand_boot;
 pub mod nand_boot_rom;
 pub mod osd_items;
 pub mod progress;
+pub mod rec_readiness;
 pub mod reference;
 pub mod rom_start;
 pub mod soc;
@@ -26,7 +28,7 @@ pub use soc::SocHardware;
 /// Reusable part assembly attachments.
 pub mod parts;
 
-/// Named hardware profiles and device graphs.
+/// Body boards, device graphs and SoC device parameters.
 pub mod profiles;
 
 /// Located firmware boot and storage layouts.

@@ -4,6 +4,9 @@
   "id": "xa1-150",
   "body_id": "xa1",
   "version": "1.50",
+  "start": {
+    "kind": "rom"
+  },
   "update": {
     "size": 38405148,
     "sha256": "999afd6396cfaed54134a708326ed9a75d319bea2fac85133e66525cde540754"

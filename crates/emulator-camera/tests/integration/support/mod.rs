@@ -6,12 +6,13 @@
 #![allow(dead_code)]
 
 use fujimod_emulator_camera::{
-    BootCache, CardInputs, ExecutionPolicy, FirmwareInput, Flash, Library, LoaderImage, Request,
-    Start, StateDir, directory_files,
+    BootCache, Card, Cards, ExecutionPolicy, FirmwareChoice, Library, LoaderImage, Request, Start,
+    StateDir, directory_files,
 };
 use std::path::{Path, PathBuf};
 
 pub const FIRMWARE: &str = "x70-110";
+pub const BODY: &str = "x70";
 
 /// How a test starts the camera.
 pub enum Boot {
@@ -60,23 +61,14 @@ pub fn request(boot: Boot, image: Option<LoaderImage>, cache: BootCache) -> Requ
         ),
     };
     Request {
-        firmware: FIRMWARE.into(),
-        files: FirmwareInput::Library,
-        overlays: Vec::new(),
         start,
-        flash: Flash::Stock,
-        card: CardInputs {
-            files,
+        cards: Cards {
+            sd_card: Some(Card::with_files(files)),
             ..Default::default()
         },
         policy: ExecutionPolicy::Interactive,
-        engine: None,
         cache,
-        run_to_rec: true,
-        nand_image: None,
-        face_result_profile: None,
-        camera_settings: Default::default(),
-        kept: Default::default(),
+        ..Request::new(BODY, FirmwareChoice::Named(FIRMWARE.into()))
     }
 }
 

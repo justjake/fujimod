@@ -4,6 +4,9 @@
   "id": "xe5-110",
   "body_id": "xe5",
   "version": "1.10",
+  "start": {
+    "kind": "loader"
+  },
   "update": {
     "size": 110561552,
     "sha256": "ef040de2a241c6f0318cae5a2911f7b6c1a1edc61704870f041ac0c8256603d3"

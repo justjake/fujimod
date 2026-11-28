@@ -121,6 +121,18 @@ a GPIO input together with its interrupt line, or the timer channel and rest
 phase a command dial's quadrature drives. A control's measured ADC levels are
 body facts; the firmware's table of key bands is a generated firmware fact.
 
+A body has one hardware description, the same every time it is opened:
+`hardware.board` (its device graph, controllers, imaging and, for an EXR II
+body, the construction its device list exports with each node's startup
+values), `hardware.reset_inputs` and `hardware.inputs` (the levels the board
+rests at when it powers on: switches, pads, battery and control ADC levels,
+companion replies) and its bus facts (`bus_byte_times`,
+`polled_serial_blocks`, `sd_clock_steps` and the like). A connected cable, an
+inserted card, held controls, settings and the scene differ between opens of
+the same body and are chosen by the camera description or a run, never by a
+second hardware description. `storage_slots` lists the removable-storage
+slots the camera has, from its published specification.
+
 A body changes a processor block only through `block_overrides`, which names a
 block ID and replaces its `device` with another value of the same model or
 replaces individual `registers` entries by name. The same processor behaves the
@@ -130,8 +142,9 @@ attached part or an incomplete processor model, and is recorded there instead.
 ## Firmware
 
 A firmware directory holds `firmware.json` (body, version, update and ROM
-hashes, and the layout for decoding the update) and generated files only, one
-per generator. It declares no device windows, device models, register behavior
+hashes, the layout for decoding the update, how the firmware starts
+(`start`) and, for a body whose installed DRAM capacity is unknown, the address
+space its memory plan reaches) and generated files only, one per generator. It declares no device windows, device models, register behavior
 or stubs. Firmware identity includes its body and version; firmware IDs are
 selectors, never file locations.
 
@@ -141,10 +154,11 @@ selectors, never file locations.
 chooses for a processor rather than what the hardware is: execution engines,
 the CPU model standing in for an unavailable one, instruction and tick rates,
 the runtime ABI, the modeled MMU and the declared limits of its processor
-models. Run configurations select it with the hardware records; it holds no
-hardware facts. A run overlay may change a hardware record's field only when
-that field's evidence is `stand-in`; validation refuses an override of a
-measured, located or inferred fact.
+models. It holds no hardware facts. A run configuration
+(`../configurations/emulator/<firmware-id>/run.json`) holds only a firmware's
+session defaults: execution policy, scene, power-on settings and the host
+factory's device policies; it declares no hardware and no start entry. A
+firmware without one opens from its body and firmware records alone.
 
 Mods read register addresses and firmware numbers from C headers generated
 from these records, never from hand-copied constants.
@@ -171,7 +185,7 @@ Catalog validation refuses:
 `fujimod-emulator-board-graph` assembles every processor's board from its
 processor, body and firmware records, selecting each block's device model by
 its `kind`. Callers supply only the update file, an optional boot ROM and
-persistent images, and a run configuration; they never supply register
+persistent images, and a camera description; they never supply register
 addresses, device lists or wiring. `fujimod-emulator-boot` opens every
 processor as the same `Camera`, with the same session, checkpoint and control
 interface.

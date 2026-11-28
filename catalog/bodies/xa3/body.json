@@ -3,5 +3,11 @@
   "schema": 1,
   "id": "xa3",
   "soc_id": "exr2",
-  "dram_bytes": 536870912
+  "dram_bytes": 536870912,
+  "storage_slots": [
+    {
+      "id": "sd_card",
+      "basis": "X-A3 specifications: one SD card slot (UHS-I)."
+    }
+  ]
 }

@@ -4,32 +4,397 @@
   "id": "xe4",
   "soc_id": "xp4",
   "hardware": {
-    "profiles": {
-      "xe4-201-handoff": {
-        "block_overrides": [
+    "board": {
+      "block_overrides": [
+        {
+          "block_id": "block-fff5a000",
+          "device": {
+            "model": "register_block",
+            "idle_bits": [],
+            "basis": "X-E4 2.01 copies three 256-word display parameter banks on this page in 0x021c1e18, via 0x021c1644. This virtual page retains the last written words; physical reset values and display side effects are not modeled.",
+            "order": 1000
+          }
+        },
+        {
+          "block_id": "block-fff5b000",
+          "device": {
+            "model": "register_block",
+            "idle_bits": [],
+            "basis": "X-E4 2.01 copies three 256-word display parameter banks on this page in 0x021c1e18, via 0x021c1644. This virtual page retains the last written words; physical reset values and display side effects are not modeled.",
+            "order": 1001
+          }
+        }
+      ],
+      "dram_basis": "Declared virtual 512 MiB address-space bound used for the Discovery run; physical DRAM size is unknown."
+    },
+    "reset_inputs": {
+      "adc_input": {
+        "basis": "Declared virtual ADC startup samples used by the Discovery run; physical idle samples are not measured.",
+        "samples": [
+          2048,
+          2048,
+          4095,
+          4095,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          2048,
+          2048
+        ]
+      },
+      "execution_clock": {
+        "basis": "Estimated, not measured, for each core: a Cortex-A7 at roughly 1.2 GHz against the 54 MHz device tick gives about 22 instructions per tick at one instruction per cycle; the boots run 6, a quarter of that. At 24 per core the X-T3 5.11 boot reads the pointer at 0x18181ec before another core sets it (at 0x33bd548) and halts in the exception reporter; at 6 it reaches the first-start language menu.",
+        "instructions_per_tick": [
+          6,
+          1
+        ]
+      },
+      "gpio_input": {
+        "basis": "Declared virtual GPIO startup levels used by the Discovery run; physical levels are not measured.",
+        "levels": [
+          8,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          20,
+          6,
+          0,
+          0,
+          0,
+          3
+        ]
+      },
+      "sd_cards": [
+        {
+          "card": {
+            "basis": "Virtual SDHC card and slot follow X-T3 Discovery; physical X-E4 behavior is unmeasured.",
+            "format": {
+              "filesystem": "fat32",
+              "label": "CAMERA",
+              "partition_start": 8192,
+              "sectors_per_cluster": 64
+            },
+            "high_speed": true,
+            "rca": 1,
+            "sectors": 16777216
+          },
+          "host_base": 4294721536
+        }
+      ],
+      "kernel_unit": "kernel",
+      "loader_handoff": {
+        "address": 65644,
+        "basis": "Original X-E4 loader output observed with declared Discovery inputs. The startup also declares 0xff70f03c reset zero via the XP4 control-request model; zero and 0x400 produced equivalent observed REC workflows, and the physical reset value is unknown.",
+        "fill": 0,
+        "size": 1488,
+        "words": [
           {
-            "block_id": "block-fff5a000",
-            "device": {
-              "model": "register_block",
-              "idle_bits": [],
-              "basis": "X-E4 2.01 copies three 256-word display parameter banks on this page in 0x021c1e18, via 0x021c1644. This virtual page retains the last written words; physical reset values and display side effects are not modeled.",
-              "order": 1000
-            }
+            "name": "Observed word at +0x000",
+            "offset": 0,
+            "value": 8
           },
           {
-            "block_id": "block-fff5b000",
-            "device": {
-              "model": "register_block",
-              "idle_bits": [],
-              "basis": "X-E4 2.01 copies three 256-word display parameter banks on this page in 0x021c1e18, via 0x021c1644. This virtual page retains the last written words; physical reset values and display side effects are not modeled.",
-              "order": 1001
-            }
+            "name": "Observed word at +0x028",
+            "offset": 40,
+            "value": 20
+          },
+          {
+            "name": "Observed word at +0x02c",
+            "offset": 44,
+            "value": 6
+          },
+          {
+            "name": "Observed word at +0x03c",
+            "offset": 60,
+            "value": 3
+          },
+          {
+            "name": "Observed word at +0x040",
+            "offset": 64,
+            "value": 16777216
+          },
+          {
+            "name": "Observed word at +0x044",
+            "offset": 68,
+            "value": 76
+          },
+          {
+            "name": "Observed word at +0x048",
+            "offset": 72,
+            "value": 285212672
+          },
+          {
+            "name": "Observed word at +0x04c",
+            "offset": 76,
+            "value": 300599
+          },
+          {
+            "name": "Observed word at +0x050",
+            "offset": 80,
+            "value": 16777728
+          },
+          {
+            "name": "Observed word at +0x054",
+            "offset": 84,
+            "value": 301326
+          },
+          {
+            "name": "Observed word at +0x058",
+            "offset": 88,
+            "value": 285213184
+          },
+          {
+            "name": "Observed word at +0x05c",
+            "offset": 92,
+            "value": 809266
+          },
+          {
+            "name": "Observed word at +0x060",
+            "offset": 96,
+            "value": 1398031684
+          },
+          {
+            "name": "Observed word at +0x0c0",
+            "offset": 192,
+            "value": 16777984
+          },
+          {
+            "name": "Observed word at +0x0c4",
+            "offset": 196,
+            "value": 3910
+          },
+          {
+            "name": "Observed word at +0x0c8",
+            "offset": 200,
+            "value": 16778240
+          },
+          {
+            "name": "Observed word at +0x0cc",
+            "offset": 204,
+            "value": 351226
+          },
+          {
+            "name": "Observed word at +0x0d0",
+            "offset": 208,
+            "value": 285213696
+          },
+          {
+            "name": "Observed word at +0x0d4",
+            "offset": 212,
+            "value": 354498
+          },
+          {
+            "name": "Observed word at +0x0d8",
+            "offset": 216,
+            "value": 285213440
+          },
+          {
+            "name": "Observed word at +0x0dc",
+            "offset": 220,
+            "value": 354886
+          },
+          {
+            "name": "Observed word at +0x0e0",
+            "offset": 224,
+            "value": 1398031684
+          },
+          {
+            "name": "Observed word at +0x140",
+            "offset": 320,
+            "value": 4
+          },
+          {
+            "name": "Observed word at +0x1c4",
+            "offset": 452,
+            "value": 98304
+          },
+          {
+            "name": "Observed word at +0x5bc",
+            "offset": 1468,
+            "value": 1
+          },
+          {
+            "name": "Observed word at +0x5c0",
+            "offset": 1472,
+            "value": 62
+          },
+          {
+            "name": "Observed word at +0x5c8",
+            "offset": 1480,
+            "value": 261
+          },
+          {
+            "name": "Observed word at +0x5cc",
+            "offset": 1484,
+            "value": 32
           }
         ],
-        "dram_basis": "Declared virtual 512 MiB address-space bound used for the Discovery run; physical DRAM size is unknown."
+        "section_table": true
+      },
+      "processed_frame_input": {
+        "basis": "Declared virtual X-E4 MOVDC frame input.",
+        "frame_period_ticks": 1000000,
+        "luma": 81
+      },
+      "sensor_input": {
+        "basis": "Declared virtual X-E4 sensor and statistics scene, with native statistics defaults made explicit.",
+        "frame_active_ticks": 10000,
+        "frame_period_ticks": 4000000,
+        "statistics_scene": {
+          "black_level": 1024,
+          "luma": 4096,
+          "name": "diagnostic-flat-linear-statistics",
+          "samples_per_cell": 1024,
+          "signal_shift": 2
+        }
+      },
+      "serial_flash": {
+        "basis": "JEDEC ID 20 bb 20 was observed on an X-E4 and identifies a 64 MiB NOR array; erase and page geometry and timing are declared virtual inputs.",
+        "contents": "registered-update",
+        "geometry": {
+          "basis": "JEDEC ID 20 bb 20 was observed on an X-E4 and identifies a 64 MiB NOR array; erase and page geometry and timing are declared virtual inputs.",
+          "erase_bytes": 65536,
+          "erase_ticks": 4096,
+          "page_bytes": 256,
+          "page_ticks": 512
+        },
+        "jedec_id": 2145056
+      },
+      "spi_inputs": {
+        "1": {
+          "basis": "Declared virtual X-E4 startup inputs; physical SPI levels and power-controller register values are not measured.",
+          "level": "low",
+          "power_checksum_registers": {
+            "alarm": {
+              "basis": "The stock power-off with a wake deadline writes register 25 = 0, stores the countdown in seconds in register 37, then writes register 25 = 1 before cutting power; without a deadline it writes neither. The physical alarm, its countdown and the wake are not measured.",
+              "enable": 25,
+              "seconds": 37
+            },
+            "basis": "Declared virtual X-E4 startup inputs; physical SPI levels and power-controller register values are not measured. Register 16 is declared 4 as in the X-T3 virtual cold-boot input and a successful X-E4 loader run; the physical X-E4 value is unmeasured. Register 18 is virtual volatile storage for the observed loader write 0x0097, without a physical power effect. Registers 42–45 initialize to zero as observed with declared virtual inputs. The firmware tests register 25 bits 0x30 for USB power status. This virtual input declares 0x10 continuously, including when a virtual host attaches; the physical register value is unmeasured. Register 25 writes control the declared wake alarm.",
+            "chip_select": {
+              "active_high": true,
+              "pin": 5,
+              "port": 12
+            },
+            "disable_writes": [],
+            "inputs": {
+              "0": 64511,
+              "14": 0,
+              "16": 4,
+              "2": 0,
+              "25": 16,
+              "29": 65535,
+              "3": 520,
+              "30": 65535,
+              "34": 0,
+              "35": 0,
+              "36": 41472,
+              "37": 0,
+              "38": 0,
+              "4": 640,
+              "42": 0,
+              "43": 0,
+              "44": 0,
+              "45": 0
+            },
+            "retained_registers": [
+              2,
+              14,
+              18,
+              29,
+              30,
+              36,
+              37,
+              38,
+              42,
+              43,
+              44,
+              45
+            ]
+          }
+        },
+        "2": {
+          "basis": "Declared virtual X-E4 startup inputs; physical SPI levels and power-controller register values are not measured.",
+          "level": "low"
+        },
+        "3": {
+          "basis": "Declared virtual X-E4 startup inputs; physical SPI levels and power-controller register values are not measured.",
+          "level": "low"
+        },
+        "4": {
+          "basis": "Declared virtual X-E4 startup inputs; physical SPI levels and power-controller register values are not measured.",
+          "level": "low"
+        },
+        "5": {
+          "basis": "Declared virtual X-E4 startup inputs; physical SPI levels and power-controller register values are not measured.",
+          "level": "low"
+        }
+      },
+      "usb_cable": {
+        "basis": "The X-E4 VBUS pin is not known. Bank 15 pin 15 is a declared virtual cable input following the X-T3 Discovery profile. The initial GPIO level is low and the USB controller starts disconnected; a later virtual host may negotiate high speed.",
+        "vbus_bank": 15,
+        "vbus_pin": 15,
+        "speed": "high"
+      },
+      "usb_phy_input": {
+        "basis": "Virtual zeroed USB PHY parallel input and register bytes following the X-T3 Discovery profile; X-E4 PHY inputs are not measured.",
+        "parallel": 0,
+        "registers": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "temperature_input": {
+        "basis": "Declared virtual ambient temperature of 25 C used by the Discovery run; physical temperature is not measured.",
+        "millicelsius": 25000
       }
     }
   },
+  "storage_slots": [
+    {
+      "id": "sd_card",
+      "basis": "X-E4 specifications: one SD card slot (UHS-I)."
+    }
+  ],
   "connections": [
     {
       "id": "controls-gpio-0-11",

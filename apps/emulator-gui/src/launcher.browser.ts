@@ -21,7 +21,6 @@ try {
   });
   await context.addInitScript(() => {
     const bridge = {
-      configurations: async () => [],
       chooseUpdate: async () => undefined,
       launch: () => Promise.reject(Error('The screenshot does not open a camera.')),
       launcherCameras: async () => [

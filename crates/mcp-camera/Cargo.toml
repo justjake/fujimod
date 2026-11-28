@@ -20,6 +20,8 @@ fujimod-emulator-session.workspace = true
 fujimod-emulator-cpu.workspace = true
 fujimod-catalog-resolution.workspace = true
 fujimod-catalog-remote.workspace = true
+# The open request's JSON Schema is the camera_open tool's input schema.
+fujimod-catalog-run-inputs = { workspace = true, features = ["schema"] }
 fujimod-emulator-controls.workspace = true
 fujimod-emulator-devices.workspace = true
 fujimod-emulator-gui.workspace = true

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://fujimod.com/schemas/rec-readiness.generated.schema.json",
+  "schema": 1,
+  "id": "xh2-530-rec-readiness",
+  "firmware_id": "xh2-530",
+  "firmware_sha256": "be47168cb075ef726e67cb4bb08175a896047a3b0de2bcb6e65333b22cfcb203",
+  "ui_mode": {
+    "address": 40601696,
+    "bytes": 4
+  },
+  "pending_mode": {
+    "address": 40601708,
+    "bytes": 4
+  },
+  "system_mode": {
+    "address": 41091696,
+    "bytes": 4
+  },
+  "menu_active": {
+    "address": 37946328,
+    "bytes": 4
+  },
+  "rec_ui_mode": 3,
+  "rec_system_mode": 3,
+  "settle_milliseconds": 2000,
+  "identity_checks": [
+    {
+      "address": 21605932,
+      "size": 36,
+      "sha256": "ceb108db8f0741d4a9c8b2b85e53eef36860293e3ab402550db06699a915caba"
+    },
+    {
+      "address": 48843872,
+      "size": 180,
+      "sha256": "cad905a9606dbf9fcf7cbff6f949e0da6cf915f24d892dc3bce4069842091604"
+    }
+  ]
+}

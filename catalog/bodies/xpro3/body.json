@@ -3,5 +3,17 @@
   "schema": 1,
   "id": "xpro3",
   "soc_id": "xp4",
-  "dram_bytes": 536870912
+  "dram_bytes": 536870912,
+  "storage_slots": [
+    {
+      "id": "sd_card",
+      "label": "1",
+      "basis": "X-Pro3 specifications: two SD card slots (UHS-II)."
+    },
+    {
+      "id": "sd_card_2",
+      "label": "2",
+      "basis": "X-Pro3 specifications: two SD card slots (UHS-II)."
+    }
+  ]
 }

@@ -28,7 +28,7 @@ fn clock_override_updates_the_device_clock_and_requires_one_rtc() {
 }
 
 fn exr2_inputs(resolved: &mut ResolvedConfiguration) -> &mut Exr2RunInputs {
-    match resolved.configuration.inputs.as_mut().unwrap() {
+    match resolved.inputs.as_mut().unwrap() {
         RunInputs::Exr2(inputs) => inputs,
         RunInputs::Xp4(_) | RunInputs::Xp5(_) => panic!("unexpected input model"),
     }
@@ -172,7 +172,7 @@ fn checked_run_configuration_selects_runtime_and_supplies_scene_and_quantum() {
     assert_eq!(json["overlays"], serde_json::json!([]));
     assert_eq!(json["resolved"]["reference"]["body"]["id"], "x70");
     assert!(json["inputs"]["mcu"]["route"].is_number());
-    let settings = &json["resolved"]["configuration"]["inputs"]["settings"];
+    let settings = &json["resolved"]["inputs"]["settings"];
     assert_eq!(settings["camera"], "reference");
     assert_eq!(settings["requested"]["setup"], "done");
 }
@@ -206,11 +206,11 @@ fn rec_configuration_starts_with_manual_lever_and_normal_lcd() {
 #[test]
 fn unsupported_run_configuration_start_is_refused_and_usb_overlay_is_applied() {
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
-    resolved.configuration.start = RunStart::Loader;
+    resolved.start = RunStart::Loader;
     assert!(prepared(resolved).err().unwrap().contains("loader-start"));
 
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
-    resolved.configuration.start = RunStart::SdCard;
+    resolved.start = RunStart::SdCard;
     assert!(prepared(resolved).err().unwrap().contains("SD-card-start"));
 
     for (purpose, expected) in [
@@ -225,7 +225,7 @@ fn unsupported_run_configuration_start_is_refused_and_usb_overlay_is_applied() {
     }
 
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
-    resolved.configuration.inputs = None;
+    resolved.inputs = None;
     assert!(
         prepared(resolved)
             .err()
@@ -770,7 +770,7 @@ fn browser_camera_overlay_declares_a_virtual_card_host_on_the_native_plan() {
     );
     let text = serde_json::to_string(&prepared.to_json()).unwrap();
     assert!(Prepared::from_json(&serde_json::from_str(&text).unwrap()).is_ok());
-    assert_eq!(prepared.resolved.configuration.start, RunStart::Rom);
+    assert_eq!(prepared.resolved.start, RunStart::Rom);
     let sd = model(&prepared, "sd");
     assert_eq!(sd["kind"], "sd-host");
     assert_eq!(sd["options"]["protocol"], "sdhc");
@@ -1196,10 +1196,7 @@ fn common_open_checks_generation_before_loading_startup_files() {
         update: std::path::PathBuf::from("unavailable.dat").into(),
         manifest: None,
         boot_rom: None,
-        card_image: None,
-        card_files: vec![],
-        second_card_image: None,
-        second_card_files: vec![],
+        cards: Default::default(),
         scene: None,
         output: None,
         mode: Mode::Strict,

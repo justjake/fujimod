@@ -2010,6 +2010,7 @@ dependencies = [
  "fujimod-catalog-memory-reservations",
  "fujimod-catalog-remote",
  "fujimod-catalog-restart",
+ "fujimod-catalog-run-inputs",
  "fujimod-catalog-settings",
  "fujimod-catalog-workflows",
  "fujimod-workspace-hack",
@@ -2219,6 +2220,7 @@ name = "fujimod-catalog-run-inputs"
 version = "0.1.0"
 dependencies = [
  "fujimod-catalog-construction",
+ "fujimod-catalog-controls",
  "fujimod-catalog-identity",
  "fujimod-workspace-hack",
  "schemars 1.2.3",
@@ -2421,6 +2423,7 @@ dependencies = [
 name = "fujimod-emulator-camera"
 version = "0.1.0"
 dependencies = [
+ "base64 0.23.1",
  "fujimod-catalog",
  "fujimod-catalog-configuration",
  "fujimod-catalog-controls",
@@ -2453,12 +2456,14 @@ dependencies = [
  "fujimod-catalog-configuration",
  "fujimod-catalog-resolution",
  "fujimod-emulator-boot",
+ "fujimod-emulator-camera",
  "fujimod-emulator-controls",
  "fujimod-emulator-cpu",
  "fujimod-emulator-exr2-board",
  "fujimod-emulator-gui",
  "fujimod-emulator-models",
  "fujimod-workspace-hack",
+ "serde",
  "serde_json",
 ]
 
@@ -3597,6 +3602,7 @@ dependencies = [
  "fujimod-camera",
  "fujimod-catalog-remote",
  "fujimod-catalog-resolution",
+ "fujimod-catalog-run-inputs",
  "fujimod-emulator-boot",
  "fujimod-emulator-camera",
  "fujimod-emulator-controls",

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://fujimod.com/schemas/rec-readiness.generated.schema.json",
+  "schema": 1,
+  "id": "xt5-431-rec-readiness",
+  "firmware_id": "xt5-431",
+  "firmware_sha256": "790d6deecf26766188b0e506e40645e6b816addfeba39a52334349405421724e",
+  "ui_mode": {
+    "address": 39800600,
+    "bytes": 4
+  },
+  "pending_mode": {
+    "address": 39800612,
+    "bytes": 4
+  },
+  "system_mode": {
+    "address": 40290960,
+    "bytes": 4
+  },
+  "menu_active": {
+    "address": 37405136,
+    "bytes": 4
+  },
+  "rec_ui_mode": 3,
+  "rec_system_mode": 1,
+  "settle_milliseconds": 2000,
+  "identity_checks": [
+    {
+      "address": 21581564,
+      "size": 36,
+      "sha256": "63ad7263b3474bb0912251a0470e52d2e3f5a2a1067cb9a2741b352380f4a9db"
+    },
+    {
+      "address": 48047208,
+      "size": 180,
+      "sha256": "13040a00df1bd8d545f621faa4c500f0263d5dbc225746ffdb4cea7b69a584e9"
+    }
+  ]
+}

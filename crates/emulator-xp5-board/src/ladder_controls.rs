@@ -17,7 +17,7 @@
 use crate::{keys::Key, ladders};
 use fujimod_catalog_configuration::{
     RunInputs,
-    application_inputs::{ApplicationBlockInput, ApplicationRunInputs},
+    application::{ApplicationBlockInput, ApplicationRunInputs},
 };
 use fujimod_catalog_controls::{ControlLadder, LadderWire, PhysicalControls};
 use fujimod_catalog_resolution::ResolvedConfiguration;
@@ -73,7 +73,7 @@ pub fn ladders(resolved: &ResolvedConfiguration) -> Result<Option<ladders::Optio
     if controls.ladders.is_empty() {
         return Ok(None);
     }
-    let inputs = match resolved.configuration.inputs.as_ref() {
+    let inputs = match resolved.inputs.as_ref() {
         Some(RunInputs::Xp5(inputs)) => inputs,
         _ => {
             return Err(format!(
@@ -898,7 +898,7 @@ mod tests {
     }
 
     fn inputs(resolved: &mut ResolvedConfiguration) -> &mut ApplicationRunInputs {
-        match resolved.configuration.inputs.as_mut() {
+        match resolved.inputs.as_mut() {
             Some(RunInputs::Xp5(inputs)) => inputs,
             _ => panic!("X-T5 run has XP5 inputs"),
         }

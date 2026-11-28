@@ -22,7 +22,7 @@ crate, so a consumer rebuilds only when the documents it reads change:
   `persistent_inputs`, the persistent inputs a run supplies.
 - `fujimod-catalog-bulk`: stock diagnostic bulk-read facts.
 - `fujimod-catalog` (this crate): the bundled reference catalog of SoCs,
-  parts, bodies and firmware and their hardware profiles. It keeps the control
+  parts, bodies and firmware and their hardware descriptions. It keeps the control
   and remote documents as JSON values so edits to their typed decoders do not
   rebuild the reference catalog.
 - `fujimod-catalog-configuration`: the bundled emulator run configurations,
@@ -113,22 +113,26 @@ one whose bindings read them, so native builds skip them: derive with
 and write tsify attributes under the same condition.
 
 The record layout and the home of each fact are defined in the
-[catalog README](../../catalog/README.md); this crate implements it. Hardware
-profiles hold emulator choices and qualified device graphs, not hardware facts,
-and move to the emulation layer that README describes.
-`fujimod_catalog_construction::HardwareSelection` selects one entry from `Soc.hardware.profiles`
-and one from `Body.hardware.profiles`. Profile IDs distinguish REC, service,
-and discovery hardware configurations. Resolution refuses unknown profiles.
-Profiles contain no input file locations. A device graph records closed device
-kinds, named references, alternatives, and separate construction and attachment
-orders; both orders must cover its declared nodes exactly once. Run presets own
-execution policy and reset/scene inputs independently of these profiles.
+[catalog README](../../catalog/README.md); this crate implements it. A body has
+one hardware description, `Body.hardware`, the same every time it is opened:
+its board (`hardware.board`: the device graph, controllers, imaging, encoders
+and, for an EXR II body, the exported construction with each node's startup
+values), its resting reset inputs (`hardware.reset_inputs` and the processor's
+`hardware.inputs`) and its bus facts. What differs between opens of one body
+(a connected cable, an inserted card, held controls, settings, scene) is a
+camera-description or run choice, never a second hardware description. A
+device graph records closed device kinds, named references, alternatives, and
+separate construction and attachment orders; both orders must cover its
+declared nodes exactly once.
 
 `fujimod_catalog_construction::ConstructionProfile` retains an exported native topology with
 closed model variants, ordered nodes, windows, dependencies, boot eligibility,
-and typed endpoint parameters. Run presets own each node's execution/reset
-options. Firmware `layouts` retain qualified boot plans, immutable table
-identities, and persistent record formats. Reusable persistent asset/placement
+and typed endpoint parameters; the board's `native_device_inputs` hold each
+node's startup values. A firmware record says how the firmware starts
+(`start`) and, for a body of unknown DRAM capacity, the address space its
+memory plan reaches (`dram_address_space`). Firmware `layouts` retain
+qualified boot plans, immutable table identities, and persistent record
+formats. Reusable persistent asset/placement
 types are shared rather than declaring types for individual named assets.
 
 `provenance::CatalogAnnotations` and `rehearsal::Rehearsal` describe explicit

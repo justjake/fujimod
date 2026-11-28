@@ -666,13 +666,12 @@ mod tests {
     fn xh2s(adc3: u16) -> Panel {
         let mut resolved = ResolvedConfiguration::bundled("xh2s-730").unwrap();
         // The mode-dial level is a run input: pose the run at `adc3`, as a Movie start does.
-        let Some(fujimod_catalog_configuration::RunInputs::Xp5(inputs)) =
-            resolved.configuration.inputs.as_mut()
+        let Some(fujimod_catalog_configuration::RunInputs::Xp5(inputs)) = resolved.inputs.as_mut()
         else {
             panic!("the X-H2S run has XP5 inputs");
         };
         for block in &mut inputs.blocks {
-            if let fujimod_catalog_configuration::application_inputs::ApplicationBlockInput::Adc {
+            if let fujimod_catalog_configuration::application::ApplicationBlockInput::Adc {
                 samples,
                 ..
             } = block

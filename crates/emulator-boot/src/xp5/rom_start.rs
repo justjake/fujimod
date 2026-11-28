@@ -10,10 +10,7 @@ use super::manifest::RamRegion;
 use fujimod_emulator_devices::graph::DeviceWindow;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-};
+use std::{collections::BTreeMap, path::Path};
 
 pub(crate) const ROM_BASE: u64 = 0xfff0_0000;
 pub(crate) const ROM_SIZE: usize = 0x1_0000;
@@ -183,7 +180,7 @@ impl RomStart {
     pub fn load(
         rom: crate::FirmwareFile,
         dials_held: bool,
-        card_files: Vec<(String, PathBuf)>,
+        card_files: Vec<(String, Vec<u8>)>,
         card_present: bool,
     ) -> Result<Self, String> {
         let captured = rom.read(crate::firmware_file::MAX_BYTES)?;
@@ -220,7 +217,7 @@ impl RomStart {
 
     pub fn from_card_handoff(
         handoff: Handoff,
-        files: Vec<(String, PathBuf)>,
+        files: Vec<(String, Vec<u8>)>,
     ) -> Result<Self, String> {
         let (setup_windows, window_options) =
             (handoff.device.clone(), handoff.window_options.clone());
@@ -245,11 +242,11 @@ impl RomStart {
     fn with_media(
         entry: Entry,
         dials_held: bool,
-        card_files: Vec<(String, PathBuf)>,
+        card_files: Vec<(String, Vec<u8>)>,
         card_present: bool,
     ) -> Result<Self, String> {
         let mut files: Vec<(String, Vec<u8>)> = Vec::new();
-        for (name, source) in card_files {
+        for (name, bytes) in card_files {
             // The card carries the boot files only: exactly `marble_init.bin` (the ROM's stage
             // file) and `ffboot.bin` (the loader's RAM image), any case, in the root. Every other
             // name, with or without a directory, is refused, so this start cannot carry the
@@ -269,16 +266,12 @@ impl RomStart {
             {
                 return Err(format!("card file {name:?} given twice"));
             }
-            let size = std::fs::metadata(&source)
-                .map_err(|e| format!("{}: {e}", source.display()))?
-                .len();
+            let size = bytes.len() as u64;
             if size > MAX_CARD_FILE_BYTES {
                 return Err(format!(
-                    "card file {} is {size} bytes, over the {MAX_CARD_FILE_BYTES}-byte bound",
-                    source.display()
+                    "card file {name} is {size} bytes, over the {MAX_CARD_FILE_BYTES}-byte bound"
                 ));
             }
-            let bytes = std::fs::read(&source).map_err(|e| format!("{}: {e}", source.display()))?;
             files.push((name, bytes));
         }
         Ok(Self {
@@ -317,7 +310,7 @@ impl RomStart {
 mod tests {
     use super::*;
 
-    fn start(dials_held: bool, files: Vec<(String, PathBuf)>) -> Result<RomStart, String> {
+    fn start(dials_held: bool, files: Vec<(String, Vec<u8>)>) -> Result<RomStart, String> {
         RomStart::with_media(Entry::MaskRom(vec![0; ROM_SIZE]), dials_held, files, true)
     }
 
@@ -341,10 +334,7 @@ mod tests {
         let config =
             fujimod_catalog_resolution::ResolvedConfiguration::with_overlays("xh2s-730", &[])
                 .unwrap();
-        assert_eq!(
-            config.configuration.start,
-            fujimod_catalog_configuration::RunStart::Setup
-        );
+        assert_eq!(config.start, fujimod_catalog_configuration::RunStart::Setup);
         let handoff = SetupHandoff::for_firmware("xh2s-730").unwrap().unwrap();
         assert_eq!(
             (handoff.pc, handoff.dat_offset, handoff.length),
@@ -510,23 +500,16 @@ mod tests {
             "..",
             "",
         ] {
-            let error = start(
-                true,
-                vec![(name.to_string(), PathBuf::from("/nonexistent"))],
-            )
-            .err()
-            .expect(name);
+            let error = start(true, vec![(name.to_string(), Vec::new())])
+                .err()
+                .expect(name);
             assert!(error.contains("startup-card files only"), "{name}: {error}");
         }
     }
 
     #[test]
     fn exactly_the_two_boot_files_are_accepted_in_any_case_once_each() {
-        let directory =
-            std::env::temp_dir().join(format!("rom-start-names-{}", std::process::id()));
-        std::fs::create_dir_all(&directory).unwrap();
-        let file = directory.join("file.bin");
-        std::fs::write(&file, b"abcd").unwrap();
+        let file = b"abcd".to_vec();
         let both = |first: &str, second: &str| {
             start(
                 true,
@@ -553,7 +536,6 @@ mod tests {
         // The update never rides along, even next to valid boot files.
         let error = both("marble_init.bin", "FPUPDATE.DAT").err().unwrap();
         assert!(error.contains("startup-card files only"), "{error}");
-        std::fs::remove_dir_all(&directory).ok();
     }
 
     #[test]

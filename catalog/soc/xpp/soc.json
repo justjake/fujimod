@@ -51,11 +51,7 @@
     }
   ],
   "hardware": {
-    "profiles": {
-      "xpp": {
-        "cache_basis": "Declared discovery input: the XP4 Cortex-A7 capacities, unmeasured. Not a cache timing model."
-      }
-    }
+    "cache_basis": "Declared discovery input: the XP4 Cortex-A7 capacities, unmeasured. Not a cache timing model."
   },
   "mappings": [
     {

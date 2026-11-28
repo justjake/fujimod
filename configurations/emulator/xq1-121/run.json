@@ -5,11 +5,70 @@
   "purpose": "rom_boot",
   "body_id": "xq",
   "firmware_id": "xq1-121",
-  "start": {
-    "kind": "rom"
+  "execution": {
+    "mode": "strict",
+    "engine": "unicorn",
+    "quantum": 1000,
+    "instructions_per_tick": {
+      "numerator": 24,
+      "denominator": 1
+    }
   },
-  "execution": null,
-  "inputs": null,
-  "scene": null,
-  "overlays": []
+  "scene": {
+    "kind": "exr2",
+    "frame_period_ticks": 400000,
+    "generated_assets": [
+      {
+        "id": "live_pixels",
+        "pattern": [
+          64,
+          64,
+          128,
+          128
+        ],
+        "size": 3481920
+      },
+      {
+        "id": "live_statistics_0",
+        "pattern": [
+          0
+        ],
+        "size": 1024
+      }
+    ],
+    "images": {
+      "live_image": {
+        "width": 2080,
+        "height": 837,
+        "stride": 4160,
+        "asset": "live_pixels"
+      }
+    },
+    "statistics": {
+      "live_statistics": [
+        {
+          "destination": 2,
+          "offset": 0,
+          "asset": "live_statistics_0"
+        }
+      ]
+    }
+  },
+  "overlays": [],
+  "preset": {
+    "factory_options": {},
+    "settings": {
+      "requested": {
+        "language": "en",
+        "setup": "done"
+      }
+    },
+    "virtual_card": {
+      "filesystem": "fat32",
+      "label": "CAMERA",
+      "sectors": 16777216,
+      "partition_start": 8192,
+      "sectors_per_cluster": 64
+    }
+  }
 }

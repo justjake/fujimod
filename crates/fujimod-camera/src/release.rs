@@ -34,7 +34,7 @@ pub fn card(state: &StateDir, library: &Library, firmware: &str) -> Result<PathB
     let index = index(&tag)?;
     let manifest = ota_manifest(&tag, firmware)?;
     let soc = library
-        .resolved(firmware)
+        .resolved(firmware, &[])
         .ok()
         .map(|resolved| resolved.reference.soc.id);
     let files = plan(&tag, &index, &manifest, firmware, soc.as_deref())?;

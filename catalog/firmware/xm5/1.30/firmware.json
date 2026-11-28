@@ -4,6 +4,9 @@
   "id": "xm5-130",
   "body_id": "xm5",
   "version": "1.30",
+  "start": {
+    "kind": "loader"
+  },
   "update": {
     "size": 110561488,
     "sha256": "0ee53160737b770ca9927b11885140228df1142d2694ba2e8e32b127f205c03c"

@@ -1,7 +1,6 @@
 //! Hardware parameters shared by application-profile SoC records.
 
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
 /// Additional hardware parameters whose meaning depends on the processor family.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -14,13 +13,9 @@ use std::collections::BTreeMap;
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct SocHardware {
-    /// Named hardware profiles, selected explicitly by a run preset.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    #[cfg_attr(
-        all(target_arch = "wasm32", not(target_os = "emscripten")),
-        tsify(type = "Record<string, SocProfile>")
-    )]
-    pub profiles: BTreeMap<String, crate::profiles::SocProfile>,
+    /// Qualification of the declared processor cache capacities.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_basis: Option<String>,
 }
 
 /// Hardware parameters for a SoC block, selected by its model tag.

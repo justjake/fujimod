@@ -4,6 +4,9 @@
   "id": "xt5-431",
   "body_id": "xt5",
   "version": "4.31",
+  "start": {
+    "kind": "loader"
+  },
   "update": {
     "size": 109365284,
     "sha256": "790d6deecf26766188b0e506e40645e6b816addfeba39a52334349405421724e"

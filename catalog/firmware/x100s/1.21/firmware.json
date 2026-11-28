@@ -4,6 +4,9 @@
   "id": "x100s-121",
   "body_id": "x100s",
   "version": "1.21",
+  "start": {
+    "kind": "rom"
+  },
   "update": {
     "size": 27362792,
     "sha256": "bd0530be00e22d9e807f295acb51693c1ede47e5ee6d276169a67c7beb7cf08d"

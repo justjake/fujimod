@@ -24,29 +24,24 @@ fn state() -> StateDir {
 
 fn request(preset: Preset) -> Request {
     Request {
-        firmware: "x70-110".into(),
-        files: fujimod_camera::FirmwareInput::Library,
-        overlays: Vec::new(),
+        camera: fujimod_camera::EmulatorRequestBase {
+            policy: ExecutionPolicy::Interactive,
+            cache: BootCache::Bypass,
+            ..fujimod_camera::EmulatorRequestBase::new(
+                "x70",
+                fujimod_camera::FirmwareChoice::Named("x70-110".into()),
+            )
+        },
         preset,
-        sd_card: None,
-        policy: ExecutionPolicy::Interactive,
-        engine: None,
-        cache: BootCache::Bypass,
-        run_to_rec: true,
-        card: Default::default(),
-        nand_image: None,
-        face_result_profile: None,
-        camera_settings: Default::default(),
     }
 }
 
 /// The same request, stopped before its first instruction.
-fn unbooted(preset: Preset, card: Option<fujimod_camera::CardSource>) -> Request {
-    Request {
-        sd_card: card,
-        run_to_rec: false,
-        ..request(preset)
-    }
+fn unbooted(preset: Preset, files: Option<Vec<(String, Vec<u8>)>>) -> Request {
+    let mut request = request(preset);
+    request.camera.cards.sd_card = files.map(fujimod_emulator_camera::Card::with_files);
+    request.camera.run_to_rec = false;
+    request
 }
 
 #[test]
@@ -58,15 +53,8 @@ fn the_x70_sd_card_boot_starts_from_the_stock_internal_flash() {
     let state = state();
     let stock = open(&library, &state, unbooted(Preset::Stock, None))
         .expect("stock open before the first instruction");
-    let card = open(
-        &library,
-        &state,
-        unbooted(
-            Preset::SdCard,
-            Some(fujimod_camera::CardSource::Files(Vec::new())),
-        ),
-    )
-    .expect("SD card open before the first instruction");
+    let card = open(&library, &state, unbooted(Preset::SdCard, Some(Vec::new())))
+        .expect("SD card open before the first instruction");
     let facts = library.nand_boot("x70-110").expect("X70 NAND boot facts");
     let stock_flash = fujimod_camera::read_flash(stock.session(), facts).expect("stock flash");
     let card_flash = fujimod_camera::read_flash(card.session(), facts).expect("card flash");

@@ -4,8 +4,7 @@
 //! the test returns without opening a camera.
 use fujimod_emulator_boot as boot;
 use fujimod_emulator_camera::{
-    BootCache, CardInputs, ExecutionPolicy, FirmwareInput, Flash, Library, Request, Stage, Start,
-    open_unbooted,
+    ExecutionPolicy, FirmwareChoice, Library, Request, Stage, open_unbooted,
 };
 
 const FIRMWARE: &str = "xm1-150";
@@ -27,20 +26,9 @@ fn library() -> Option<Library> {
 
 fn request() -> Request {
     Request {
-        firmware: FIRMWARE.into(),
-        files: FirmwareInput::Library,
-        overlays: Vec::new(),
-        start: Start::Rom,
-        flash: Flash::Stock,
-        card: CardInputs::default(),
         policy: ExecutionPolicy::Interactive,
-        engine: None,
-        cache: BootCache::Bypass,
         run_to_rec: false,
-        nand_image: None,
-        face_result_profile: None,
-        camera_settings: Default::default(),
-        kept: Default::default(),
+        ..Request::new("xm1", FirmwareChoice::Named(FIRMWARE.into()))
     }
 }
 
@@ -52,7 +40,7 @@ fn stock_starts_at_the_boot_rom() {
     };
     let opened = open_unbooted(&library, request()).unwrap_or_else(|error| panic!("open: {error}"));
     assert_eq!(
-        opened.resolved.configuration.id, "xm1-150-runtime",
+        opened.resolved.configuration.id, "xm1-150",
         "the library opened another run configuration"
     );
     assert_eq!(opened.stage, Stage::BootRom);

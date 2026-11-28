@@ -4,6 +4,9 @@
   "id": "xa3-222",
   "body_id": "xa3",
   "version": "2.22",
+  "start": {
+    "kind": "rom"
+  },
   "update": {
     "size": 20633088,
     "sha256": "d51108e476e1028a18472df2797c8d81a22736e0b90a48b02b0ddc278ba91fba"

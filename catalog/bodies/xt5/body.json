@@ -5,12 +5,159 @@
   "soc_id": "xp5",
   "dram_bytes": 1610612736,
   "hardware": {
-    "profiles": {
-      "xt5": {
-        "dram_basis": "The firmware memory map and the supplied Linux device tree end at 1.5 GiB (Linux 256 MiB from 1 GiB, then the shared arenas); installed capacity is unmeasured.",
-        "limits": []
-      }
+    "board": {
+      "dram_basis": "The firmware memory map and the supplied Linux device tree end at 1.5 GiB (Linux 256 MiB from 1 GiB, then the shared arenas); installed capacity is unmeasured.",
+      "limits": []
     },
+    "inputs": {
+      "kind": "xp5",
+      "ticks_per_second": 1000000000,
+      "blocks": [
+        {
+          "kind": "adc",
+          "block_id": "adc",
+          "samples": [
+            2713,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095
+          ]
+        },
+        {
+          "kind": "flash",
+          "block_id": "flash-aperture",
+          "part_id": "xt5-serial-nor",
+          "source": "firmware_update",
+          "erased_tail": 255,
+          "seeds": []
+        },
+        {
+          "kind": "gpio",
+          "block_id": "gpio",
+          "levels": [],
+          "outputs": [
+            {
+              "port": 12,
+              "levels": 1280
+            }
+          ],
+          "pins": [
+            {
+              "port": 11,
+              "pin": 4,
+              "high": false
+            }
+          ]
+        }
+      ],
+      "parts": [
+        {
+          "kind": "clock",
+          "part_id": "power-controller",
+          "seconds": 845151906,
+          "valid": true
+        },
+        {
+          "kind": "bis_revision",
+          "part_id": "bis-configuration",
+          "revision": [
+            0,
+            0
+          ],
+          "samples": [
+            0,
+            0
+          ],
+          "block": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "idle_high": false
+        },
+        {
+          "kind": "motion",
+          "part_id": "lsm6ds",
+          "temperature": 0,
+          "angular_rate": [
+            0,
+            0,
+            0
+          ],
+          "acceleration": [
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "timings": [],
+      "ladders": [
+        {
+          "wire": {
+            "kind": "power_controller_register",
+            "register": 52
+          },
+          "released": 1023,
+          "basis": "No key callback compares any value in 934..1023 on this register: the last band of its table in the X-T5 4.31 factory configuration page is read by no code, and every key band ends at 933 or lower. Any value in 934..1023 holds no control; 1023 is the top of that range, not the body's measured idle reading."
+        },
+        {
+          "wire": {
+            "kind": "power_controller_register",
+            "register": 53
+          },
+          "released": 1023,
+          "basis": "No key callback compares any value in 934..1023 on this register: the last band of its table in the X-T5 4.31 factory configuration page is read by no code, and every key band ends at 933 or lower. Any value in 934..1023 holds no control; 1023 is the top of that range, not the body's measured idle reading."
+        }
+      ]
+    },
+    "bus_byte_times": [
+      {
+        "block_id": "i2c1",
+        "ticks": 1000000
+      },
+      {
+        "block_id": "i2c2",
+        "ticks": 1000000
+      }
+    ],
+    "polled_serial_blocks": [
+      "spi3",
+      "spi4",
+      "spi5",
+      "spi8"
+    ],
+    "idle_status_blocks": [
+      "input"
+    ],
+    "sd_clock_steps": [
+      {
+        "block_id": "sd-host-0",
+        "interface": 2,
+        "default_speed": 4,
+        "high_speed": 2
+      },
+      {
+        "block_id": "sd-host-1",
+        "interface": 2,
+        "default_speed": 4,
+        "high_speed": 2
+      }
+    ],
     "serial_attachments": [
       {
         "part_id": "power-controller",
@@ -105,6 +252,18 @@
       }
     ]
   },
+  "storage_slots": [
+    {
+      "id": "sd_card",
+      "label": "1",
+      "basis": "X-T5 specifications: two SD card slots (UHS-II)."
+    },
+    {
+      "id": "sd_card_2",
+      "label": "2",
+      "basis": "X-T5 specifications: two SD card slots (UHS-II)."
+    }
+  ],
   "connections": [
     {
       "id": "power-controller-bus",

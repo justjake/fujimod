@@ -16,13 +16,48 @@ use crate::provenance::Evidence;
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct BodyHardware {
-    /// Named hardware profiles, selected explicitly by a run preset.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    /// The board: its device list and the controllers, imaging and controls
+    /// it models. A body has one, the same every time it is opened.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(
         all(target_arch = "wasm32", not(target_os = "emscripten")),
-        tsify(type = "Record<string, BodyProfile>")
+        tsify(type = "BodyBoard | null")
     )]
-    pub profiles: BTreeMap<String, crate::profiles::BodyProfile>,
+    pub board: Option<crate::profiles::BodyBoard>,
+    /// The reset inputs the board rests at when it powers on: switch and pad
+    /// levels, battery and control ADC levels and the companion parts' replies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "Record<string, unknown> | null")
+    )]
+    pub reset_inputs: Option<fujimod_catalog_run_inputs::HardwareReset>,
+    /// The processor's resting startup inputs: pad, ADC, power and serial
+    /// levels by block and part. Cable and card state here is the resting one;
+    /// a camera description connects or inserts them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "RunInputs | null")
+    )]
+    pub inputs: Option<fujimod_catalog_run_inputs::RunInputs>,
+    /// Per-byte times of the control buses; none is measured.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bus_byte_times: Vec<fujimod_catalog_run_inputs::RunBusByteTime>,
+    /// Serial blocks emulated with the polled transport in place of their full model.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub polled_serial_blocks: Vec<String>,
+    /// Imaging input blocks whose word 15 reports idle while their run bit is
+    /// clear: an inferred stand-in the recording task waits for.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub idle_status_blocks: Vec<String>,
+    /// Serial blocks whose companion interrupt line is unknown and never
+    /// observed (no pending-register read); a raised interrupt reaches no input.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unobserved_interrupt_blocks: Vec<String>,
+    /// SD clock dividers the stock driver programs; a faster clock than its step refuses.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sd_clock_steps: Vec<fujimod_catalog_run_inputs::RunSdClockSteps>,
     /// Serial endpoints and their processor-side connections.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub serial_attachments: Vec<SerialAttachment>,
@@ -223,10 +258,28 @@ pub struct GpioFeedback {
 impl BodyHardware {
     /// Validate installed parts and all physical connection identities.
     pub fn validate(&self, body: &crate::reference::Body) -> Result<(), String> {
-        for (id, profile) in &self.profiles {
-            fujimod_catalog_identity::validate_id(id)?;
-            if let Some(graph) = &profile.graph {
+        if let Some(board) = &self.board {
+            if let Some(graph) = &board.graph {
                 graph.validate()?;
+            }
+            for (id, inputs) in &board.native_device_inputs {
+                fujimod_catalog_identity::validate_id(id)?;
+                inputs.validate()?;
+            }
+        }
+        if let Some(inputs) = &self.inputs {
+            inputs.validate()?;
+            if let fujimod_catalog_run_inputs::RunInputs::Exr2(inputs) = inputs
+                && (inputs.settings.is_some()
+                    || inputs.first_start.is_some()
+                    || inputs.usb.connected
+                    || inputs.card.present)
+            {
+                return Err(format!(
+                    "body {} resting inputs declare settings, a first start, a connected cable \
+                     or an inserted card; those belong to the camera description",
+                    body.id
+                ));
             }
         }
         let connection = |id: &str| {

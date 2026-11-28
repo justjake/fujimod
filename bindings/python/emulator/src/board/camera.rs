@@ -4,7 +4,7 @@
 //! autostart presets, and `fujimod_emulator_camera` for explicit firmware
 //! files, internal flash and a power-on combination.
 use super::*;
-use fujimod_camera::{CardSource, Library, Preset, StateDir};
+use fujimod_camera::{Library, Preset, StateDir};
 use fujimod_emulator_camera as emulator;
 
 /// A camera one of the two layers opened.
@@ -38,239 +38,64 @@ impl CameraBoard {
 
 #[pymethods]
 impl Board {
-    /// Open a camera.
+    /// Open a camera from its description: JSON text with the same fields as
+    /// the MCP server's `camera_open` and the command line's `--camera`. `body` is required. Relative paths resolve from the
+    /// current directory.
     ///
-    /// `boot` is `stock`, `sd-card` or `autostart`; the firmware's update, boot
-    /// ROM and reference camera come from its source record under
-    /// `FUJIMOD_FIRMWARE_LIBRARY`, or the current directory when it is unset.
-    /// Give `update` and `boot_rom` to name the two files instead. `sd_card`
-    /// names a directory of SD card files and
-    /// `sd_card_files` their bytes, for a caller without a filesystem tree.
-    /// `flash` starts from a saved internal-flash image and `combination`
-    /// holds a catalog power-on combination (`sd`, `firmware_update` or
-    /// `service`); those, and a RAM image, select the emulator layer.
-    /// `nand` restores a saved internal-flash image and `face_result_profile`
-    /// supplies external detector results in place of the passive face bank.
-    ///
-    /// With `run_to_rec` false the board is returned before its first
-    /// instruction, with the boot controls held; running it and calling
-    /// `release_holds` finishes the boot. Otherwise the session is already at
-    /// REC or its first-start setup.
+    /// A request that holds a power-on combination, starts from a RAM image or
+    /// a flash image opens the emulator layer; the others open the FujiMod
+    /// layer, whose `boot` is `stock`, `sd-card` or `autostart`. With
+    /// `run_to_rec` false, or for a firmware without REC readiness facts, the
+    /// board is returned before its first instruction with the boot controls
+    /// held; running it and calling `release_holds` finishes the boot.
     #[staticmethod]
-    #[pyo3(signature=(*, firmware, boot="stock", sd_card=None, execution_policy="exact", boot_cache=true,
-        run_to_rec=true, sd_card_present=true, sd_card_write_protected=false, sd_card_transfer_ticks=None,
-        card_layout=None, start="rom", image=None, image_sha256=None, update=None, boot_rom=None,
-        flash=None, combination=None, sd_card_files=None, image_bytes=None, nand=None,
-        face_result_profile=None, overlays=None, sd_card_initialization_fault=None, camera_settings=None))]
-    #[allow(clippy::too_many_arguments)]
-    fn open_camera(
-        firmware: String,
-        boot: &str,
-        sd_card: Option<PathBuf>,
-        execution_policy: &str,
-        boot_cache: bool,
-        run_to_rec: bool,
-        sd_card_present: bool,
-        sd_card_write_protected: bool,
-        sd_card_transfer_ticks: Option<u64>,
-        card_layout: Option<&str>,
-        start: &str,
-        image: Option<PathBuf>,
-        image_sha256: Option<String>,
-        update: Option<PathBuf>,
-        boot_rom: Option<PathBuf>,
-        flash: Option<PathBuf>,
-        combination: Option<String>,
-        sd_card_files: Option<std::collections::HashMap<String, Vec<u8>>>,
-        image_bytes: Option<Vec<u8>>,
-        nand: Option<Vec<u8>>,
-        face_result_profile: Option<String>,
-        overlays: Option<Vec<String>>,
-        sd_card_initialization_fault: Option<&str>,
-        camera_settings: Option<std::collections::BTreeMap<String, String>>,
-    ) -> PyResult<Self> {
-        let camera_settings = camera_settings.unwrap_or_default();
-        let files = match (update, boot_rom) {
-            (None, None) => emulator::FirmwareInput::Library,
-            (Some(update), Some(boot_rom)) => emulator::FirmwareInput::Files { update, boot_rom },
-            _ => {
-                return Err(PyValueError::new_err(
-                    "update and boot_rom are named together, or not at all",
-                ));
-            }
-        };
-        let library = match &files {
+    fn open_camera(camera: &str) -> PyResult<Self> {
+        let document: fujimod_camera::CameraDescription = serde_json::from_str(camera)
+            .map_err(|failure| PyValueError::new_err(format!("camera: {failure}")))?;
+        let base = std::env::current_dir().map_err(|failure| error(failure.to_string()))?;
+        let request = fujimod_camera::Request::from_description(&document, &base)
+            .map_err(|failure| PyValueError::new_err(failure.to_string()))?;
+        let library = match &request.camera.files {
             emulator::FirmwareInput::Files { .. } => Library::without_directory(),
             emulator::FirmwareInput::Library => Library::from_env(),
         }
         .map_err(|failure| error(failure.to_string()))?;
         let state = StateDir::from_env();
-        let policy =
-            fujimod_emulator_cpu::ExecutionPolicy::parse(execution_policy).map_err(error)?;
-        if let Some(ticks) = sd_card_transfer_ticks
-            && ticks == 0
-        {
-            return Err(PyValueError::new_err(
-                "sd_card_transfer_ticks must be positive",
-            ));
-        }
-        let layout = match card_layout {
-            None => None,
-            Some(text) => {
-                let layout: emulator::CardLayout = serde_json::from_str(text)
-                    .map_err(|failure| PyValueError::new_err(format!("card_layout: {failure}")))?;
-                layout.validate().map_err(PyValueError::new_err)?;
-                Some(layout)
-            }
-        };
-        let image = loader_image(start, image, image_sha256, image_bytes)?;
-        let face_result_profile = match face_result_profile {
-            None => None,
-            Some(name) => Some(
-                serde_json::from_value::<emulator::RunFaceResultProfile>(
-                    serde_json::Value::String(name),
-                )
-                .map_err(|_| {
-                    PyValueError::new_err(
-                        "face_result_profile must be empty, box64x20 or box172x120",
-                    )
-                })?,
-            ),
-        };
-        let cache = if boot_cache {
-            fujimod_camera::BootCache::Reuse
-        } else {
-            fujimod_camera::BootCache::Bypass
-        };
-        let initialization_fault = match sd_card_initialization_fault {
-            None => None,
-            Some(text) => Some(serde_json::from_str::<serde_json::Value>(text).map_err(
-                |failure| PyValueError::new_err(format!("sd_card_initialization_fault: {failure}")),
-            )?),
-        };
-        let overlays = overlays.unwrap_or_default();
-        let card_contents = match sd_card_files {
-            None => None,
-            Some(files) => {
-                let mut files: Vec<(String, Vec<u8>)> = files.into_iter().collect();
-                if files.iter().any(|(name, _)| name.is_empty()) {
-                    return Err(PyValueError::new_err(
-                        "sd_card_files keys must be nonempty strings",
-                    ));
-                }
-                files.sort_by(|left, right| left.0.cmp(&right.0));
-                Some(files)
-            }
-        };
-        if sd_card.is_some() && card_contents.is_some() {
-            return Err(PyValueError::new_err(
-                "name sd_card (a directory) or sd_card_files (their bytes), not both",
-            ));
-        }
-        let emulator_layer = flash.is_some() || combination.is_some() || image.is_some();
-        if emulator_layer {
-            if boot != "stock" {
-                return Err(PyValueError::new_err(
-                    "flash, a combination and a RAM image open the emulator layer; boot must be 'stock'",
-                ));
-            }
-            let card_files = match (&sd_card, card_contents) {
-                (Some(directory), _) => emulator::directory_files(directory)
-                    .map_err(|failure| error(failure.to_string()))?,
-                (None, Some(files)) => files,
-                (None, None) => Vec::new(),
-            };
-            let flash = match flash {
-                Some(path) => emulator::Flash::Image(
-                    std::fs::read(&path)
-                        .map_err(|failure| error(format!("{}: {failure}", path.display())))?,
-                ),
-                None => emulator::Flash::Stock,
-            };
-            let start = match combination {
-                Some(name) => {
-                    if image.is_some() {
-                        return Err(PyValueError::new_err(
-                            "a RAM image and a power-on combination are exclusive",
-                        ));
-                    }
-                    emulator::Start::Held { combination: name }
-                }
-                None => match image {
-                    Some(image) => emulator::Start::Loader(image),
-                    None => emulator::Start::Rom,
-                },
-            };
-            let opened = emulator::open(
-                &library,
-                &state,
-                emulator::Request {
-                    firmware,
-                    files,
-                    overlays,
-                    start,
-                    flash,
-                    card: emulator::CardInputs {
-                        files: card_files,
-                        present: sd_card_present,
-                        protected: sd_card_write_protected,
-                        transfer_ticks: sd_card_transfer_ticks,
-                        layout,
-                        initialization_fault: initialization_fault.clone(),
-                    },
-                    policy,
-                    engine: None,
-                    cache,
-                    run_to_rec,
-                    nand_image: nand.clone(),
-                    face_result_profile: face_result_profile.clone(),
-                    camera_settings: camera_settings.clone(),
-                    kept: Default::default(),
-                },
-            )
-            .map_err(|failure| error(failure.to_string()))?;
-            return Ok(Self::from_emulator(opened));
-        }
-        let preset = Preset::parse(boot).ok_or_else(|| {
-            PyValueError::new_err(format!(
-                "boot must be 'stock', 'sd-card' or 'autostart', not {boot:?}"
-            ))
-        })?;
-        if preset == Preset::Autostart && !run_to_rec {
+        if request.preset == Preset::Autostart && !request.camera.run_to_rec {
             return Err(PyValueError::new_err(
                 "an autostart open cannot stop before REC",
             ));
         }
-        let opened = fujimod_camera::open(
-            &library,
-            &state,
-            fujimod_camera::Request {
-                firmware,
-                files,
-                overlays,
-                preset,
-                sd_card: match (sd_card, card_contents) {
-                    (Some(directory), _) => Some(CardSource::Directory(directory)),
-                    (None, Some(files)) => Some(CardSource::Files(files)),
-                    (None, None) => None,
-                },
-                policy,
-                engine: None,
-                cache,
-                run_to_rec,
-                nand_image: nand,
-                face_result_profile,
-                camera_settings,
-                card: fujimod_camera::CardOptions {
-                    present: sd_card_present,
-                    protected: sd_card_write_protected,
-                    transfer_ticks: sd_card_transfer_ticks,
-                    layout,
-                    initialization_fault,
-                },
-            },
-        )
+        let snapshot = document
+            .snapshot
+            .as_deref()
+            .map(|path| emulator::description::resolve(&base, path));
+        let emulator_layer = !matches!(request.camera.start, emulator::Start::Rom)
+            || !matches!(request.camera.flash, emulator::Flash::Stock);
+        if emulator_layer {
+            if request.preset != Preset::Stock {
+                return Err(PyValueError::new_err(
+                    "hold, loader_image and flash_image open the emulator layer; boot must be 'stock'",
+                ));
+            }
+            let mut opened = match &snapshot {
+                Some(_) => emulator::open_unbooted(&library, request.camera),
+                None => emulator::open(&library, &state, request.camera),
+            }
+            .map_err(|failure| error(failure.to_string()))?;
+            if let Some(path) = &snapshot {
+                fujimod_emulator_boot::load_snapshot(opened.session_mut(), path).map_err(error)?;
+            }
+            return Ok(Self::from_emulator(opened));
+        }
+        let mut opened = match &snapshot {
+            Some(_) => fujimod_camera::open_unbooted(&library, &state, request),
+            None => fujimod_camera::open(&library, &state, request),
+        }
         .map_err(|failure| error(failure.to_string()))?;
+        if let Some(path) = &snapshot {
+            fujimod_emulator_boot::load_snapshot(opened.session_mut(), path).map_err(error)?;
+        }
         Ok(Self::from_fujimod(opened))
     }
 
@@ -370,35 +195,5 @@ impl Board {
         let session = self.session()?;
         let report = fujimod_emulator_boot::status(session).map_err(error)?;
         serde_json::to_string(&report).map_err(|failure| error(failure.to_string()))
-    }
-}
-
-/// A caller-verified loader image, from `start` and the image arguments.
-fn loader_image(
-    start: &str,
-    image: Option<PathBuf>,
-    image_sha256: Option<String>,
-    image_bytes: Option<Vec<u8>>,
-) -> PyResult<Option<emulator::LoaderImage>> {
-    match (start, image, image_sha256, image_bytes) {
-        ("rom", None, None, None) => Ok(None),
-        ("rom", ..) => Err(PyValueError::new_err("image requires start='loader'")),
-        ("loader", Some(path), Some(sha256), None) => {
-            if sha256.len() != 64 || !sha256.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-                return Err(PyValueError::new_err(
-                    "image_sha256 must be 64 hexadecimal characters",
-                ));
-            }
-            let bytes = std::fs::read(&path)
-                .map_err(|failure| error(format!("{}: {failure}", path.display())))?;
-            Ok(Some(emulator::LoaderImage { bytes, sha256 }))
-        }
-        ("loader", None, None, Some(bytes)) => Ok(Some(emulator::LoaderImage::new(bytes))),
-        ("loader", ..) => Err(PyValueError::new_err(
-            "start='loader' requires image (a path with image_sha256, or bytes)",
-        )),
-        (other, ..) => Err(PyValueError::new_err(format!(
-            "start must be 'rom' or 'loader', not {other:?}"
-        ))),
     }
 }

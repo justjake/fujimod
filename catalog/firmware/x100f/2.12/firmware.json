@@ -4,6 +4,9 @@
   "id": "x100f-212",
   "body_id": "x100f",
   "version": "2.12",
+  "start": {
+    "kind": "loader"
+  },
   "update": {
     "size": 53544672,
     "sha256": "c0d4c31985aaf793e060924fbfdfbd7cf205a27986cda43c1806688e01523f89"

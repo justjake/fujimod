@@ -4,6 +4,9 @@
   "id": "xm1-150",
   "body_id": "xm1",
   "version": "1.50",
+  "start": {
+    "kind": "rom"
+  },
   "update": {
     "size": 38405148,
     "sha256": "43d67afa1a2bc9ae8481bc0acf02cb085ed0f515122dcbd26addcae102cd1490"
@@ -127,8 +130,6 @@
             }
           ]
         },
-        "browser_configuration_id": "xm1-150-browser-camera",
-        "camera_configuration_id": "xm1-150-runtime",
         "control_bus_tables_id": "control-bus-xm1-150",
         "execution_scope": "offline-boot-development",
         "fe80_programs": [

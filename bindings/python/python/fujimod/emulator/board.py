@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import math
 import sys
@@ -414,222 +415,127 @@ class Board:
     def open_camera(
         cls,
         *,
-        firmware: str,
-        boot: Literal["stock", "sd-card", "autostart"] = "stock",
-        sd_card: str | PathLike[str] | None = None,
-        sd_card_files: Mapping[str, bytes] | None = None,
-        execution_policy: ExecutionPolicy = "exact",
-        boot_cache: bool = True,
-        run_to_rec: bool = True,
-        sd_card_present: bool = True,
-        sd_card_write_protected: bool = False,
-        sd_card_transfer_ticks: int | None = None,
-        card_layout: Mapping[str, object] | None = None,
-        start: Literal["rom", "loader"] = "rom",
-        image: str | PathLike[str] | bytes | None = None,
-        image_sha256: str | None = None,
-        nand: bytes | None = None,
-        face_result_profile: str | None = None,
-        update: str | PathLike[str] | None = None,
-        boot_rom: str | PathLike[str] | None = None,
-        flash: str | PathLike[str] | None = None,
-        combination: str | None = None,
+        body: str,
+        firmware: str | None = None,
+        settings: Mapping[str, str] | None = None,
+        sd_card: Mapping[str, object] | None = None,
+        sd_card_2: Mapping[str, object] | None = None,
+        cfexpress_card: Mapping[str, object] | None = None,
+        date: str | None = None,
+        scene: str | PathLike[str] | None = None,
+        engine: Literal["unicorn", "hypervisor"] | None = None,
+        execution_policy: ExecutionPolicy | None = None,
+        boot: Literal["stock", "sd-card", "autostart"] | None = None,
+        hold: str | None = None,
+        loader_image: Mapping[str, object] | None = None,
+        flash_image: str | PathLike[str] | None = None,
+        nand_image: str | PathLike[str] | None = None,
+        firmware_files: Mapping[str, object] | None = None,
+        application_plan: str | PathLike[str] | None = None,
+        face_result_profile: Literal["empty", "box64x20", "box172x120"] | None = None,
         overlays: Sequence[str] = (),
-        sd_card_initialization_fault: Mapping[str, object] | str | None = None,
-        camera_settings: Mapping[str, str] | None = None,
+        run_to_rec: bool | None = None,
+        boot_cache: bool | None = None,
+        snapshot: str | PathLike[str] | None = None,
     ) -> Self:
-        """Open a camera through the shared builder and return it at REC.
+        """Open a camera through the shared builder.
 
-        The firmware's update, boot ROM and reference camera come from its
-        source record under FUJIMOD_FIRMWARE_LIBRARY, or the current directory
-        when that is unset, so the caller names only the firmware. `boot` is
-        `stock`, `sd-card` or `autostart`. `sd_card`
-        names an SD card directory, or is the current release card when it is
-        omitted for the two card boots, or the extra files of an otherwise
-        empty card for a stock boot. `sd_card_files` gives the same files as a
-        name-to-bytes mapping, for a caller without a directory tree.
-        `update` and `boot_rom` name the two firmware files instead of the
-        library. `flash` starts from a saved internal-flash image, and
-        `combination` holds a catalog power-on combination (`sd`,
-        `firmware_update` or `service`); those, and a RAM image, open the
-        emulator layer, whose SD card is `sd_card` or `sd_card_files`.
-        `execution_policy` is `exact` or `interactive`. `boot_cache`
-        restores the library's saved boot when the same inputs were opened
-        before and saves this one; `False` boots from scratch and saves
-        nothing. With `run_to_rec` false the board is returned before its
+        The arguments are the camera description the MCP server's
+        `camera_open` and the command line's `--camera` take, under the same
+        names (`catalog/schemas/emulator-camera.generated.schema.json`).
+        `body` is a catalog body such as `xh2s`; `firmware` is a version such
+        as `7.30`, a firmware identity, or `none`, and the body's newest
+        firmware when omitted. The firmware's files come from its source
+        record under FUJIMOD_FIRMWARE_LIBRARY, or the current directory when
+        that is unset, unless `firmware_files` names `update` and `boot_rom`.
+        `settings` names camera settings such as `{"language": "en"}`.
+        Each card (`sd_card`, `sd_card_2`, `cfexpress_card`) is a mapping of
+        `present`, `write_protected` and one of `files` (card path to
+        `{"source": path}` or `{"bytes": data}`), `directory` or `image`,
+        plus the rare `layout`, `transfer_ticks` and `initialization_fault`.
+        `boot` is `stock`, `sd-card` or `autostart`; `hold`, `loader_image`
+        (`{"path": ..., "sha256": ...}`) and `flash_image` open the emulator
+        layer with a stock boot. With `run_to_rec` false, or for a firmware
+        that declares no REC readiness facts, the board is returned before its
         first instruction with the boot controls held: run it and call
-        `release_holds` to finish the boot. The boot cache is not used then.
-        `sd_card_present` false models an empty slot, and
-        `sd_card_write_protected` asserts the card's write-protect contact.
-        `sd_card_transfer_ticks` replaces the catalog's guest ticks per SD
-        data transfer. `card_layout` declares the FAT geometry of the SD
-        card in place of the catalog's layout: `sectors`, `label`,
-        `partition_start` and `sectors_per_cluster`; it needs the card
-        present. `start="loader"` places a
-        caller-verified RAM image at address zero and starts the first core at
-        the native loader before any instruction runs; `image` is the image's
-        path, with `image_sha256`, or its bytes. The boot ROM never runs for
-        such an open. `nand` is a saved internal-flash image, laid over the
-        board's own medium before the first instruction (the bytes
-        `nand_medium(name).to_bytes()` returns). `face_result_profile` is
-        one of `empty`, `box64x20` or `box172x120`: external detector
-        results the guest's own start consumes in place of the passive face
-        bank.
-        `overlays` resolves the camera's run with those catalog overlays after
-        the library profile's own. `sd_card_initialization_fault`
-        models an SD host initialization fault as the device model names it,
-        such as `"reject_cmd8"` or
-        `{"reject_standby_cmd3_and_cmd8_once_after": 2}`.
-        `camera_settings` names settings by catalog name and value name,
-        such as `{"language": "zh-hans"}`, in place of the run's own.
+        `release_holds` to finish the boot. `snapshot` restores a checkpoint
+        file instead of booting. Relative paths resolve from the current
+        directory.
         """
-        firmware = cls._identifier(firmware, "firmware")
-        if camera_settings is not None and not isinstance(camera_settings, Mapping):
-            raise TypeError("camera_settings must map setting names to value names")
-        selected_settings = dict(camera_settings or {})
-        if any(
-            type(key) is not str or type(value) is not str or not key or not value
-            for key, value in selected_settings.items()
-        ):
-            raise TypeError(
-                "camera_settings must map nonempty strings to nonempty strings"
-            )
-        if boot not in ("stock", "sd-card", "autostart"):
-            raise ValueError("boot must be 'stock', 'sd-card' or 'autostart'")
-        if (update is None) != (boot_rom is None):
-            raise ValueError("update and boot_rom are named together, or not at all")
-        if execution_policy not in ("exact", "interactive"):
-            raise ValueError("execution_policy must be 'exact' or 'interactive'")
-        if type(boot_cache) is not bool:
-            raise TypeError("boot_cache must be a bool")
-        if type(run_to_rec) is not bool:
-            raise TypeError("run_to_rec must be a bool")
-        if type(sd_card_present) is not bool:
-            raise TypeError("sd_card_present must be a bool")
-        if type(sd_card_write_protected) is not bool:
-            raise TypeError("sd_card_write_protected must be a bool")
-        if sd_card_transfer_ticks is not None and (
-            type(sd_card_transfer_ticks) is not int or sd_card_transfer_ticks < 1
-        ):
-            raise ValueError("sd_card_transfer_ticks must be a positive integer")
-        layout_text = None
-        if card_layout is not None:
-            if not isinstance(card_layout, Mapping):
-                raise TypeError("card_layout must be a mapping or None")
-            selected_layout = dict(card_layout)
-            if set(selected_layout) != {
-                "sectors",
-                "label",
-                "partition_start",
-                "sectors_per_cluster",
-            }:
-                raise ValueError(
-                    "card_layout needs sectors, label, partition_start, sectors_per_cluster"
+        request: dict[str, object] = {"body": cls._identifier(body, "body")}
+        if firmware is not None:
+            request["firmware"] = cls._identifier(firmware, "firmware")
+        if settings is not None:
+            if not isinstance(settings, Mapping) or any(
+                type(key) is not str or type(value) is not str or not key or not value
+                for key, value in settings.items()
+            ):
+                raise TypeError(
+                    "settings must map nonempty setting names to nonempty value names"
                 )
-            for key in ("sectors", "partition_start", "sectors_per_cluster"):
-                if type(selected_layout[key]) is not int:
-                    raise TypeError(f"card_layout {key} must be an integer")
-            if type(selected_layout["label"]) is not str:
-                raise TypeError("card_layout label must be a string")
-            if not sd_card_present:
-                raise ValueError("card_layout needs the card present")
-            layout_text = json.dumps(selected_layout)
-        emulator_layer = (
-            flash is not None or combination is not None or image is not None
-        )
-        if emulator_layer and boot != "stock":
-            raise ValueError(
-                "flash, a combination and a RAM image open the emulator layer; boot must be 'stock'"
-            )
-        if not run_to_rec and boot == "autostart":
-            raise ValueError("an autostart open cannot stop before REC")
-        if emulator_layer and image is not None and combination is not None:
-            raise ValueError("a RAM image and a power-on combination are exclusive")
-        if not sd_card_present and boot != "stock":
-            raise ValueError("a card boot needs the card present")
-        if start not in ("rom", "loader"):
-            raise ValueError("start must be 'rom' or 'loader'")
-        if start == "loader" and image is None:
-            raise ValueError("start='loader' requires image")
-        if start == "rom" and (image is not None or image_sha256 is not None):
-            raise ValueError("image requires start='loader'")
-        if image_sha256 is not None and (
-            type(image_sha256) is not str or len(image_sha256) != 64
+            request["settings"] = dict(settings)
+        for slot, card in (
+            ("sd_card", sd_card),
+            ("sd_card_2", sd_card_2),
+            ("cfexpress_card", cfexpress_card),
         ):
-            raise ValueError("image_sha256 must be 64 hexadecimal characters")
+            if card is not None:
+                request[slot] = cls._card(card, slot)
+        for name, path in (
+            ("scene", scene),
+            ("flash_image", flash_image),
+            ("nand_image", nand_image),
+            ("application_plan", application_plan),
+            ("snapshot", snapshot),
+        ):
+            if path is not None:
+                request[name] = cls._input_path(path, name)
+        for name, text in (
+            ("date", date),
+            ("engine", engine),
+            ("execution_policy", execution_policy),
+            ("boot", boot),
+            ("hold", hold),
+            ("face_result_profile", face_result_profile),
+        ):
+            if text is not None:
+                if type(text) is not str:
+                    raise TypeError(f"{name} must be a string")
+                request[name] = text
+        if loader_image is not None:
+            if not isinstance(loader_image, Mapping) or set(loader_image) != {
+                "path",
+                "sha256",
+            }:
+                raise TypeError("loader_image must map path and sha256")
+            request["loader_image"] = {
+                "path": cls._input_path(
+                    cast("str | PathLike[str]", loader_image["path"]), "loader_image"
+                ),
+                "sha256": loader_image["sha256"],
+            }
+        if firmware_files is not None:
+            if not isinstance(firmware_files, Mapping) or not set(firmware_files) <= {
+                "update",
+                "boot_rom",
+            }:
+                raise TypeError("firmware_files must map update and boot_rom")
+            request["firmware_files"] = {
+                key: cls._input_path(cast("str | PathLike[str]", value), key)
+                for key, value in firmware_files.items()
+            }
         if isinstance(overlays, (str, bytes)) or not isinstance(overlays, Sequence):
             raise TypeError("overlays must be a sequence of catalog overlay IDs")
-        selected_overlays = list(overlays)
-        if any(
-            type(overlay) is not str or not overlay for overlay in selected_overlays
-        ):
+        if any(type(overlay) is not str or not overlay for overlay in overlays):
             raise TypeError("overlays must be nonempty strings")
-        fault_text = None
-        if sd_card_initialization_fault is not None:
-            if isinstance(sd_card_initialization_fault, str):
-                fault_text = sd_card_initialization_fault
-            elif isinstance(sd_card_initialization_fault, Mapping):
-                fault_text = json.dumps(dict(sd_card_initialization_fault))
-            else:
-                raise TypeError(
-                    "sd_card_initialization_fault must be a mapping or JSON text"
-                )
-        card = None if sd_card is None else cls._input_path(sd_card, "sd_card")
-        if card is not None and sd_card_files is not None:
-            raise ValueError(
-                "name sd_card (a directory) or sd_card_files (their bytes), not both"
-            )
-        if sd_card_files is not None and not isinstance(sd_card_files, Mapping):
-            raise TypeError("sd_card_files must map SD card file names to bytes")
-        selected_files: dict[str, bytes] = {}
-        for name, data in (sd_card_files or {}).items():
-            if type(name) is not str or not name:
-                raise TypeError("sd_card_files keys must be nonempty strings")
-            if not isinstance(data, (bytes, bytearray, memoryview)):
-                raise TypeError("sd_card_files values must be bytes")
-            selected_files[name] = bytes(data)
-        image_path = None
-        image_contents = None
-        if image is not None:
-            if isinstance(image, (bytes, bytearray, memoryview)):
-                image_contents = bytes(image)
-            else:
-                image_path = cls._input_path(image, "image")
-        if image_path is not None and image_sha256 is None:
-            raise ValueError("start='loader' requires image_sha256 for an image path")
-        if image_contents is not None and image_sha256 is not None:
-            raise ValueError("image bytes carry their own SHA-256")
-        update_path = None if update is None else cls._input_path(update, "update")
-        boot_rom_path = (
-            None if boot_rom is None else cls._input_path(boot_rom, "boot_rom")
-        )
-        flash_path = None if flash is None else cls._input_path(flash, "flash")
-        native = _native.Board.open_camera(
-            firmware=firmware,
-            boot=boot,
-            sd_card=card,
-            sd_card_files=selected_files or None,
-            execution_policy=execution_policy,
-            boot_cache=boot_cache,
-            run_to_rec=run_to_rec,
-            sd_card_present=sd_card_present,
-            sd_card_write_protected=sd_card_write_protected,
-            sd_card_transfer_ticks=sd_card_transfer_ticks,
-            card_layout=layout_text,
-            start=start,
-            image=image_path,
-            image_sha256=image_sha256,
-            image_bytes=image_contents,
-            nand=nand,
-            face_result_profile=face_result_profile,
-            update=update_path,
-            boot_rom=boot_rom_path,
-            flash=flash_path,
-            combination=combination,
-            overlays=selected_overlays,
-            sd_card_initialization_fault=fault_text,
-            camera_settings=selected_settings or None,
-        )
+        if overlays:
+            request["overlays"] = list(overlays)
+        for name, flag in (("run_to_rec", run_to_rec), ("boot_cache", boot_cache)):
+            if flag is not None:
+                if type(flag) is not bool:
+                    raise TypeError(f"{name} must be a bool")
+                request[name] = flag
+        native = _native.Board.open_camera(json.dumps(request))
         quantum = native.boot_quantum
         if type(quantum) is not int or quantum < 1:
             native.close()
@@ -725,6 +631,46 @@ class Board:
         ):
             raise ValueError(f"{name} must be a bounded identifier")
         return value
+
+    @staticmethod
+    def _card(card: Mapping[str, object], slot: str) -> dict[str, object]:
+        if not isinstance(card, Mapping):
+            raise TypeError(f"{slot} must be a mapping")
+        selected = dict(card)
+        files = selected.get("files")
+        if files is not None:
+            if not isinstance(files, Mapping):
+                raise TypeError(f"{slot} files must map card paths to file entries")
+            entries: dict[str, object] = {}
+            for name, entry in files.items():
+                if type(name) is not str or not name:
+                    raise TypeError(f"{slot} files keys must be nonempty card paths")
+                if not isinstance(entry, Mapping) or len(entry) != 1:
+                    raise TypeError(
+                        f"{slot} file {name} must be {{'source': path}} or {{'bytes': data}}"
+                    )
+                if "bytes" in entry:
+                    data = entry["bytes"]
+                    if not isinstance(data, (bytes, bytearray, memoryview)):
+                        raise TypeError(f"{slot} file {name} bytes must be bytes")
+                    entries[name] = {"bytes": base64.b64encode(bytes(data)).decode()}
+                elif "source" in entry:
+                    entries[name] = {
+                        "source": Board._input_path(
+                            cast("str | PathLike[str]", entry["source"]), name
+                        )
+                    }
+                else:
+                    raise TypeError(
+                        f"{slot} file {name} must be {{'source': path}} or {{'bytes': data}}"
+                    )
+            selected["files"] = entries
+        for name in ("directory", "image"):
+            if selected.get(name) is not None:
+                selected[name] = Board._input_path(
+                    cast("str | PathLike[str]", selected[name]), f"{slot} {name}"
+                )
+        return selected
 
     @staticmethod
     def _input_path(value: str | PathLike[str], name: str) -> str:

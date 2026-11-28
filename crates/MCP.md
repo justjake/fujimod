@@ -179,8 +179,7 @@ unless the receiving session's definition, firmware images, execution,
 devices and scene all match.
 
 `camera_open` from a file hides that step. It asks the builder for the
-unexecuted board from the same firmware, boot, SD card and execution
-policy (`open_unbooted`), then imports and restores the snapshot. The
+unexecuted board from the same request (`open_unbooted`), then imports and restores the snapshot. The
 builder's firmware library and resolved configuration are what make the
 snapshot's definition, firmware images, devices and scene match.
 
@@ -200,23 +199,27 @@ cloud machine with Mesa's software Vulkan driver:
 ### Opening cameras
 
 `camera_open` calls the shared builder in
-[`fujimod-emulator-camera`](emulator-camera/src/lib.rs) with a catalog
-firmware identity and one of its boots:
+[`fujimod-emulator-camera`](emulator-camera/README.md) with `name` (the
+camera id later calls use) and `camera`, the camera description every front
+door takes (`catalog/schemas/emulator-camera.generated.schema.json`):
 
-- `firmware`: the catalog release, such as `x70-110`.
-- `boot`: `stock`, `sd-card` or `autostart`. An `sd-card` boot holds
-  the body's `boot.sd` controls through the session contact driver from
-  power-on and releases them at REC; an `autostart` holds nothing and
+- `body`: the catalog body, such as `x70`. Required.
+- `firmware`: a version (`1.10`), a firmware identity (`x70-110`) or `none`;
+  the body's newest when omitted.
+- `boot`: `stock` (the default), `sd-card` or `autostart`. An `sd-card` boot
+  holds the body's `boot.sd` controls through the session contact driver
+  from power-on and releases them at REC; an `autostart` holds nothing and
   drives the card's AUTOMATIC boot installer into internal flash once.
-- `sd_card`: the directory for the virtual SD card. An `sd-card` or
-  `autostart` without it downloads the current release card into the state
-  directory for the
-  firmware; for `stock` its files are added to the otherwise empty card.
+- `sd_card`, `sd_card_2`, `cfexpress_card`: the cards in the body's slots,
+  each `{present, write_protected, files | directory | image}`. An `sd-card`
+  or `autostart` whose card names no files downloads the current release
+  card into the state directory for the firmware.
+- `settings`, `date`, `scene`, `engine`: the session's choices.
 - `execution_policy`: `exact` (the default) or `interactive`.
 - `boot_cache`: restore a saved boot with the same inputs instead of
   booting, and save this boot; the default. `false` boots from scratch and
   saves nothing.
-- `name`: the camera id later calls use.
+- `snapshot`: a checkpoint file to restore instead of booting.
 
 The FujiMod layer reads the firmware's source record under the directory named
 by `FUJIMOD_FIRMWARE_LIBRARY`, or the current directory when it is unset.
@@ -224,10 +227,9 @@ Records live at `firmware/<model>/<version>/firmware.json`, and their update
 and boot ROM paths are relative to that root. A zstd frame is decoded in
 memory by its magic number. The layer keeps downloads, autostart flash and the
 boot cache under `FUJIMOD_STATE_DIR` (default `/tmp/fujimod`), and resolves
-the firmware's registered run configuration, and owns the boot holds, card
-media and control connection. Callers never name a configuration,
-overlays, update files, boot ROMs, NAND images, GPIO levels or key
-scripts.
+the firmware's run configuration, and owns the boot holds, card media and
+control connection. Callers name a body and its firmware, never a run
+configuration, GPIO levels or key scripts.
 
 ### Rules
 

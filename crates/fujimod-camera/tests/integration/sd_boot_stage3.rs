@@ -10,10 +10,9 @@
 use crate::support;
 use support::{MARKER_ADDRESS, STAGE3_MARKER, built_card, library, release_folder, state};
 
-use fujimod_camera::{
-    BootCache, CardSource, ExecutionPolicy, FirmwareInput, Opened, Preset, Request, Stage, open,
-};
+use fujimod_camera::{BootCache, Opened, Preset, Request, Stage, open};
 use fujimod_emulator_session::Session;
+use support::CardSource;
 
 const RECORD_ADDRESS: u64 = 0x1d01_ff00;
 const RECORD_BYTES: usize = 44;
@@ -22,21 +21,13 @@ const WINDOW: u64 = 5_000_000;
 const WINDOWS: usize = 150;
 
 fn request(firmware: &str, files: Vec<(String, Vec<u8>)>) -> Request {
-    Request {
-        firmware: firmware.into(),
-        files: FirmwareInput::Library,
-        overlays: Vec::new(),
-        preset: Preset::SdCard,
-        sd_card: Some(CardSource::Files(files)),
-        policy: ExecutionPolicy::Interactive,
-        engine: None,
-        cache: BootCache::Bypass,
-        run_to_rec: false,
-        card: Default::default(),
-        nand_image: None,
-        face_result_profile: None,
-        camera_settings: Default::default(),
-    }
+    support::request(
+        firmware,
+        Preset::SdCard,
+        Some(CardSource::Files(files)),
+        BootCache::Bypass,
+        false,
+    )
 }
 
 fn word(session: &Session, address: u64) -> u32 {

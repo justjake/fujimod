@@ -1,31 +1,38 @@
 //! Open an emulated camera: the emulator layer.
 //!
-//! A caller names the firmware files, the internal flash, the SD card's files
-//! and options, and how the camera starts. Everything else, the run
-//! configuration, overlays, boot controls, card geometry and execution policy,
-//! comes from the catalog. Anything that wants a camera without FujiMod opens
-//! it here.
+//! A caller names a catalog body and optionally its firmware, the storage
+//! cards, the session's settings and how the camera starts. Everything else,
+//! the firmware's run configuration, its processor's startup path, boot
+//! controls, card geometry and execution policy, comes from the catalog.
+//! Anything that wants a camera without FujiMod opens it here. `README.md`
+//! describes the layers a request resolves through.
 //!
-//! Opening returns only when the camera reaches REC (or its first-start
-//! setup). Every other outcome is an OpenError that names the boot stage it
-//! reached. A boot is saved in the state directory's boot cache when the
+//! Opening returns when the camera reaches REC (or its first-start setup).
+//! A firmware that declares no REC readiness facts is built and returned
+//! before its first instruction, saying why. Every other outcome is an
+//! OpenError that names the boot stage it reached. A boot is saved in the state directory's boot cache when the
 //! caller asked for it, and a later open with the same inputs restores that
 //! checkpoint instead of booting.
 mod cache;
+pub mod description;
 mod flash;
 mod library;
 mod open;
 mod state;
 
 pub use flash::{read as read_flash, write as write_flash};
+/// The open request document every front door takes.
+pub use fujimod_catalog_run_inputs::camera::{
+    Action, ActionInput, Actions, BootPreset, CameraDescription, ExecutionPolicyName,
+};
 pub use library::{
-    FirmwareFiles, LIBRARY_ENV, Library, LibraryError, LibraryFirmware, RECORD_DIRECTORY,
-    RECORD_FILE,
+    FirmwareChoice, FirmwareFiles, LIBRARY_ENV, Library, LibraryError, LibraryFirmware,
+    RECORD_DIRECTORY, RECORD_FILE,
 };
 pub use open::{
-    BootCache, BootHolds, CardInputs, FirmwareInput, Flash, KeptMedia, LoaderImage, OpenError,
-    Opened, PowerOn, Request, Start, directory_files, open, open_unbooted, remote_facts,
-    remote_options,
+    BootCache, BootHolds, Card, CardContents, CardFile, Cards, FirmwareInput, Flash, KeptMedia,
+    LoaderImage, OpenError, Opened, Plan, PowerOn, Request, Start, directory_files, open,
+    open_unbooted, plan, remote_facts, remote_options, settings_camera,
 };
 pub use state::{AUTOSTART, BOOT_CACHE, DEFAULT_STATE, SD_CARDS, STATE_ENV, StateDir};
 
@@ -71,5 +78,7 @@ pub use fujimod_catalog_run_inputs::RunFaceResultProfile;
 pub use fujimod_emulator_boot::Camera;
 /// A declared FAT geometry for a stock SD card.
 pub use fujimod_emulator_boot::CardLayout;
+/// The startup path of a firmware's processor, and whether it reads the boot ROM.
+pub use fujimod_emulator_boot::{BootRomUse, StartupPath};
 /// The CPU execution policy a request selects.
 pub use fujimod_emulator_cpu::ExecutionPolicy;

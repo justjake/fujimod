@@ -5,12 +5,102 @@
   "soc_id": "xp5",
   "dram_bytes": 1744830464,
   "hardware": {
-    "profiles": {
-      "xm5": {
-        "dram_basis": "Catalog extent of the X-M5 body; installed capacity is unmeasured.",
-        "limits": []
-      }
+    "board": {
+      "dram_basis": "Catalog extent of the X-M5 body; installed capacity is unmeasured.",
+      "limits": []
     },
+    "inputs": {
+      "kind": "xp5",
+      "ticks_per_second": 1000000000,
+      "blocks": [
+        {
+          "kind": "adc",
+          "block_id": "adc",
+          "samples": [
+            2713,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095,
+            4095
+          ]
+        },
+        {
+          "kind": "flash",
+          "block_id": "flash-aperture",
+          "part_id": "winbond-w35n01jw",
+          "source": "firmware_update",
+          "erased_tail": 255,
+          "seeds": []
+        }
+      ],
+      "parts": [
+        {
+          "kind": "clock",
+          "part_id": "power-controller",
+          "seconds": 845151906,
+          "valid": true,
+          "registers": [
+            {
+              "register": 0,
+              "value": 33280
+            },
+            {
+              "register": 16,
+              "value": 2
+            }
+          ]
+        }
+      ],
+      "timings": [
+        {
+          "kind": "delay",
+          "block_ids": [
+            "resize"
+          ],
+          "operation": "complete",
+          "ticks": 1000000
+        },
+        {
+          "kind": "delay",
+          "block_ids": [
+            "rifp"
+          ],
+          "operation": "complete",
+          "ticks": 1000000
+        },
+        {
+          "kind": "delay",
+          "block_ids": [
+            "sensor"
+          ],
+          "operation": "command",
+          "ticks": 1000
+        }
+      ]
+    },
+    "bus_byte_times": [
+      {
+        "block_id": "i2c1",
+        "ticks": 25000
+      },
+      {
+        "block_id": "i2c2",
+        "ticks": 25000
+      }
+    ],
+    "polled_serial_blocks": [
+      "spi8"
+    ],
     "serial_attachments": [
       {
         "part_id": "power-controller",
@@ -47,6 +137,12 @@
       }
     ]
   },
+  "storage_slots": [
+    {
+      "id": "sd_card",
+      "basis": "X-M5 specifications: one SD card slot (UHS-I)."
+    }
+  ],
   "connections": [
     {
       "id": "power-controller-bus",

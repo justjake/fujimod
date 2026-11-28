@@ -1,0 +1,16 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-configuration.schema.json",
+  "schema": 1,
+  "id": "xm1-150-driver",
+  "purpose": "rom_boot",
+  "body_id": "xm1",
+  "firmware_id": "xm1-150",
+  "execution": null,
+  "scene": null,
+  "overlays": [],
+  "preset": {
+    "factory_options": {},
+    "execution_scope": "offline-boot-development",
+    "firmware_profile_id": "xm1-150"
+  }
+}

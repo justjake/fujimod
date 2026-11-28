@@ -3,6 +3,12 @@
   "schema": 1,
   "id": "x100f",
   "soc_id": "xpp",
+  "storage_slots": [
+    {
+      "id": "sd_card",
+      "basis": "X100F specifications: one SD card slot (UHS-I)."
+    }
+  ],
   "connections": [
     {
       "id": "flash-storage",

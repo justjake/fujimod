@@ -26,7 +26,13 @@ fn located_bulk_profiles_validate_with_only_xe4_resolved() {
     assert!(xe4.execution.is_none());
     assert!(catalog.execution("xe4-201").is_none());
 
-    assert!(catalog.body("xt30ii").is_none());
+    // The X-T30 II body record declares only its storage slots; no firmware
+    // record resolves on it.
+    assert!(
+        catalog
+            .body("xt30ii")
+            .is_some_and(|body| body.hardware.is_none() && !body.storage_slots.is_empty())
+    );
     // The GFX100RF body is registered with firmware 1.12; 1.13 has only its bulk profile.
     assert!(catalog.body("gfx100rf").is_some());
     assert!(catalog.firmware("gfx100rf-112").is_some());

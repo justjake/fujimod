@@ -1477,6 +1477,10 @@ pub struct Body {
     /// Optional removable-card slot and its body-specific contacts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub card_slot: Option<CardSlotAssembly>,
+    /// The removable storage slots the body has, in the order the camera
+    /// numbers them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub storage_slots: Vec<StorageSlot>,
     /// Physical control-bus devices installed in this body.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub control_bus_chips: Vec<ControlBusChip>,
@@ -1542,6 +1546,15 @@ impl Body {
                 "body {} DRAM regions differ from its capacity",
                 self.id
             ));
+        }
+        let mut slots = BTreeSet::new();
+        for slot in &self.storage_slots {
+            if !slots.insert(slot.id) || slot.basis.trim().is_empty() {
+                return Err(format!(
+                    "body {} repeats a storage slot or declares one without a basis",
+                    self.id
+                ));
+            }
         }
         unique_ids(self.parts.iter().map(String::as_str), "body part")?;
         unique_ids(
@@ -2078,6 +2091,60 @@ pub struct CardSlotAssembly {
         tsify(type = "string | null")
     )]
     pub controller_id: Option<String>,
+}
+
+/// One removable storage slot of a body.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct StorageSlot {
+    /// The slot's name in an open request.
+    pub id: StorageSlotId,
+    /// The slot's label on the body, when the body labels its slots.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "string | null")
+    )]
+    pub label: Option<String>,
+    /// Where the slot comes from: the camera's published specification, or
+    /// for a synthetic body, why it has the slot.
+    pub basis: String,
+}
+
+/// The kind and place of a removable storage slot.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub enum StorageSlotId {
+    /// The first SD card slot.
+    SdCard,
+    /// The second SD card slot.
+    #[serde(rename = "sd_card_2")]
+    SdCard2,
+    /// The CFexpress Type B slot.
+    CfexpressCard,
+}
+
+impl StorageSlotId {
+    /// The slot's name in an open request.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::SdCard => "sd_card",
+            Self::SdCard2 => "sd_card_2",
+            Self::CfexpressCard => "cfexpress_card",
+        }
+    }
 }
 
 /// Display orientation relative to the camera body.
@@ -3029,6 +3096,21 @@ pub struct Firmware {
     pub body_id: String,
     /// Human-readable firmware version string.
     pub version: String,
+    /// How the firmware starts: the entry a camera opens it through.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "RunStart | null")
+    )]
+    pub start: Option<fujimod_catalog_run_inputs::RunStart>,
+    /// The DRAM address space the firmware's own memory plan reaches, for a
+    /// body whose installed capacity is unknown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "RunDramAddressSpace | null")
+    )]
+    pub dram_address_space: Option<fujimod_catalog_run_inputs::RunDramAddressSpace>,
     /// Firmware update content, when distributed for this version.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub update: Option<ContentIdentity>,
@@ -3063,6 +3145,9 @@ impl Firmware {
         validate_id(&self.body_id)?;
         if let Some(content) = &self.update {
             content.validate()?;
+        }
+        if let Some(address_space) = &self.dram_address_space {
+            address_space.validate()?;
         }
         if let Some(boot_rom) = &self.boot_rom {
             boot_rom.content.validate()?;
@@ -3348,6 +3433,12 @@ pub struct ResolvedSelection {
     /// Exact stock scene names and their firmware-specific IDs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ui_scene_names: Option<crate::ui_scene_names::UiSceneNames>,
+    /// Where the firmware keeps the state that says the camera is at REC.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rec_readiness: Option<crate::rec_readiness::RecReadiness>,
+    /// How an X-Processor 4 or X-Processor Pro application starts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub application_startup: Option<crate::application_startup::ApplicationStartup>,
     /// Exact stock setting names and their firmware-specific IDs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ui_setting_names: Option<crate::ui_setting_names::UiSettingNames>,
@@ -3392,6 +3483,8 @@ pub struct ReferenceCatalog {
     control_ids: BTreeMap<String, serde_json::Value>,
     first_start: BTreeMap<String, crate::first_start::FirstStartMenu>,
     ui_scene_names: BTreeMap<String, crate::ui_scene_names::UiSceneNames>,
+    rec_readiness: BTreeMap<String, crate::rec_readiness::RecReadiness>,
+    application_startup: BTreeMap<String, crate::application_startup::ApplicationStartup>,
     ui_setting_names: BTreeMap<String, crate::ui_setting_names::UiSettingNames>,
     ui_event_codes: BTreeMap<String, crate::ui_event_codes::UiEventCodes>,
     osd_items: BTreeMap<String, crate::osd_items::OsdItems>,
@@ -3568,6 +3661,8 @@ impl ReferenceCatalog {
             control_ids: self.control_ids.get(&firmware.id).cloned(),
             first_start: self.first_start.get(&firmware.id).cloned(),
             ui_scene_names: self.ui_scene_names.get(&firmware.id).cloned(),
+            rec_readiness: self.rec_readiness.get(&firmware.id).cloned(),
+            application_startup: self.application_startup.get(&firmware.id).cloned(),
             ui_setting_names: self.ui_setting_names.get(&firmware.id).cloned(),
             ui_event_codes: self.ui_event_codes.get(&firmware.id).cloned(),
             bulk: self.bulk.get(&firmware.id).cloned(),
@@ -3774,6 +3869,26 @@ impl ReferenceCatalog {
                     path,
                 )
             }
+            ReferenceKind::ApplicationStartup => {
+                let value: crate::application_startup::ApplicationStartup = decode(bytes, path)?;
+                value.validate()?;
+                insert_unique(
+                    &mut self.application_startup,
+                    value.firmware_id.clone(),
+                    value,
+                    path,
+                )
+            }
+            ReferenceKind::RecReadiness => {
+                let value: crate::rec_readiness::RecReadiness = decode(bytes, path)?;
+                value.validate()?;
+                insert_unique(
+                    &mut self.rec_readiness,
+                    value.firmware_id.clone(),
+                    value,
+                    path,
+                )
+            }
             ReferenceKind::UiSceneNames => {
                 let value: crate::ui_scene_names::UiSceneNames = decode(bytes, path)?;
                 value.validate()?;
@@ -3967,6 +4082,30 @@ impl ReferenceCatalog {
             if update != Some(scenes.firmware_sha256.as_str()) {
                 return Err(format!(
                     "scene names differ from update identity {firmware_id}"
+                ));
+            }
+        }
+        for (firmware_id, startup) in &self.application_startup {
+            let update = self
+                .firmwares
+                .get(firmware_id)
+                .and_then(|firmware| firmware.update.as_ref())
+                .map(|update| update.sha256.as_str());
+            if update != Some(startup.firmware_sha256.as_str()) {
+                return Err(format!(
+                    "application startup differs from update identity {firmware_id}"
+                ));
+            }
+        }
+        for (firmware_id, readiness) in &self.rec_readiness {
+            let update = self
+                .firmwares
+                .get(firmware_id)
+                .and_then(|firmware| firmware.update.as_ref())
+                .map(|update| update.sha256.as_str());
+            if update != Some(readiness.firmware_sha256.as_str()) {
+                return Err(format!(
+                    "REC readiness differs from update identity {firmware_id}"
                 ));
             }
         }
@@ -4976,6 +5115,8 @@ enum ReferenceKind {
     ControlIds,
     FirstStart,
     UiSceneNames,
+    RecReadiness,
+    ApplicationStartup,
     UiSettingNames,
     UiEventCodes,
     OsdItems,
@@ -5019,6 +5160,8 @@ impl ReferenceKind {
             Some("control-ids.generated.json") => Ok(Self::ControlIds),
             Some("first-start.generated.json") => Ok(Self::FirstStart),
             Some("ui-scene-names.generated.json") => Ok(Self::UiSceneNames),
+            Some("rec-readiness.generated.json") => Ok(Self::RecReadiness),
+            Some("application-startup.generated.json") => Ok(Self::ApplicationStartup),
             Some("ui-setting-names.generated.json") => Ok(Self::UiSettingNames),
             Some("ui-event-codes.generated.json") => Ok(Self::UiEventCodes),
             Some("osd-items.generated.json") => Ok(Self::OsdItems),
@@ -5506,6 +5649,7 @@ mod layout_tests {
             microcontroller: None,
             power_control: None,
             card_slot: None,
+            storage_slots: Vec::new(),
             control_bus_chips: vec![],
             connections: vec![],
             parts: vec![],

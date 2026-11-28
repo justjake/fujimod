@@ -1,0 +1,266 @@
+{
+  "$defs": {
+    "Action": {
+      "description": "One input at a guest time.",
+      "oneOf": [
+        {
+          "description": "Press a key and release it after `hold_ms`.",
+          "properties": {
+            "press": {
+              "$ref": "#/$defs/Press"
+            }
+          },
+          "required": [
+            "press"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Press a key and keep it down until a `release`.",
+          "properties": {
+            "hold": {
+              "$ref": "#/$defs/Control"
+            }
+          },
+          "required": [
+            "hold"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Release a held key.",
+          "properties": {
+            "release": {
+              "$ref": "#/$defs/Control"
+            }
+          },
+          "required": [
+            "release"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Move a dial, switch or lever to a named position.",
+          "properties": {
+            "set": {
+              "$ref": "#/$defs/ControlPosition"
+            }
+          },
+          "required": [
+            "set"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Drive a GPIO input pin.",
+          "properties": {
+            "gpio": {
+              "$ref": "#/$defs/GpioLevel"
+            }
+          },
+          "required": [
+            "gpio"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Write a 32-bit word to physical memory.",
+          "properties": {
+            "poke": {
+              "$ref": "#/$defs/MemoryWord"
+            }
+          },
+          "required": [
+            "poke"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Move a declared input word of the power peer.",
+          "properties": {
+            "power_input": {
+              "$ref": "#/$defs/PowerWord"
+            }
+          },
+          "required": [
+            "power_input"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Connect an HDMI sink to the body's HDMI connector.",
+          "properties": {
+            "hdmi": {
+              "$ref": "#/$defs/HdmiSink"
+            }
+          },
+          "required": [
+            "hdmi"
+          ],
+          "type": "object"
+        }
+      ],
+      "properties": {
+        "at_ms": {
+          "description": "Guest milliseconds after the run starts.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "at_ms"
+      ],
+      "type": "object",
+      "unevaluatedProperties": false
+    },
+    "Control": {
+      "additionalProperties": false,
+      "description": "A key by its catalog name.",
+      "properties": {
+        "control": {
+          "description": "The key's catalog name, such as `MENU_OK`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "control"
+      ],
+      "type": "object"
+    },
+    "ControlPosition": {
+      "additionalProperties": false,
+      "description": "A dial, switch or lever and its position.",
+      "properties": {
+        "control": {
+          "type": "string"
+        },
+        "position": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "control",
+        "position"
+      ],
+      "type": "object"
+    },
+    "GpioLevel": {
+      "additionalProperties": false,
+      "description": "A GPIO input level.",
+      "properties": {
+        "high": {
+          "type": "boolean"
+        },
+        "pin": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "port": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "port",
+        "pin",
+        "high"
+      ],
+      "type": "object"
+    },
+    "HdmiSink": {
+      "additionalProperties": false,
+      "description": "An HDMI sink on the body's connector.",
+      "properties": {
+        "connected": {
+          "description": "Whether the sink is connected; only connecting is modeled.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "connected"
+      ],
+      "type": "object"
+    },
+    "MemoryWord": {
+      "additionalProperties": false,
+      "description": "A word written to physical memory.",
+      "properties": {
+        "address": {
+          "description": "Four-byte aligned physical address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "value"
+      ],
+      "type": "object"
+    },
+    "PowerWord": {
+      "additionalProperties": false,
+      "description": "A declared input word of the power peer.",
+      "properties": {
+        "register": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "register",
+        "value"
+      ],
+      "type": "object"
+    },
+    "Press": {
+      "additionalProperties": false,
+      "description": "A key press and its hold.",
+      "properties": {
+        "control": {
+          "description": "The key's catalog name, such as `MENU_OK`.",
+          "type": "string"
+        },
+        "hold_ms": {
+          "description": "Guest milliseconds the key stays down. Omitted, 150.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "control"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/emulator-actions.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "The inputs a run applies, in any order; each names its guest time.",
+  "items": {
+    "$ref": "#/$defs/Action"
+  },
+  "title": "Actions",
+  "type": "array"
+}

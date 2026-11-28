@@ -1,0 +1,288 @@
+{
+  "$schema": "https://fujimod.com/schemas/application-startup.generated.schema.json",
+  "schema": 1,
+  "id": "xt20-211-application-startup",
+  "firmware_id": "xt20-211",
+  "firmware_sha256": "b37faf524e6e2c72410e615a48feff05d6d2236f73f5cc6027c25863d7d48fad",
+  "kind": "xpp",
+  "cores": 2,
+  "registers": [
+    [
+      "Pc",
+      358784
+    ],
+    [
+      "Pstate",
+      211
+    ],
+    [
+      {
+        "Arm32": {
+          "R": 0
+        }
+      },
+      13545496
+    ],
+    [
+      {
+        "Arm32": {
+          "R": 1
+        }
+      },
+      9437184
+    ]
+  ],
+  "images": [
+    {
+      "address": 262144,
+      "size": 113408,
+      "sha256": "9dccf886ee4d544776826b725c04d619f4c15c790c6632036cf24dbf3fb978ef",
+      "dat_offset": 393820,
+      "encoding": "raw"
+    },
+    {
+      "address": 11866112,
+      "size": 4411492,
+      "sha256": "ea4bbc47aadcddb95c8b80c731f40a90d77c4cce23aaaf3320dc8de952041b6c",
+      "dat_offset": 2294364,
+      "encoding": "method4"
+    },
+    {
+      "address": 20463616,
+      "size": 7016448,
+      "sha256": "b5b6afef630662bb9314ac50762571f7e33e7c3b1667f37ca657cd2b6a2a0026",
+      "dat_offset": 4391516,
+      "encoding": "method4"
+    },
+    {
+      "address": 9764864,
+      "size": 1024,
+      "sha256": "86f8da3f3474ddbdefb88269bbdcb84b3c6bafe9e54e65f1ce47ce07389bc9c7",
+      "dat_offset": 1180252,
+      "encoding": "raw"
+    },
+    {
+      "address": 9765888,
+      "size": 236096,
+      "sha256": "5f1e59db3b1a78aa11cecfad2a6598ea4be3d11a7d8ce5a738d76193d866270e",
+      "dat_offset": 1245788,
+      "encoding": "raw"
+    },
+    {
+      "address": 10814464,
+      "size": 236096,
+      "sha256": "de7fd790224611299bc9a8ddf6d0cacf2401d3b3360450a123d85ef3e539514e",
+      "dat_offset": 1770076,
+      "encoding": "raw"
+    },
+    {
+      "address": 1966080,
+      "size": 4381800,
+      "sha256": "6ffe3cc6b088588000aba973c8765927611dd1524a7a8e3f8559b869a6a2fe48",
+      "dat_offset": 19333724,
+      "encoding": "raw"
+    },
+    {
+      "address": 7274496,
+      "size": 590640,
+      "sha256": "1767b5a2896fb32b294c1252b99ac302cb886d71a4c8ae4951114ec45d0af294",
+      "dat_offset": 25363036,
+      "encoding": "raw"
+    },
+    {
+      "address": 37437440,
+      "size": 8044544,
+      "sha256": "7fedd4eaee9eb759b1640dddd386c104fc6086e6021676b1a951c4027b1cf50c",
+      "dat_offset": 8389212,
+      "encoding": "raw"
+    }
+  ],
+  "loader_handoff": {
+    "address": 9437184,
+    "size": 1472,
+    "fill": 0,
+    "words": [
+      {
+        "offset": 0,
+        "value": 58615
+      },
+      {
+        "offset": 4,
+        "value": 4116
+      },
+      {
+        "offset": 8,
+        "value": 394
+      },
+      {
+        "offset": 12,
+        "value": 559
+      },
+      {
+        "offset": 24,
+        "value": 16
+      },
+      {
+        "offset": 32,
+        "value": 24
+      },
+      {
+        "offset": 40,
+        "value": 644
+      },
+      {
+        "offset": 44,
+        "value": 4064
+      },
+      {
+        "offset": 48,
+        "value": 65
+      },
+      {
+        "offset": 52,
+        "value": 537
+      },
+      {
+        "offset": 56,
+        "value": 12
+      },
+      {
+        "offset": 60,
+        "value": 1
+      },
+      {
+        "offset": 64,
+        "value": 16777216
+      },
+      {
+        "offset": 68,
+        "value": 303
+      },
+      {
+        "offset": 72,
+        "value": 285212672
+      },
+      {
+        "offset": 76,
+        "value": 173031
+      },
+      {
+        "offset": 80,
+        "value": 1398031684
+      },
+      {
+        "offset": 192,
+        "value": 16777984
+      },
+      {
+        "offset": 196,
+        "value": 180208
+      },
+      {
+        "offset": 200,
+        "value": 16778240
+      },
+      {
+        "offset": 204,
+        "value": 1222203
+      },
+      {
+        "offset": 208,
+        "value": 285213696
+      },
+      {
+        "offset": 212,
+        "value": 1229232
+      },
+      {
+        "offset": 216,
+        "value": 285213440
+      },
+      {
+        "offset": 220,
+        "value": 1229731
+      },
+      {
+        "offset": 224,
+        "value": 1398031684
+      },
+      {
+        "offset": 320,
+        "value": 18
+      },
+      {
+        "offset": 324,
+        "value": 1
+      },
+      {
+        "offset": 332,
+        "value": 4278192080
+      },
+      {
+        "offset": 336,
+        "value": 4284907606
+      },
+      {
+        "offset": 340,
+        "value": 699007004
+      },
+      {
+        "offset": 392,
+        "value": 347
+      },
+      {
+        "offset": 396,
+        "value": 624
+      },
+      {
+        "offset": 400,
+        "value": 1023
+      },
+      {
+        "offset": 404,
+        "value": 1023
+      },
+      {
+        "offset": 408,
+        "value": 862
+      },
+      {
+        "offset": 412,
+        "value": 516
+      },
+      {
+        "offset": 416,
+        "value": 81
+      },
+      {
+        "offset": 420,
+        "value": 731
+      },
+      {
+        "offset": 424,
+        "value": 427
+      },
+      {
+        "offset": 428,
+        "value": 1023
+      },
+      {
+        "offset": 452,
+        "value": 98304
+      },
+      {
+        "offset": 1468,
+        "value": 4
+      }
+    ],
+    "sha256": "ab399d185a974beeee3ce66c91e64c74b02d1b9f9800d7c0309ed0ebea0a7fad"
+  },
+  "flash": {
+    "dat_offset": 604,
+    "size": 53543380,
+    "sha256": "635293f292ca9639a0d45f8125807d9fc9e444c054a3a57d4edd0c02a360c7c0"
+  },
+  "assets": [
+    "xt20-211-statistics-window"
+  ]
+}

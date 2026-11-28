@@ -5,18 +5,125 @@
   "purpose": "rom_boot",
   "body_id": "xe2",
   "firmware_id": "xe2-411",
-  "start": {
-    "kind": "rom"
+  "execution": {
+    "mode": "strict",
+    "engine": "unicorn",
+    "quantum": 1000,
+    "instructions_per_tick": {
+      "numerator": 24,
+      "denominator": 1
+    }
   },
-  "execution": null,
-  "inputs": null,
-  "scene": null,
+  "scene": {
+    "kind": "exr2",
+    "frame_period_ticks": 400000,
+    "generated_assets": [
+      {
+        "id": "live_pixels",
+        "pattern": [
+          64,
+          64,
+          128,
+          128
+        ],
+        "size": 691200
+      },
+      {
+        "id": "live_statistics_0",
+        "pattern": [
+          0
+        ],
+        "size": 1024
+      }
+    ],
+    "images": {
+      "live_image": {
+        "width": 720,
+        "height": 480,
+        "stride": 1440,
+        "asset": "live_pixels"
+      }
+    },
+    "statistics": {
+      "live_statistics": [
+        {
+          "destination": 2,
+          "offset": 0,
+          "asset": "live_statistics_0"
+        }
+      ]
+    }
+  },
   "overlays": [],
   "preset": {
-    "factory_options": {},
-    "hardware_selection": {
-      "body_profile_id": "xe2-rec"
+    "factory_options": {
+      "instructions_per_tick": 24,
+      "storage_profile": "erased",
+      "irq_tie_profile": "kernel-active-scan-order",
+      "graphics_profile": "mode1-abgr8888-straight",
+      "backdrop_profile": "declared-black-canvas-unmeasured",
+      "copy_profile": "vg-32bpp-untile-unrotated",
+      "clear_profile": "declared-vg-ui-primitives-unmeasured",
+      "input_processing_profile": "stock-mode0-81-packed-writes",
+      "input_phase_profile": "xm1-150-phase2-ack-unmeasured",
+      "input_event_profile": "xm1-150-configured-phase-clock-unmeasured",
+      "input_event_ticks": 200000,
+      "pulse_timer_profile": "exr2-configured-interval-clocks-unmeasured",
+      "auxiliary_control_profile": "stock-control3-bit0-clear-ack-unmeasured",
+      "producer_stop_profile": "stock-idle-stop-handshakes-unmeasured",
+      "image_work_stop_profile": "stock-initial-image-banks-bit0-stop-ack-unmeasured",
+      "image_work_data_profile": "xm1-150-declared-continuous-postisp-scene-unmeasured",
+      "image_work_data_ticks": 50000,
+      "movrsz_profile": "declared-packed-yycbcr-pyramid-unmeasured",
+      "movrsz_ticks": 50000,
+      "producer_data_profile": "xm1-150-declared-continuous-statistics-scene-unmeasured",
+      "rectangle_profile": "xm1-150-declared-luma-rectangle-overlay-unmeasured",
+      "settings": "default",
+      "sd_card_profile": "declared-blank-sdhc-default-speed-unmeasured",
+      "sd_card_present": true,
+      "sd_card_format": {
+        "label": "CAMERA",
+        "partition_start": 8192,
+        "sectors_per_cluster": 64
+      }
     },
-    "hardware_inputs_id": "xe2-rec"
-  }
+    "execution": {
+      "mode": "strict",
+      "engine": "unicorn",
+      "quantum": 1000,
+      "instructions_per_tick": {
+        "numerator": 24,
+        "denominator": 1
+      }
+    },
+    "firmware_profile_id": "xe2-411",
+    "settings": {
+      "requested": {
+        "language": "en",
+        "setup": "done"
+      }
+    },
+    "nand_inputs": {
+      "nand": {
+        "kind": "raw",
+        "options": {
+          "bytes": 134217728,
+          "page_bytes": 2048,
+          "pages_per_block": 64,
+          "spare_bytes": 512
+        },
+        "base": "nand_base",
+        "overlays": [],
+        "spare": []
+      }
+    },
+    "virtual_card": {
+      "filesystem": "fat32",
+      "label": "CAMERA",
+      "sectors": 16777216,
+      "partition_start": 8192,
+      "sectors_per_cluster": 64
+    }
+  },
+  "browser_camera": null
 }

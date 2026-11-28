@@ -4,6 +4,9 @@
   "id": "xq2-101",
   "body_id": "xq",
   "version": "1.01",
+  "start": {
+    "kind": "rom"
+  },
   "update": {
     "size": 41551104,
     "sha256": "8ad0442f411e4a76930325bc24996e365e06a13e56def1665b6e65e1ad242860"

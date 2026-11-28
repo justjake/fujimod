@@ -62,26 +62,101 @@ pub fn read_image(path: &Path) -> Result<Card, String> {
     Ok(card)
 }
 
+/// The contents of one file a host puts on an SD card: a host file, or bytes the
+/// host already holds.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CardFile {
+    Path(PathBuf),
+    Bytes(Vec<u8>),
+}
+
+impl From<PathBuf> for CardFile {
+    fn from(path: PathBuf) -> Self {
+        Self::Path(path)
+    }
+}
+
+impl From<Vec<u8>> for CardFile {
+    fn from(bytes: Vec<u8>) -> Self {
+        Self::Bytes(bytes)
+    }
+}
+
+/// One card a host puts in an SD slot before the camera starts.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CardInsert {
+    /// Whether the card is in the slot at power-on.
+    pub present: bool,
+    /// Whether the card's write-protect contact is asserted.
+    pub write_protected: bool,
+    /// A raw card image, opened read-only; `files` are merged into it.
+    pub image: Option<PathBuf>,
+    /// Files by their path on the card.
+    pub files: Vec<(String, CardFile)>,
+}
+
+impl Default for CardInsert {
+    fn default() -> Self {
+        Self {
+            present: true,
+            write_protected: false,
+            image: None,
+            files: Vec::new(),
+        }
+    }
+}
+
+impl CardInsert {
+    /// A present, writable card holding these files.
+    pub fn with_files(files: Vec<(String, CardFile)>) -> Self {
+        Self {
+            files,
+            ..Self::default()
+        }
+    }
+
+    /// Whether the card changes nothing the run would build: present,
+    /// writable, with no image and no files.
+    pub fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
 /// Read caller-supplied SD card files before editing the selected medium.
-pub fn read_files(files: &[(String, PathBuf)]) -> Result<Vec<(String, Vec<u8>)>, String> {
+pub fn read_files(files: &[(String, CardFile)]) -> Result<Vec<(String, Vec<u8>)>, String> {
     read_files_within(files, MAX_FILE_BYTES)
 }
 
 fn read_files_within(
-    files: &[(String, PathBuf)],
+    files: &[(String, CardFile)],
     bound: u64,
 ) -> Result<Vec<(String, Vec<u8>)>, String> {
     let mut total = 0u64;
+    let mut seen = std::collections::BTreeSet::new();
     files
         .iter()
-        .map(|(name, path)| {
-            let mut file =
-                File::open(path).map_err(|error| format!("{}: {error}", path.display()))?;
-            let mut bytes = Vec::new();
-            Read::by_ref(&mut file)
-                .take(bound - total + 1)
-                .read_to_end(&mut bytes)
-                .map_err(|error| format!("{}: {error}", path.display()))?;
+        .map(|(name, source)| {
+            if !seen.insert(name.to_ascii_uppercase()) {
+                return Err(format!("SD card file {name} is named twice"));
+            }
+            let bytes = match source {
+                CardFile::Bytes(bytes) => {
+                    if bytes.len() as u64 > bound - total {
+                        return Err(format!("SD card files exceed {} MiB total", bound >> 20));
+                    }
+                    bytes.clone()
+                }
+                CardFile::Path(path) => {
+                    let mut file =
+                        File::open(path).map_err(|error| format!("{}: {error}", path.display()))?;
+                    let mut bytes = Vec::new();
+                    Read::by_ref(&mut file)
+                        .take(bound - total + 1)
+                        .read_to_end(&mut bytes)
+                        .map_err(|error| format!("{}: {error}", path.display()))?;
+                    bytes
+                }
+            };
             total += bytes.len() as u64;
             if total > bound {
                 return Err(format!("SD card files exceed {} MiB total", bound >> 20));
@@ -95,7 +170,7 @@ fn read_files_within(
 pub fn attach(
     session: &mut Session,
     image: Option<&Path>,
-    files: &[(String, PathBuf)],
+    files: &[(String, CardFile)],
 ) -> Result<(), String> {
     if image.is_none() && files.is_empty() {
         return Ok(());
@@ -108,6 +183,25 @@ pub fn attach(
         .ok_or("board has no modeled SD card slot")?;
     let medium = image.map(read_image).transpose()?;
     session.install_card_files(&slot, medium, &read_files(files)?)
+}
+
+/// Put a host's card into a board's one modeled SD slot after it opens: its
+/// image and files, then its presence and write protection.
+pub fn insert(session: &mut Session, card: &CardInsert) -> Result<(), String> {
+    attach(session, card.image.as_deref(), &card.files)?;
+    if card.present && !card.write_protected {
+        return Ok(());
+    }
+    let slot = session
+        .contacts
+        .keys()
+        .next()
+        .cloned()
+        .ok_or("board has no modeled SD card slot")?;
+    let medium = session.card_medium(&slot)?;
+    session
+        .insert_card(&slot, medium, card.present, card.write_protected)
+        .map(|_| ())
 }
 
 /// Write every sector of `current` that differs from `original` (the medium loaded from `path`)
@@ -167,7 +261,10 @@ mod tests {
         let (first, second) = (directory.join("a.bin"), directory.join("b.bin"));
         std::fs::write(&first, vec![0x11u8; 3 << 20]).unwrap();
         std::fs::write(&second, vec![0x22u8; 2 << 20]).unwrap();
-        let files = [("A.BIN".to_string(), first), ("B.BIN".to_string(), second)];
+        let files = [
+            ("A.BIN".to_string(), CardFile::from(first)),
+            ("B.BIN".to_string(), CardFile::from(second)),
+        ];
         let read = read_files_within(&files, 5 << 20).unwrap();
         assert_eq!(
             read.iter()

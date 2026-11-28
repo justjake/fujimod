@@ -5,8 +5,9 @@
 use crate::support;
 use support::{built_card, library, state};
 
-use fujimod_camera::{BootCache, CardSource, Preset, Stage, open};
+use fujimod_camera::{BootCache, Preset, Stage, open};
 use fujimod_emulator_boot as boot;
+use support::CardSource;
 
 const FIRMWARE: &str = "xm1-150";
 /// The catalog declares REC as this UI mode for X-M1.

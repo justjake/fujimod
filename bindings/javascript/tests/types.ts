@@ -10,7 +10,7 @@ import type {
   LensClockMode,
   PartAttachment,
   StabilizerCommand,
-  BodyProfile,
+  BodyBoard,
 } from '../pkg/fujimod.js';
 declare const lensClock: LensClockMode;
 if (lensClock.kind === 'divided') {
@@ -21,8 +21,8 @@ if (lensClock.kind === 'divided') {
 }
 declare const attachment: PartAttachment;
 const homePin: number | undefined = attachment.motor_home_pins?.[0]?.pin;
-declare const bodyProfile: BodyProfile;
-const constructionSchema: number | undefined = bodyProfile.construction?.schema;
+declare const bodyBoard: BodyBoard;
+const constructionSchema: number | undefined = bodyBoard.construction?.schema;
 const stabilizer: StabilizerCommand = {
   code: 1,
   bits: 8,

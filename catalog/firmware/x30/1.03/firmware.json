@@ -4,6 +4,9 @@
   "id": "x30-103",
   "body_id": "x30",
   "version": "1.03",
+  "start": {
+    "kind": "rom"
+  },
   "update": {
     "size": 53085452,
     "sha256": "76c9fcbdd6d02ca0b376146fd326927e1ea7a5b0055daac755eb8c152e983084"

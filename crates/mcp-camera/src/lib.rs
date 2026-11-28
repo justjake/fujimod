@@ -134,46 +134,17 @@ impl Cameras {
     }
 }
 
-/// How `camera_open` starts the firmware.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, JsonSchema)]
-#[serde(rename_all = "kebab-case")]
-pub enum OpenBoot {
-    /// The firmware installed in internal flash.
-    Stock,
-    /// FujiMod loaded from the SD card by the boot ROM.
-    SdCard,
-    /// FujiMod started from the SD card's autostart installer in internal
-    /// flash. The first open installs it and keeps the flash in the state
-    /// directory.
-    Autostart,
-}
-
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct OpenParams {
     /// Name to address this camera by in later calls. Defaults to camera-N.
     pub name: Option<String>,
-    /// Catalog firmware identity, for example `x70-110`. Its update, boot ROM
-    /// and reference camera are found in `FUJIMOD_FIRMWARE_LIBRARY`, or the
-    /// current directory when it is unset.
-    pub firmware: String,
-    /// `stock` boots the installed firmware; `sd-card` boots FujiMod from
-    /// `sd_card`, or from the current release card when it is omitted;
-    /// `autostart` starts the release card's installer from internal flash.
-    pub boot: OpenBoot,
-    /// Directory for the virtual SD card. An `sd-card` boot without it fetches
-    /// the release SD card for the firmware, as does an `autostart`; for a
-    /// `stock` boot its files are added to the otherwise empty card.
-    pub sd_card: Option<String>,
-    /// Checkpoint file to restore instead of booting. Give the same firmware,
-    /// boot, SD card and execution policy as the camera that saved it.
-    pub snapshot: Option<String>,
-    /// `exact` (deterministic; use when runs will be compared) or `interactive`.
-    /// Defaults to `exact`.
-    pub execution_policy: Option<String>,
-    /// Restore a saved boot with the same inputs instead of booting, and save
-    /// this boot for later opens. Defaults to true; false boots from scratch.
-    pub boot_cache: Option<bool>,
+    /// The camera to open: the same camera description the Python binding and
+    /// the command line take. `body` is required; `firmware` defaults to the
+    /// body's newest. Firmware files come from `FUJIMOD_FIRMWARE_LIBRARY`, or
+    /// the current directory when it is unset; relative paths resolve from the
+    /// server's current directory.
+    pub camera: fujimod_camera::CameraDescription,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -295,11 +266,14 @@ pub struct DiffParams {
 #[tool_router]
 impl Cameras {
     #[tool(
-        description = "Open an emulated camera from a catalog firmware and boot. `boot` is \
-`stock`, `sd-card` or `autostart`; `sd_card` names an SD card directory, or the release \
-card is fetched for the firmware when it is omitted. `autostart` installs the card's \
-loader into internal flash once and starts from it without holding a button. It boots to REC \
-(or restores `snapshot`) and stays running for later calls. Returns its name, state and screen."
+        description = "Open an emulated camera. `camera` is the camera description: `body` (a \
+catalog body such as `xh2s`), optionally `firmware` (a version such as `7.30`, a firmware id, \
+or `none`; the body's newest when omitted), `settings`, `sd_card`/`sd_card_2`/`cfexpress_card` \
+(each `{present, write_protected, files | directory | image}`), `date`, `scene`, `engine` and \
+`boot`: `stock`, `sd-card` (FujiMod from the SD card, or the current release card when it \
+names no files) or `autostart`. It boots to REC (or restores `snapshot`) and stays running for \
+later calls; a firmware without REC readiness facts is returned before its first instruction, \
+saying so. Returns its name, state and screen."
     )]
     async fn camera_open(
         &self,
@@ -797,7 +771,7 @@ mod tests {
     }
 
     #[test]
-    fn camera_open_exposes_only_the_builder_parameters() {
+    fn camera_open_takes_a_name_and_the_open_request() {
         let tools = module(std::env::temp_dir()).tools();
         let tool = tools
             .iter()
@@ -807,52 +781,40 @@ mod tests {
         let properties = schema["properties"].as_object().unwrap();
         let mut names: Vec<_> = properties.keys().map(String::as_str).collect();
         names.sort_unstable();
-        assert_eq!(
-            names,
-            [
-                "boot",
-                "boot_cache",
-                "execution_policy",
-                "firmware",
-                "name",
-                "sd_card",
-                "snapshot",
-            ]
-        );
-        for removed in [
-            "configuration",
-            "overlays",
-            "update",
-            "boot_rom",
-            "application_plan",
-            "camera_sections",
-            "nand",
-            "settings",
-            "gpio",
-            "keys",
-            "instruction_limit",
-        ] {
-            assert!(
-                !properties.contains_key(removed),
-                "{removed} is still exposed"
-            );
-        }
+        assert_eq!(names, ["camera", "name"]);
         let required: Vec<_> = schema["required"]
             .as_array()
             .unwrap()
             .iter()
             .map(|value| value.as_str().unwrap())
             .collect();
-        assert!(required.contains(&"firmware"));
-        assert!(required.contains(&"boot"));
-        assert!(!required.contains(&"name"));
+        assert_eq!(required, ["camera"]);
         assert_eq!(schema["additionalProperties"], json!(false));
-        let boot: Vec<_> = schema["$defs"]["OpenBoot"]["oneOf"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|value| value["const"].as_str().unwrap())
-            .collect();
-        assert_eq!(boot, ["stock", "sd-card", "autostart"]);
+        let request = &schema["$defs"]["CameraDescription"];
+        assert_eq!(request["required"], json!(["body"]));
+        let fields = request["properties"].as_object().unwrap();
+        for field in [
+            "body",
+            "firmware",
+            "settings",
+            "sd_card",
+            "sd_card_2",
+            "cfexpress_card",
+            "date",
+            "scene",
+            "engine",
+            "boot",
+            "snapshot",
+        ] {
+            assert!(fields.contains_key(field), "{field} is not exposed");
+        }
+        for removed in [
+            "configuration",
+            "update",
+            "sd_card_files",
+            "camera_settings",
+        ] {
+            assert!(!fields.contains_key(removed), "{removed} is still exposed");
+        }
     }
 }

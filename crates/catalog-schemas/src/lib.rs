@@ -43,6 +43,18 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         ),
     );
     documents.insert(
+        "emulator-camera.generated.schema.json",
+        schema::<fujimod_catalog_run_inputs::CameraDescription>(
+            fujimod_catalog_run_inputs::camera::CAMERA_SCHEMA_URI,
+        ),
+    );
+    documents.insert(
+        "emulator-actions.generated.schema.json",
+        schema::<fujimod_catalog_run_inputs::Actions>(
+            fujimod_catalog_run_inputs::camera::ACTIONS_SCHEMA_URI,
+        ),
+    );
+    documents.insert(
         "emulator-rehearsal.generated.schema.json",
         schema::<fujimod_catalog::rehearsal::Rehearsal>(
             fujimod_catalog::rehearsal::REHEARSAL_SCHEMA_URI,
@@ -52,12 +64,6 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         "catalog-annotations.generated.schema.json",
         schema::<fujimod_catalog::provenance::CatalogAnnotations>(
             fujimod_catalog::provenance::ANNOTATIONS_SCHEMA_URI,
-        ),
-    );
-    documents.insert(
-        "emulator-hardware-inputs.generated.schema.json",
-        schema::<fujimod_catalog_run_inputs::HardwareInputs>(
-            fujimod_catalog_run_inputs::HARDWARE_INPUTS_SCHEMA_URI,
         ),
     );
     documents.insert(
@@ -144,6 +150,18 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         "ui-event-codes.generated.schema.json",
         schema::<fujimod_catalog::ui_event_codes::UiEventCodes>(
             fujimod_catalog::ui_event_codes::UI_EVENT_CODES_SCHEMA_URI,
+        ),
+    );
+    documents.insert(
+        "application-startup.generated.schema.json",
+        schema::<fujimod_catalog::application_startup::ApplicationStartup>(
+            fujimod_catalog::application_startup::APPLICATION_STARTUP_SCHEMA_URI,
+        ),
+    );
+    documents.insert(
+        "rec-readiness.generated.schema.json",
+        schema::<fujimod_catalog::rec_readiness::RecReadiness>(
+            fujimod_catalog::rec_readiness::REC_READINESS_SCHEMA_URI,
         ),
     );
     documents.insert(

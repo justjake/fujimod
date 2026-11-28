@@ -1,5 +1,11 @@
-//! Firmware source records, and the catalog resolution that names the run
-//! configuration for a firmware.
+//! Firmware source records, and the catalog resolution that turns a body and
+//! a firmware choice into a resolved camera.
+//!
+//! A request names a body and, optionally, one of its firmwares. The body
+//! record is the hardware and the firmware record says how it starts; a
+//! firmware's run configuration, `configurations/emulator/<firmware-id>/run.json`
+//! when it has one, adds only session defaults (execution, scene, settings).
+//! Nothing maps a firmware to the hardware it runs on.
 //!
 //! A firmware library is a directory of source records:
 //!
@@ -11,7 +17,7 @@
 //! unset. Paths in a record are relative to that root. The library never writes;
 //! it reads a record's sources once and decodes zstd in memory.
 use fujimod_catalog::{ReferenceCatalog, reference::ContentIdentity};
-use fujimod_catalog_configuration::RunOverlay;
+use fujimod_catalog_configuration::RunConfiguration;
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot::firmware_file;
 use serde::Deserialize;
@@ -53,10 +59,57 @@ pub enum LibraryError {
     },
     #[error("firmware {0} is not in the catalog")]
     UnknownFirmware(String),
-    #[error("firmware {0} declares no browser run configuration")]
-    UnregisteredFirmware(String),
+    #[error("body {0} is not in the catalog")]
+    UnknownBody(String),
+    #[error("body {0} has no firmware in the catalog")]
+    NoFirmware(String),
+    #[error("{firmware} is {owner} firmware, not {body}")]
+    OtherBody {
+        firmware: String,
+        owner: String,
+        body: String,
+    },
+    #[error("body {body} has no firmware {version}; the catalog has {known}")]
+    UnknownVersion {
+        body: String,
+        version: String,
+        known: String,
+    },
+    #[error(
+        "body {body} cannot start from an empty flash yet: the {processor} camera builder starts only installed firmware"
+    )]
+    EmptyFlash { body: String, processor: String },
+    #[error(
+        "firmware {0} has no run configuration (configurations/emulator/{0}/run.json) for its \
+         overlays"
+    )]
+    NoRunConfiguration(String),
     #[error("{0}")]
     Missing(String),
+}
+
+/// The firmware a request opens on its body.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum FirmwareChoice {
+    /// The newest firmware the catalog has for the body, by version.
+    #[default]
+    Newest,
+    /// An empty flash: the boot ROM alone.
+    Empty,
+    /// A version such as `7.30`, or a firmware identity such as `xh2s-730`.
+    Named(String),
+}
+
+impl FirmwareChoice {
+    /// A request's firmware field: omitted is the newest, `none` an empty
+    /// flash, anything else a version or identity.
+    pub fn parse(text: Option<&str>) -> Self {
+        match text.map(str::trim) {
+            None | Some("") => Self::Newest,
+            Some("none") => Self::Empty,
+            Some(name) => Self::Named(name.to_owned()),
+        }
+    }
 }
 
 /// A directory of firmware source records named by catalog identity.
@@ -81,9 +134,10 @@ pub struct FirmwareFiles {
     pub update: Vec<u8>,
     /// SHA-256 of `update`.
     pub update_sha256: String,
-    pub boot_rom: Vec<u8>,
+    /// The boot ROM, for a start that runs it.
+    pub boot_rom: Option<Vec<u8>>,
     /// SHA-256 of `boot_rom`.
-    pub boot_rom_sha256: String,
+    pub boot_rom_sha256: Option<String>,
 }
 
 /// One `firmware/<model>/<version>/firmware.json` record.
@@ -186,15 +240,100 @@ impl Library {
             .ok_or_else(|| LibraryError::UnknownFirmware(id.into()))
     }
 
-    /// Catalog firmwares this library holds both files for and has a browser
-    /// run configuration for, in catalog identity order.
+    /// The body record for a body identity.
+    pub fn body(&self, id: &str) -> Result<&fujimod_catalog::reference::Body, LibraryError> {
+        self.catalog
+            .body(id)
+            .ok_or_else(|| LibraryError::UnknownBody(id.into()))
+    }
+
+    /// A body's product name, such as `X-H2S`, from the catalog's firmware
+    /// releases; the upper-case identity when the catalog lists none.
+    pub fn body_name(&self, body_id: &str) -> String {
+        self.catalog
+            .firmware_versions()
+            .iter()
+            .find(|release| {
+                self.catalog
+                    .firmware(&release.firmware_id)
+                    .is_some_and(|firmware| firmware.body_id == body_id)
+            })
+            .map(|release| release.product.clone())
+            .unwrap_or_else(|| body_id.to_ascii_uppercase())
+    }
+
+    /// Every catalog firmware of a body, oldest version first.
+    pub fn body_firmwares(&self, body_id: &str) -> Vec<&fujimod_catalog::Firmware> {
+        let mut firmwares: Vec<_> = self
+            .catalog
+            .firmware_ids()
+            .filter_map(|id| self.catalog.firmware(id))
+            .filter(|firmware| firmware.body_id == body_id)
+            .collect();
+        firmwares.sort_by(|left, right| {
+            version_key(&left.version)
+                .cmp(&version_key(&right.version))
+                .then_with(|| left.id.cmp(&right.id))
+        });
+        firmwares
+    }
+
+    /// The firmware identity a body and firmware choice select.
+    pub fn select(&self, body_id: &str, choice: &FirmwareChoice) -> Result<String, LibraryError> {
+        let body = self.body(body_id)?;
+        let firmwares = self.body_firmwares(body_id);
+        match choice {
+            FirmwareChoice::Newest => firmwares
+                .last()
+                .map(|firmware| firmware.id.clone())
+                .ok_or_else(|| LibraryError::NoFirmware(body_id.into())),
+            FirmwareChoice::Empty => Err(LibraryError::EmptyFlash {
+                body: body_id.into(),
+                processor: processor_name(&body.soc_id),
+            }),
+            FirmwareChoice::Named(name) => {
+                if let Some(firmware) = self.catalog.firmware(name) {
+                    if firmware.body_id != body_id {
+                        return Err(LibraryError::OtherBody {
+                            firmware: firmware.id.clone(),
+                            owner: self.body_name(&firmware.body_id),
+                            body: self.body_name(body_id),
+                        });
+                    }
+                    return Ok(firmware.id.clone());
+                }
+                if let Some(firmware) = firmwares.iter().find(|firmware| firmware.version == *name)
+                {
+                    return Ok(firmware.id.clone());
+                }
+                Err(LibraryError::UnknownVersion {
+                    body: body_id.into(),
+                    version: name.clone(),
+                    known: if firmwares.is_empty() {
+                        "none".into()
+                    } else {
+                        firmwares
+                            .iter()
+                            .map(|firmware| firmware.version.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    },
+                })
+            }
+        }
+    }
+
+    /// Catalog firmwares this library holds the files of and that plan to
+    /// open, in catalog identity order.
     pub fn firmwares(&self) -> Vec<LibraryFirmware> {
         self.catalog
             .firmware_ids()
             .filter_map(|id| {
                 let firmware = self.catalog.firmware(id)?;
+                let request =
+                    crate::Request::new(&firmware.body_id, FirmwareChoice::Named(id.into()));
+                let plan = crate::plan(self, &request).ok()?;
                 let update = firmware.update.as_ref()?;
-                let rom = firmware.boot_rom.as_ref()?;
                 let record = self.records.get(id)?;
                 let source = record.source.as_ref()?;
                 let identity = source.identity();
@@ -204,11 +343,13 @@ impl Library {
                 if !self.source_present(record, source) {
                     return None;
                 }
-                let rom_record = self.boot_rom_record(&rom.content.sha256)?;
-                if !self.source_present(rom_record, &rom_record.boot_rom.as_ref()?.source) {
-                    return None;
+                if plan.boot_rom == fujimod_emulator_boot::BootRomUse::Required {
+                    let rom = firmware.boot_rom.as_ref()?;
+                    let rom_record = self.boot_rom_record(&rom.content.sha256)?;
+                    if !self.source_present(rom_record, &rom_record.boot_rom.as_ref()?.source) {
+                        return None;
+                    }
                 }
-                self.resolved(id).ok()?;
                 Some(LibraryFirmware {
                     id: firmware.id.clone(),
                     body_id: firmware.body_id.clone(),
@@ -218,14 +359,12 @@ impl Library {
             .collect()
     }
 
-    /// The firmware's catalog-named update and boot ROM, decoded in memory.
-    pub fn files(&self, firmware_id: &str) -> Result<FirmwareFiles, LibraryError> {
+    /// The firmware's catalog-named update, and its boot ROM when the start
+    /// runs one, decoded in memory.
+    pub fn files(&self, firmware_id: &str, boot_rom: bool) -> Result<FirmwareFiles, LibraryError> {
         let firmware = self.firmware(firmware_id)?;
         let update_identity = firmware.update.as_ref().ok_or_else(|| {
             LibraryError::Missing(format!("firmware {firmware_id} has no update identity"))
-        })?;
-        let boot_identity = firmware.boot_rom.as_ref().ok_or_else(|| {
-            LibraryError::Missing(format!("firmware {firmware_id} has no boot ROM identity"))
         })?;
         let record = self.records.get(firmware_id).ok_or_else(|| {
             LibraryError::Missing(format!(
@@ -240,7 +379,15 @@ impl Library {
             ))
         })?;
         let (update, update_sha256) = self.update(record, source, update_identity, firmware_id)?;
-        let (boot_rom, boot_rom_sha256) = self.boot_rom(firmware_id, &boot_identity.content)?;
+        let (boot_rom, boot_rom_sha256) = if boot_rom {
+            let boot_identity = firmware.boot_rom.as_ref().ok_or_else(|| {
+                LibraryError::Missing(format!("firmware {firmware_id} has no boot ROM identity"))
+            })?;
+            let (bytes, sha256) = self.boot_rom(firmware_id, &boot_identity.content)?;
+            (Some(bytes), Some(sha256))
+        } else {
+            (None, None)
+        };
         Ok(FirmwareFiles {
             update,
             update_sha256,
@@ -249,20 +396,17 @@ impl Library {
         })
     }
 
-    /// Read two caller-named files, which must match the catalog's entry for
-    /// the firmware. zstd frames are decoded by their magic number.
+    /// Read caller-named files, which must match the catalog's entry for the
+    /// firmware. zstd frames are decoded by their magic number.
     pub fn files_from(
         &self,
         firmware_id: &str,
         update: &Path,
-        boot_rom: &Path,
+        boot_rom: Option<&Path>,
     ) -> Result<FirmwareFiles, LibraryError> {
         let firmware = self.firmware(firmware_id)?;
         let update_identity = firmware.update.as_ref().ok_or_else(|| {
             LibraryError::Missing(format!("firmware {firmware_id} has no update identity"))
-        })?;
-        let boot_identity = firmware.boot_rom.as_ref().ok_or_else(|| {
-            LibraryError::Missing(format!("firmware {firmware_id} has no boot ROM identity"))
         })?;
         let update_bytes = read_input(update)?;
         let update_sha256 = digest(&update_bytes);
@@ -276,80 +420,61 @@ impl Library {
                 firmware: firmware_id.into(),
             });
         }
-        let captured = read_input(boot_rom)?;
-        let content = &boot_identity.content;
-        let bytes = capture(
-            &captured,
-            content.size,
-            &content.sha256,
-            boot_rom,
-            firmware_id,
-        )?;
-        let boot_rom_sha256 = digest(bytes);
+        let (boot_rom, boot_rom_sha256) = match boot_rom {
+            None => (None, None),
+            Some(boot_rom) => {
+                let boot_identity = firmware.boot_rom.as_ref().ok_or_else(|| {
+                    LibraryError::Missing(format!(
+                        "firmware {firmware_id} has no boot ROM identity"
+                    ))
+                })?;
+                let captured = read_input(boot_rom)?;
+                let content = &boot_identity.content;
+                let bytes = capture(
+                    &captured,
+                    content.size,
+                    &content.sha256,
+                    boot_rom,
+                    firmware_id,
+                )?;
+                let sha256 = digest(bytes);
+                (Some(bytes.to_vec()), Some(sha256))
+            }
+        };
         Ok(FirmwareFiles {
             update: update_bytes,
             update_sha256,
-            boot_rom: bytes.to_vec(),
+            boot_rom,
             boot_rom_sha256,
         })
     }
 
-    /// The firmware's layout profile record, when it declares one.
-    fn profile(&self, firmware_id: &str) -> Option<&fujimod_catalog::firmware::FirmwareProfile> {
-        self.catalog
-            .firmware(firmware_id)
-            .and_then(|firmware| firmware.layouts.as_ref())
-            .and_then(|layouts| layouts.profiles.get(firmware_id))
-    }
-
-    /// The firmware's registered native camera run configuration, or its
-    /// browser configuration and overlay when it declares no camera one.
-    pub fn resolved(&self, firmware_id: &str) -> Result<ResolvedConfiguration, LibraryError> {
-        let configuration_id = self.camera_configuration_id(firmware_id)?;
-        let overlays = self.camera_overlays(firmware_id)?;
-        let resolved = ResolvedConfiguration::with_overlays(&configuration_id, &overlays)
-            .map_err(LibraryError::Catalog)?;
+    /// The firmware resolved on its body: its run configuration,
+    /// `configurations/emulator/<firmware-id>`, with the overlays, or its body
+    /// and firmware records alone when it has none.
+    pub fn resolved(
+        &self,
+        firmware_id: &str,
+        overlays: &[String],
+    ) -> Result<ResolvedConfiguration, LibraryError> {
+        self.firmware(firmware_id)?;
+        let resolved = if RunConfiguration::bundled_ids().any(|id| id == firmware_id) {
+            ResolvedConfiguration::with_overlays(firmware_id, overlays)
+        } else if overlays.is_empty() {
+            // Without a run configuration the camera opens from its body and
+            // firmware records and the processor's own choices.
+            ResolvedConfiguration::from_records(firmware_id)
+        } else {
+            return Err(LibraryError::NoRunConfiguration(firmware_id.into()));
+        }
+        .map_err(LibraryError::Catalog)?;
         if resolved.configuration.firmware_id != firmware_id {
             return Err(LibraryError::Missing(format!(
-                "run configuration {configuration_id} names firmware {}, not {firmware_id}",
+                "run configuration {firmware_id} names firmware {}, not {firmware_id}",
                 resolved.configuration.firmware_id
             )));
         }
         Ok(resolved)
-    }
-
-    /// The overlays the camera run resolves with by default: the firmware's
-    /// browser overlay when it declares a browser configuration, else none.
-    pub fn camera_overlays(&self, firmware_id: &str) -> Result<Vec<String>, LibraryError> {
-        let profile = self.profile(firmware_id);
-        if profile.is_some_and(|profile| profile.camera_configuration_id.is_some()) {
-            return Ok(Vec::new());
-        }
-        Ok(vec![
-            profile
-                .and_then(|profile| profile.browser_configuration_id.clone())
-                .ok_or_else(|| LibraryError::UnregisteredFirmware(firmware_id.into()))?,
-        ])
-    }
-
-    /// The catalog run configuration the firmware's camera opens with.
-    ///
-    /// A firmware with a registered native camera run names it directly. The
-    /// others name a browser overlay, whose configuration it applies.
-    pub fn camera_configuration_id(&self, firmware_id: &str) -> Result<String, LibraryError> {
-        let profile = self.profile(firmware_id);
-        if let Some(configuration_id) =
-            profile.and_then(|profile| profile.camera_configuration_id.clone())
-        {
-            return Ok(configuration_id);
-        }
-        let overlay_id = profile
-            .and_then(|profile| profile.browser_configuration_id.clone())
-            .ok_or_else(|| LibraryError::UnregisteredFirmware(firmware_id.into()))?;
-        Ok(RunOverlay::bundled(&overlay_id)
-            .map_err(LibraryError::Catalog)?
-            .configuration_id
-            .clone())
     }
 
     /// The firmware's located NAND bootloader facts.
@@ -525,6 +650,26 @@ impl Library {
             });
         }
         Ok(path)
+    }
+}
+
+/// A version's numeric parts, so `10.1` sorts after `9.30`.
+fn version_key(version: &str) -> Vec<u64> {
+    version
+        .split(|character: char| !character.is_ascii_digit())
+        .filter(|part| !part.is_empty())
+        .map(|part| part.parse().unwrap_or(u64::MAX))
+        .collect()
+}
+
+/// A processor's name in refusals.
+pub(crate) fn processor_name(soc_id: &str) -> String {
+    match soc_id {
+        "exr2" => "EXR II".into(),
+        "xp4" => "X-Processor 4".into(),
+        "xp5" => "X-Processor 5".into(),
+        "xpp" => "X-Processor Pro".into(),
+        other => other.into(),
     }
 }
 
@@ -710,7 +855,7 @@ mod tests {
         let _ = fs::remove_dir_all(&directory);
         fs::create_dir_all(&directory).unwrap();
         let library = Library::new(&directory).unwrap();
-        let error = library.files("x70-110").unwrap_err();
+        let error = library.files("x70-110", true).unwrap_err();
         assert!(matches!(error, LibraryError::Missing(_)), "{error}");
         assert!(error.to_string().contains("no firmware.json record"));
         assert!(library.firmwares().is_empty());
@@ -740,7 +885,7 @@ mod tests {
             }),
         );
         let library = Library::new(&directory).unwrap();
-        let error = library.files("x70-110").unwrap_err();
+        let error = library.files("x70-110", true).unwrap_err();
         assert!(
             matches!(
                 error,
@@ -769,7 +914,7 @@ mod tests {
             }),
         );
         let library = Library::new(&directory).unwrap();
-        let error = library.files("x70-110").unwrap_err();
+        let error = library.files("x70-110", true).unwrap_err();
         assert!(matches!(error, LibraryError::Record { .. }), "{error}");
         fs::remove_dir_all(&directory).unwrap();
     }

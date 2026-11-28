@@ -21,11 +21,13 @@ use std::{
 /// A checked emulation plan and explicit update file.
 pub struct Startup {
     pub update: crate::FirmwareFile,
-    pub plan: PathBuf,
+    /// A caller's startup plan in place of the firmware's catalog application
+    /// startup.
+    pub plan: Option<PathBuf>,
     pub discovery: bool,
     pub quantum: Option<usize>,
     pub card_image: Option<PathBuf>,
-    pub card_files: Vec<(String, PathBuf)>,
+    pub card_files: Vec<(String, crate::media::CardFile)>,
     /// Settings to place in the plan's NOR journal before boot (XP4); empty places nothing.
     pub camera_settings: BTreeMap<String, String>,
 }
@@ -33,7 +35,7 @@ pub struct Startup {
 /// Application startup facts. File references are relative to the plan's directory.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Document {
+struct PlanFile {
     configuration_id: String,
     flash: Option<PathBuf>,
     #[serde(default)]
@@ -41,6 +43,140 @@ struct Document {
     #[serde(default)]
     card_files: BTreeMap<String, PathBuf>,
     board: Plan,
+}
+
+/// A start's board plan and the card files it brings.
+struct Document {
+    card_files: BTreeMap<String, Vec<u8>>,
+    board: Plan,
+}
+
+/// The images, NOR contents and assets of a start, beside its plan.
+type StartParts = (
+    Document,
+    Option<Vec<u8>>,
+    Vec<(u64, Vec<u8>)>,
+    BTreeMap<String, Vec<u8>>,
+);
+
+/// The start the firmware's catalog application startup declares, built from
+/// the update: the images the stock loader places, its boot-information
+/// block, the NOR contents and the statistics buffers the processor reads.
+fn catalog_start(resolved: &ResolvedConfiguration, update: &[u8]) -> Result<StartParts, String> {
+    use fujimod_catalog::application_startup::{ApplicationKind, ImageEncoding};
+    let firmware = &resolved.reference.firmware.id;
+    let startup = resolved
+        .reference
+        .application_startup
+        .as_ref()
+        .ok_or_else(|| {
+            format!("firmware {firmware} declares no application startup; name an application plan")
+        })?;
+    let inverted: Vec<u8> = update.iter().map(|byte| !byte).collect();
+    let digest = |data: &[u8]| format!("{:x}", Sha256::digest(data));
+    let extent = |offset: u64, size: u64| {
+        usize::try_from(offset)
+            .ok()
+            .zip(usize::try_from(size).ok())
+            .and_then(|(offset, size)| inverted.get(offset..offset.checked_add(size)?))
+            .ok_or_else(|| format!("firmware {firmware} start reads past its update"))
+    };
+    let mut images = Vec::with_capacity(startup.images.len() + 1);
+    for image in &startup.images {
+        let data = match image.encoding {
+            ImageEncoding::Raw => extent(image.dat_offset, image.size)?.to_vec(),
+            ImageEncoding::Method4 => {
+                let start = usize::try_from(image.dat_offset)
+                    .ok()
+                    .filter(|start| *start < inverted.len())
+                    .ok_or_else(|| format!("firmware {firmware} start reads past its update"))?;
+                let (mut data, _) = fujimod_firmware::decompress(&inverted[start..])
+                    .map_err(|error| format!("firmware {firmware} image: {error}"))?;
+                if (data.len() as u64) < image.size {
+                    return Err(format!(
+                        "firmware {firmware} image at {:#x} decodes short",
+                        image.address
+                    ));
+                }
+                data.truncate(image.size as usize);
+                data
+            }
+        };
+        if digest(&data) != image.sha256 {
+            return Err(format!(
+                "firmware {firmware} image at {:#x} differs from its declared SHA-256",
+                image.address
+            ));
+        }
+        images.push((image.address, data));
+    }
+    let handoff = startup.handoff_block();
+    if digest(&handoff) != startup.loader_handoff.sha256 {
+        return Err(format!(
+            "firmware {firmware} boot-information block differs from its declared SHA-256"
+        ));
+    }
+    images.push((startup.loader_handoff.address, handoff));
+    let flash = startup
+        .flash
+        .as_ref()
+        .map(|flash| {
+            let data = extent(flash.dat_offset, flash.size)?.to_vec();
+            if digest(&data) != flash.sha256 {
+                return Err(format!(
+                    "firmware {firmware} NOR contents differ from their declared SHA-256"
+                ));
+            }
+            Ok(data)
+        })
+        .transpose()?;
+    let core: Vec<(Register, u64)> = startup
+        .registers
+        .iter()
+        .map(|(register, value)| {
+            serde_json::from_value::<Register>(register.clone())
+                .map(|register| (register, *value))
+                .map_err(|error| format!("firmware {firmware} entry register: {error}"))
+        })
+        .collect::<Result<_, _>>()?;
+    let registers = vec![core; startup.cores as usize];
+    let (board, assets) = match startup.kind {
+        ApplicationKind::Xp4 => (
+            Plan::Xp4 {
+                registers,
+                labels: startup.labels.clone(),
+            },
+            BTreeMap::new(),
+        ),
+        ApplicationKind::Xpp => {
+            let assets = startup
+                .assets
+                .iter()
+                .map(|name| {
+                    fujimod_catalog_configuration::bundled_asset(name)
+                        .map(|bytes| (name.clone(), bytes.to_vec()))
+                        .ok_or_else(|| format!("firmware {firmware} start names no asset {name}"))
+                })
+                .collect::<Result<BTreeMap<_, _>, String>>()?;
+            (
+                Plan::Xpp {
+                    registers,
+                    sub_cpu_registers: Vec::new(),
+                    assets: BTreeMap::new(),
+                },
+                assets,
+            )
+        }
+    };
+    Ok((
+        Document {
+            card_files: BTreeMap::new(),
+            board,
+        },
+        flash,
+        images,
+        assets,
+    ))
 }
 
 #[derive(Deserialize)]
@@ -400,17 +536,50 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
     {
         return Err("application update differs from the catalog identity".into());
     }
-    let document: Document = serde_json::from_slice(&bytes(Path::new(""), &startup.plan)?)
-        .map_err(|error| format!("{}: {error}", startup.plan.display()))?;
-    if document.configuration_id != resolved.configuration.id {
-        return Err("application startup plan selects another run configuration".into());
-    }
-    let directory = startup.plan.parent().unwrap_or_else(|| Path::new(""));
-    let mut flash = document
-        .flash
-        .as_deref()
-        .map(|path| bytes(directory, path))
-        .transpose()?;
+    let (document, mut flash, images, assets) = match &startup.plan {
+        Some(plan) => {
+            let document: PlanFile = serde_json::from_slice(&bytes(Path::new(""), plan)?)
+                .map_err(|error| format!("{}: {error}", plan.display()))?;
+            if document.configuration_id != resolved.configuration.id {
+                return Err("application startup plan selects another run configuration".into());
+            }
+            let directory = plan.parent().unwrap_or_else(|| Path::new(""));
+            let flash = document
+                .flash
+                .as_deref()
+                .map(|path| bytes(directory, path))
+                .transpose()?;
+            let images = document
+                .images
+                .iter()
+                .map(|image| {
+                    let data = bytes(directory, &image.file)?;
+                    if format!("{:x}", Sha256::digest(&data)) != image.sha256 {
+                        return Err(format!(
+                            "{} differs from its declared SHA-256",
+                            image.file.display()
+                        ));
+                    }
+                    Ok((image.address, data))
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            let assets = match &document.board {
+                Plan::Xpp { assets, .. } => named(directory, assets.clone())?,
+                Plan::Xp4 { .. } => BTreeMap::new(),
+            };
+            let card_files = named(directory, document.card_files)?;
+            (
+                Document {
+                    card_files,
+                    board: document.board,
+                },
+                flash,
+                images,
+                assets,
+            )
+        }
+        None => catalog_start(resolved, &update)?,
+    };
     let camera_settings = if startup.camera_settings.is_empty() {
         Value::Null
     } else {
@@ -422,7 +591,7 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
             .ok_or("camera settings need the plan's flash")?;
         crate::journal_settings::place(resolved, nor, &startup.camera_settings)?
     };
-    let mut files = named(directory, document.card_files)?;
+    let mut files = document.card_files;
     for (name, bytes) in crate::media::read_files(&startup.card_files)? {
         if files.insert(name.clone(), bytes).is_some() {
             return Err(format!("SD card file {name} supplied twice"));
@@ -489,7 +658,7 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
             Plan::Xpp {
                 registers,
                 sub_cpu_registers,
-                assets,
+                ..
             },
         ) => {
             if registers.len() != body.soc.processors.len() {
@@ -509,7 +678,7 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
                     registers,
                 })
                 .collect::<Vec<_>>();
-            let mut assets = named(directory, assets)?;
+            let mut assets = assets;
             let assembly = xpp::assemble(
                 resolved,
                 &xpp::Inputs {
@@ -565,19 +734,12 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
         }
         _ => return Err("application startup plan does not match the selected processor".into()),
     };
-    for image in document.images {
-        let data = bytes(directory, &image.file)?;
-        if format!("{:x}", Sha256::digest(&data)) != image.sha256 {
-            return Err(format!(
-                "{} differs from its declared SHA-256",
-                image.file.display()
-            ));
-        }
+    for (address, data) in images {
         match &board {
-            Board::Shared(session) => session.board.write_memory(0, image.address, &data)?,
+            Board::Shared(session) => session.board.write_memory(0, address, &data)?,
         }
     }
-    let ticks_per_second = match resolved.configuration.inputs.as_ref() {
+    let ticks_per_second = match resolved.inputs.as_ref() {
         Some(RunInputs::Xp4(inputs)) => inputs.ticks_per_second,
         _ => 54_000_000,
     };
@@ -833,7 +995,7 @@ mod shared_board_tests {
             .and_then(|n| n.parse().ok())
             .unwrap_or(1_000_000);
         let plan = PathBuf::from(path);
-        let document: Document = serde_json::from_slice(&std::fs::read(&plan).unwrap()).unwrap();
+        let document: PlanFile = serde_json::from_slice(&std::fs::read(&plan).unwrap()).unwrap();
         let directory = plan.parent().unwrap();
         let resolved = ResolvedConfiguration::bundled(&document.configuration_id).unwrap();
         let Plan::Xp4 { registers, labels } = document.board else {

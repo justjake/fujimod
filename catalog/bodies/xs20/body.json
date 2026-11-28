@@ -5,11 +5,9 @@
   "soc_id": "xp5",
   "dram_bytes": 1610612736,
   "hardware": {
-    "profiles": {
-      "xs20": {
-        "dram_basis": "The firmware memory map and the supplied Linux device tree (identical to X-T5 4.31's, SHA-256 9cb8691a..., mem=256M) end at 1.5 GiB; installed capacity is unmeasured.",
-        "limits": []
-      }
+    "board": {
+      "dram_basis": "The firmware memory map and the supplied Linux device tree (identical to X-T5 4.31's, SHA-256 9cb8691a..., mem=256M) end at 1.5 GiB; installed capacity is unmeasured.",
+      "limits": []
     },
     "bus_drain": [
       {
@@ -24,6 +22,12 @@
       }
     ]
   },
+  "storage_slots": [
+    {
+      "id": "sd_card",
+      "basis": "X-S20 specifications: one SD card slot (UHS-II)."
+    }
+  ],
   "parts": [
     "xs20-serial-nor"
   ],

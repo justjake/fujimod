@@ -1,0 +1,18 @@
+{
+  "$schema": "https://fujimod.com/schemas/body.schema.json",
+  "schema": 1,
+  "id": "xh1",
+  "soc_id": "xpp",
+  "storage_slots": [
+    {
+      "id": "sd_card",
+      "label": "1",
+      "basis": "X-H1 specifications: two SD card slots (UHS-II)."
+    },
+    {
+      "id": "sd_card_2",
+      "label": "2",
+      "basis": "X-H1 specifications: two SD card slots (UHS-II)."
+    }
+  ]
+}

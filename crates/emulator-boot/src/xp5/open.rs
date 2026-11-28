@@ -795,7 +795,7 @@ pub(crate) fn open_from(
         .as_ref()
         .and_then(|layouts| layouts.profiles.get(firmware_profile_id))
         .ok_or_else(|| format!("firmware has no startup profile {firmware_profile_id}"))?;
-    let ticks_per_second = match resolved.configuration.inputs.as_ref() {
+    let ticks_per_second = match resolved.inputs.as_ref() {
         Some(RunInputs::Xp5(inputs)) => inputs.ticks_per_second,
         _ => return Err("X100VI run configuration has no XP5 inputs".into()),
     };
@@ -907,7 +907,7 @@ pub(crate) fn open_from(
         .map(|region| region.base)
         .ok_or("SoC declares no body DRAM region")?;
     let dram_limit = memory.dram_end_from(dram_base)?;
-    if let Some(space) = &resolved.configuration.dram_address_space
+    if let Some(space) = &resolved.reference.firmware.dram_address_space
         && space.limit_bytes != dram_limit
     {
         return Err(format!(
@@ -1259,7 +1259,7 @@ pub(crate) fn open_from(
         "quantum": quantum,
         "execution": {"kind":"xp5"},
         "run_scene": run_scene,
-        "startup": resolved.configuration.start,
+        "startup": resolved.start,
         "boot_wiring_sha256": wiring_sha256,
         "update_sha256": firmware.source_sha256
     });
@@ -1688,7 +1688,7 @@ label = "NO NAME"
         let card = super::super::loader_card::LoaderCard::load(
             super::super::loader_card::SLOT,
             None,
-            &[("FWUP0036.DAT".into(), file)],
+            &[("FWUP0036.DAT".into(), file.into())],
         )
         .unwrap()
         .unwrap();

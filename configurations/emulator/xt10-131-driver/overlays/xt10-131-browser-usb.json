@@ -1,0 +1,17 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "xt10-131-browser-usb",
+  "configuration_id": "xt10-131-driver",
+  "change": {
+    "kind": "preset",
+    "preset": {
+      "factory_options": {
+        "secondary_bus_profile": "disabled"
+      },
+      "limits": [],
+      "usb_connected": true,
+      "firmware_inputs_id": "xt10-131-browser-usb-catalog-inputs"
+    }
+  }
+}

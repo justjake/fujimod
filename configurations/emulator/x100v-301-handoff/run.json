@@ -5,21 +5,9 @@
   "purpose": "rom_boot",
   "body_id": "x100v",
   "firmware_id": "x100v-301",
-  "start": {
-    "kind": "loader"
-  },
   "execution": null,
   "overlays": [],
-  "dram_address_space": {
-    "limit_bytes": 536870912,
-    "basis": "Declared 512 MiB execution bound within the captured X100V 3.01 stock address window; physical DRAM density is not asserted."
-  },
   "preset": {
-    "factory_options": {},
-    "hardware_selection": {
-      "soc_profile_id": "xp4",
-      "body_profile_id": "x100v-301-handoff"
-    },
-    "hardware_inputs_id": "x100v-301-handoff"
+    "factory_options": {}
   }
 }
