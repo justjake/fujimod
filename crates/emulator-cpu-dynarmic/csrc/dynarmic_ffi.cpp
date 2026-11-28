@@ -234,6 +234,20 @@ bool UserCallbacksImpl::PreCodeReadHook(bool thumb, VAddr pc, IREmitter& ir) {
     uint32_t kind = word ? callbacks.batch_instruction(*word) : 0;
     if (kind >= 4 && kind <= 6 && (instance->jit->Cpsr() & 31) == 0x10) kind = 0;
     if (kind == 8) kind = instance->vfp_enabled ? 1 : 0;
+    if (kind == 9) {
+        // This affects dispatch only. The runtime proof checks the current
+        // instruction bytes again before advancing the loop.
+        kind = 1;
+        if (pc >= 12) {
+            const auto shift = ReadCheckedCode(pc - 12);
+            const auto increment = ReadCheckedCode(pc - 8);
+            const auto compare = ReadCheckedCode(pc - 4);
+            if (shift && increment && compare
+                && callbacks.is_shift_count_loop(*shift, *increment, *compare)) {
+                kind = 7;
+            }
+        }
+    }
     if (!entry) {
         if (pc - start.PC() < max_block_instructions * 4) {
             if (kind == 1) return consume_word();

@@ -111,6 +111,8 @@ extern "C" fn batch_instruction(word: u32) -> u32 {
         5 => {
             if word == 0x1aff_fffd {
                 7 // A two-instruction BNE loop, subject to the runtime proof.
+            } else if loops::is_shift_count_branch(word) {
+                9 // A branch that may close a shift-counting loop.
             } else if word >> 28 != 10 {
                 1
             } else if body & 0x0180_0000 == 0x0080_0000 {
@@ -1667,6 +1669,7 @@ impl Core {
                 std::ptr::null_mut()
             },
             batch_instruction,
+            is_shift_count_loop: loops::is_shift_count_loop,
             guard_transfer: Self::guard_transfer,
             read_code: Self::read_code,
             read: Self::read,
@@ -3627,6 +3630,55 @@ mod tests {
         assert_eq!(cpu.instruction_progress(), Some(2));
         assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 0) }, 5);
         assert_eq!(unsafe { ffi::dynarmic_get_cpsr(cpu.inst) } >> 28, 6);
+    }
+
+    #[test]
+    fn native_shift_counting_matches_single_step_at_each_boundary() {
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+        for (index, word) in [
+            0xe1a0_2122u32, // mov r2, r2, lsr #2
+            0xe284_4003,    // add r4, r4, #3
+            0xe352_0003,    // cmp r2, #3
+            0x8aff_fffb,    // bhi 0x1000
+            0xe3a0_500c,    // mov r5, #12
+            0xeaff_fffe,    // b .
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            cpu.write_memory(0x1000 + index as u64 * 4, &word.to_le_bytes())
+                .unwrap();
+        }
+        let run = |batch, value: u32, budget| {
+            for (reg, value) in [(2, value), (4, u32::MAX - 1), (5, 0)] {
+                cpu.write_register(arm::CORE[reg], &value.to_le_bytes())
+                    .unwrap();
+            }
+            cpu.set_cpsr(0x0800_00d3).unwrap();
+            cpu.set_loop_window(batch).unwrap();
+            cpu.run(Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(budget),
+            })
+            .unwrap();
+            assert_eq!(cpu.instruction_progress(), Some(budget as u64));
+            let regs = [2, 4, 5, 15].map(|reg| unsafe { ffi::dynarmic_get_reg(cpu.inst, reg) });
+            (regs, unsafe { ffi::dynarmic_get_cpsr(cpu.inst) })
+        };
+        let mut skipped_inside_loop = false;
+        for value in [0, 16, 0x7fff_ffff, u32::MAX] {
+            for budget in 1..=65 {
+                let skipped = cpu.loops.skipped.get();
+                assert_eq!(run(true, value, budget), run(false, value, budget));
+                if value == u32::MAX && budget < 60 {
+                    skipped_inside_loop |= cpu.loops.skipped.get() > skipped;
+                }
+            }
+        }
+        assert!(skipped_inside_loop);
     }
 
     #[test]

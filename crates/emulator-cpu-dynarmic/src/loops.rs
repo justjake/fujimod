@@ -2,7 +2,7 @@
 use super::{Core, NativeAccess, ffi};
 use fujimod_emulator_cpu::{
     Access, Cpu, Hook, arm, armv7a,
-    loop_proof::{self, Isa, Proof, RegisterLoop, State},
+    loop_proof::{self, Isa, Proof, RegisterLoop, ShiftCountLoop, State},
     loops::LoopMode,
 };
 use std::cell::{Cell, RefCell};
@@ -12,6 +12,14 @@ const PROOF_CACHE_SLOTS: usize = 16;
 /// A direct A32 B to its own address. Its condition is evaluated by the CPU.
 pub(super) fn is_self_branch(word: u32) -> bool {
     word >> 28 != 15 && word & 0x0fff_ffff == 0x0aff_fffe
+}
+
+pub(super) fn is_shift_count_branch(word: u32) -> bool {
+    word == 0x8aff_fffb // BHI to the head of a four-instruction loop.
+}
+
+pub(super) extern "C" fn is_shift_count_loop(shift: u32, increment: u32, compare: u32) -> bool {
+    ShiftCountLoop::decode([shift, increment, compare]).is_some()
 }
 
 #[derive(Default)]
@@ -24,6 +32,7 @@ pub(super) struct Loops {
 
 enum Advance {
     Counter(RegisterLoop),
+    ShiftCount(ShiftCountLoop),
     General(Proof),
 }
 
@@ -92,7 +101,11 @@ impl Core {
         if !entry.as_ref().is_some_and(|entry| {
             entry.address == address && entry.privileged == privileged && entry.bytes == bytes
         }) {
-            let advance = if word >> 28 == 10 {
+            let advance = if is_shift_count_branch(word) {
+                let (words, _) = bytes[..size].as_chunks::<4>();
+                let body = std::array::from_fn(|index| u32::from_le_bytes(words[index]));
+                ShiftCountLoop::decode(body).map(Advance::ShiftCount)
+            } else if word >> 28 == 10 {
                 RegisterLoop::decode(start, &bytes[..size], |word| {
                     privileged && armv7a::data_cache_set_way(word)
                 })
@@ -115,6 +128,12 @@ impl Core {
         let before = State { registers, cpsr };
         let (after, skipped) = match advance {
             Advance::Counter(proof) => {
+                let Some(advanced) = proof.advance(before, remaining) else {
+                    return Ok(false);
+                };
+                advanced
+            }
+            Advance::ShiftCount(proof) => {
                 let Some(advanced) = proof.advance(before, remaining) else {
                     return Ok(false);
                 };

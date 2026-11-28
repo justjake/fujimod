@@ -52,6 +52,7 @@ pub struct DynarmicCallbacks {
     pub user_data: *mut c_void,
     pub inline_read32: *mut DynarmicDirectRead,
     pub batch_instruction: extern "C" fn(u32) -> u32,
+    pub is_shift_count_loop: extern "C" fn(u32, u32, u32) -> bool,
     pub guard_transfer: unsafe extern "C" fn(*mut c_void, u32, u32),
     pub read_code: unsafe extern "C" fn(*mut c_void, u32, *mut u32) -> bool,
     pub read: unsafe extern "C" fn(*mut c_void, u32, u32) -> u64,

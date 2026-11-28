@@ -12,7 +12,7 @@ mod a32;
 mod register;
 mod t32;
 
-pub use register::RegisterLoop;
+pub use register::{RegisterLoop, ShiftCountLoop};
 
 /// The instruction set a loop branch was fetched in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
