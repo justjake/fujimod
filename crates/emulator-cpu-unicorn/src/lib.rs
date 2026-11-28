@@ -486,10 +486,15 @@ unsafe extern "C" fn mmio_read(_: ffi::Engine, offset: u64, size: u32, data: *mu
         return 0;
     }
     let offset = context.offset + offset;
-    if !context.fast_reads.is_empty() {
+    let reads = &context.fast_reads;
+    let first = reads.partition_point(|read| read.register_offset < offset);
+    let mut candidates = reads[first..]
+        .iter()
+        .take_while(|read| read.register_offset == offset);
+    if reads.get(first).is_some_and(|read| read.register_offset == offset) {
         let policy = FAST_MMIO_READS.get();
         let tick = approximate_guest_tick();
-        if let Some(value) = context.fast_reads.iter().find_map(|read| match policy {
+        if let Some(value) = candidates.find_map(|read| match policy {
             Some(true) => read.published_at(offset, size, tick),
             Some(false) => None,
             None => read.read_at(offset, size, tick),
@@ -766,9 +771,13 @@ impl Core {
         let end = address
             .checked_add(bytes as u64)
             .ok_or("MMIO address overflow")?;
+        // Sorted by register so a read finds its candidates by binary search.
+        // The sort is stable: reads of one register keep their order.
+        let mut by_register = fast_reads.clone();
+        by_register.sort_by_key(|read| read.register_offset);
         let mut context = Box::new(MmioData {
             callbacks,
-            fast_reads: fast_reads.clone(),
+            fast_reads: by_register,
             inspection: self.inspection.clone(),
             offset,
         });
@@ -1105,7 +1114,6 @@ impl Cpu for Core {
         // uc_vmem_read uses a fast host-pointer lookup, which refuses writable
         // pages carrying a write observer/dirty flag. Translate with the requested
         // access, then use the observational physical read instead.
-        let regions = self.memory_regions()?;
         let mut offset = 0;
         while offset < bytes.len() {
             let at = address + offset as u64;
@@ -1114,7 +1122,8 @@ impl Cpu for Core {
             let end = physical
                 .checked_add(n as u64 - 1)
                 .ok_or("physical read range overflow")?;
-            if !regions.iter().any(|r| {
+            // The cached map is borrowed for this check only, not copied.
+            if !self.cached_memory_regions()?.iter().any(|r| {
                 r.begin <= physical && end <= r.end && r.permissions & protection(access) != 0
             }) {
                 return Err(format!(

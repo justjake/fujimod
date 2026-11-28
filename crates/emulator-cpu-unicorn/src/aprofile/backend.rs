@@ -283,7 +283,10 @@ impl Cpu for Core {
         // `FUJIMOD_A64_LOOP_PROOFS=0` is a host-only measurement switch: it
         // runs the same code with the prover off, so a benchmark can compare
         // the two without a second build.
-        let proofs_allowed = std::env::var("FUJIMOD_A64_LOOP_PROOFS").as_deref() != Ok("0");
+        // Read once per process: runs are too frequent for a getenv each.
+        static PROOFS_ALLOWED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        let proofs_allowed = *PROOFS_ALLOWED
+            .get_or_init(|| std::env::var("FUJIMOD_A64_LOOP_PROOFS").as_deref() != Ok("0"));
         e.prove_loops.set(
             e.loop_window.replace(false)
                 && proofs_allowed

@@ -1809,4 +1809,44 @@ mod interactive_tests {
         assert_eq!(value(&cpu, Register::X(2)), 42);
     }
 
+    #[test]
+    fn fast_reads_are_found_by_register_in_any_declared_order() {
+        let cpu = core();
+        cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
+        // ldr w0,[x1]; ldr w2,[x1,#4]; ldr w3,[x1,#8]; ldr w4,[x1,#12]
+        let code = [0xb940_0020u32, 0xb940_0422, 0xb940_0823, 0xb940_0c24];
+        let bytes: Vec<_> = code.into_iter().flat_map(u32::to_le_bytes).collect();
+        cpu.write_memory(0x1000, &bytes).unwrap();
+        set(&cpu, Register::X(1), 0x8000);
+        let reads = Cell::new(0u32);
+        unsafe {
+            cpu.map_mmio_fast(
+                0x8000,
+                0x1000,
+                Mmio {
+                    read,
+                    write,
+                    data: (&raw const reads).cast_mut().cast(),
+                },
+                vec![
+                    FastMmioRead::atomic_u32(8, Arc::new(AtomicU32::new(8))),
+                    // The first read of a register that declines leaves the
+                    // next one of the same register to answer.
+                    FastMmioRead::consuming_u32(4, Arc::new(|| None)),
+                    FastMmioRead::atomic_u32(0, Arc::new(AtomicU32::new(1))),
+                    FastMmioRead::atomic_u32(4, Arc::new(AtomicU32::new(4))),
+                ],
+            )
+        }
+        .unwrap();
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)
+            .unwrap();
+        run(&cpu, 0x1000, 4);
+        assert_eq!(value(&cpu, Register::X(0)), 1);
+        assert_eq!(value(&cpu, Register::X(2)), 4);
+        assert_eq!(value(&cpu, Register::X(3)), 8);
+        // A register without a published read goes to the device.
+        assert_eq!(value(&cpu, Register::X(4)), 42);
+        assert_eq!(reads.get(), 1);
+    }
 }
