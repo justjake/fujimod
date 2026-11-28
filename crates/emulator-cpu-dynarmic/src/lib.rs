@@ -2402,14 +2402,15 @@ impl Cpu for Core {
 
     unsafe fn backing_written(
         &self,
-        physical: u64,
+        _physical: u64,
         backing: NonNull<u8>,
         bytes: usize,
     ) -> Result<(), String> {
+        // The next native entry consumes changed instructions and descriptors
+        // through their watched backing, including every translated alias.
         self.shared
             .code_visibility
             .note_write(backing.as_ptr(), bytes);
-        unsafe { ffi::dynarmic_invalidate_cache(self.inst, physical as u32, bytes) };
         Ok(())
     }
 
@@ -3087,6 +3088,28 @@ mod tests {
             let mut bytes = [0; 4];
             reader.read_register(arm::CORE[0], &mut bytes).unwrap();
             assert_eq!(u32::from_le_bytes(bytes), 120, "native={allow_native}");
+
+            // A device writes the backing directly and reports its physical
+            // address, while both cached translations used other addresses.
+            unsafe {
+                ptr.cast::<[u8; 4]>()
+                    .as_ptr()
+                    .write(0xe280_0003u32.to_le_bytes());
+                reader.backing_written(0x3000, ptr, 4).unwrap();
+            }
+            for begin in [0x1000, 0x2000] {
+                reader.set_loop_window(allow_native).unwrap();
+                reader
+                    .run(Run {
+                        begin,
+                        until: None,
+                        watchdog_us: 0,
+                        instructions: Some(40),
+                    })
+                    .unwrap();
+            }
+            reader.read_register(arm::CORE[0], &mut bytes).unwrap();
+            assert_eq!(u32::from_le_bytes(bytes), 240, "native={allow_native}");
         }
     }
     #[test]
