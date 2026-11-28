@@ -271,6 +271,7 @@ impl StoreObserverCounters {
 }
 
 struct State {
+    inline_peers: Option<interactive::InlinePeers>,
     continuation: Rc<RefCell<continuation::Stops>>,
     host_pause: Rc<Cell<bool>>,
     execution_policy: ExecutionPolicy,
@@ -411,6 +412,7 @@ impl Settled {
     }
 }
 struct Binding {
+    inline_core: Rc<Cell<Option<usize>>>,
     state: Rc<RefCell<State>>,
     callback_service_time: Option<callback_timing::SharedStatistics>,
     cpus: Weak<Vec<Rc<dyn Cpu>>>,
@@ -421,6 +423,25 @@ struct Binding {
     // are evaluated after the access reaches the bus timeline.
     published_reads: Vec<fujimod_emulator_cpu::FastMmioRead>,
     published_hits: Cell<u64>,
+}
+
+impl Binding {
+    /// An inline callback runs on the owner thread. Park and account peers
+    /// before it can publish an effect or make a device deadline due.
+    fn park_inline_peers(&self, cpus: &[Rc<dyn Cpu>]) -> bool {
+        if self.inline_core.get() != Some(self.core) {
+            return true;
+        }
+        let mut state = self.state.borrow_mut();
+        match state.park_inline_peers(cpus) {
+            Ok(()) => true,
+            Err(error) => {
+                state.fail(error);
+                let _ = cpus[self.core].stop();
+                false
+            }
+        }
+    }
 }
 
 fn callback_service_sample(
@@ -462,6 +483,13 @@ pub struct Board {
     state: Rc<RefCell<State>>,
     access_histogram: Option<access_histogram::SharedStatistics>,
     run_wakeup: fujimod_emulator_cpu::RunWakeup,
+    inline_core: Rc<Cell<Option<usize>>>,
+    inline_mprofile_cohort: bool,
+    inline_mprofile_ready: bool,
+    inline_peers_owing_turn: Vec<bool>,
+    inline_cohort_runs: u64,
+    inline_cohort_callbacks: u64,
+    inline_cohort_instructions: u64,
     // Native hooks hold raw pointers into each box; boxing keeps them stable as the Vec grows.
     #[allow(clippy::vec_box)]
     bindings: Vec<Box<Binding>>,
@@ -707,6 +735,7 @@ impl Board {
         let continuation = Rc::new(RefCell::new(continuation::Stops::default()));
         let host_pause = Rc::new(Cell::new(false));
         let state = Rc::new(RefCell::new(State {
+            inline_peers: None,
             continuation,
             host_pause: host_pause.clone(),
             execution_policy: ExecutionPolicy::Exact,
@@ -767,6 +796,14 @@ impl Board {
         }));
         let mut board = Self {
             run_wakeup: Default::default(),
+            inline_core: Rc::new(Cell::new(None)),
+            inline_mprofile_cohort: std::env::var_os("FUJIMOD_INLINE_MPROFILE_COHORT")
+                .is_some_and(|value| value == "1"),
+            inline_mprofile_ready: false,
+            inline_peers_owing_turn: vec![false; n],
+            inline_cohort_runs: 0,
+            inline_cohort_callbacks: 0,
+            inline_cohort_instructions: 0,
             host_pause,
             progress_observer: None,
             guest_profile_active: Cell::new(false),
@@ -821,6 +858,7 @@ impl Board {
                 board.cpus[core].set_run_wakeup(board.run_wakeup.clone())?;
             }
             let binding = Box::new(Binding {
+                inline_core: board.inline_core.clone(),
                 state: board.state.clone(),
                 callback_service_time: callback_service_time.clone(),
                 cpus: Rc::downgrade(&board.cpus),
@@ -1428,6 +1466,7 @@ impl Board {
             self.m4_engine_reads.extend(engine_reads.iter().cloned());
         }
         let binding = Box::new(Binding {
+            inline_core: self.inline_core.clone(),
             state: self.state.clone(),
             callback_service_time: self.state.borrow().callback_service_time.clone(),
             cpus: Rc::downgrade(&self.cpus),
@@ -1669,10 +1708,20 @@ impl Board {
                     .map(|offset| (self.next_core.get() + offset) % n)
                     .filter(|&core| s.released[core] && !s.waiting[core])
                     .collect();
-                if cores.len() > 1
-                    && cores
+                let ordered_turns_due = self.inline_mprofile_ready
+                    && cores.iter().any(|&core| self.inline_peers_owing_turn[core]);
+                let inline = if self.inline_mprofile_ready && !ordered_turns_due {
+                    cores
                         .iter()
-                        .all(|&core| self.cpus[core].features().asynchronous_runs)
+                        .copied()
+                        .find(|&core| self.can_run_inline_mprofile(&s, core))
+                } else {
+                    None
+                };
+                if cores.len() > 1
+                    && cores.iter().all(|&core| {
+                        self.cpus[core].features().asynchronous_runs || inline == Some(core)
+                    })
                 {
                     let entered = s.total_instructions()?;
                     let pause_room =
@@ -1693,6 +1742,13 @@ impl Board {
                         return Err("scheduler made no progress at a device deadline".into());
                     }
                     drop(s);
+                    if let Some(inline) = inline {
+                        self.inline_mprofile_ready = false;
+                        self.inline_peers_owing_turn.fill(false);
+                        for &peer in cores.iter().filter(|&&core| core != inline) {
+                            self.inline_peers_owing_turn[peer] = true;
+                        }
+                    }
                     self.interactive_window(&cores, budget, quantum, boundary)?;
                     completed_slice = None;
                     continue;
@@ -1836,6 +1892,9 @@ impl Board {
             }
             s.active_slice = Some(slice);
             let entered = s.instructions[core];
+            let inline_before = self.inline_mprofile_cohort.then(|| {
+                s.blocks[core].as_ref().map_or(0, |blocks| blocks.inline.entries)
+            });
             s.mprofile_loops.begin_run(core, entered + budget as u64);
             drop(s);
             self.sync_store_hook(core)?;
@@ -1974,6 +2033,17 @@ impl Board {
             let entered = s.instructions[core]
                 .checked_sub(entered)
                 .ok_or("processor entry count moved backward")?;
+            self.inline_peers_owing_turn[core] = false;
+            if let Some(before) = inline_before
+                && let Some(blocks) = &s.blocks[core]
+            {
+                // An overlap attempt needs evidence of an ordered slice
+                // that used its grant primarily in translated Thumb code.
+                // Retry through the ordered scheduler after a handoff.
+                let translated = blocks.inline.entries.saturating_sub(before);
+                self.inline_mprofile_ready = entered >= budget as u64
+                    && translated >= (quantum as u64).div_ceil(2);
+            }
             let reason = engine_end_reason(
                 Some(exit),
                 entered,
@@ -2119,29 +2189,40 @@ impl Board {
     /// itself (PC witnesses, instruction points, discovery stubs, write
     /// watches): those read counters at their own instructions. Returns
     /// whether the processor runs in block execution, with `budget` entries.
+    fn can_run_inline_mprofile(&self, state: &State, core: usize) -> bool {
+        !self.cpus[core].features().asynchronous_runs
+            && self.mprofile_block_eligible(state, core)
+            && self.cpus[core].thumb_recovery_accounting().is_some()
+    }
+
+    fn mprofile_block_eligible(&self, state: &State, core: usize) -> bool {
+        let Some(blocks) = state.blocks[core].as_ref() else {
+            return false;
+        };
+        // Admit only the store hook and the current board observer hooks.
+        let own = 1 + if blocks.active {
+            self.block_hooks[core].len()
+        } else {
+            usize::from(self.observer_hooks[core].is_some())
+        };
+        self.block_execution.get()
+            && state.entry_points[core].is_empty()
+            && !state.memory.watching_writes()
+            && self.cpus[core].features().translation_filter
+            && self.cpus[core].hook_count() == Some(own)
+    }
+
     fn sync_block_mode(
         &mut self,
         core: usize,
         budget: u64,
     ) -> Result<(bool, Option<thumb_accounting::Slice>), String> {
         let (active, wanted) = {
-            let s = self.state.borrow();
-            let Some(blocks) = s.blocks[core].as_ref() else {
+            let state = self.state.borrow();
+            let Some(blocks) = state.blocks[core].as_ref() else {
                 return Ok((false, None));
             };
-            // The hooks the execution core keeps on this processor: its store
-            // hook, and the instruction observer or the block-mode hooks.
-            let own = 1 + if blocks.active {
-                self.block_hooks[core].len()
-            } else {
-                usize::from(self.observer_hooks[core].is_some())
-            };
-            let wanted = self.block_execution.get()
-                && s.entry_points[core].is_empty()
-                && !s.memory.watching_writes()
-                && self.cpus[core].features().translation_filter
-                && self.cpus[core].hook_count() == Some(own);
-            (blocks.active, wanted)
+            (blocks.active, self.mprofile_block_eligible(&state, core))
         };
         // Whether this engine can report the stores that cover translated
         // bytes: those are the only stores that can rewrite code.
@@ -4104,6 +4185,9 @@ unsafe fn before(pc: u64, _: u32, data: *mut c_void) {
     let Some(cpus) = b.cpus.upgrade() else {
         return;
     };
+    if !b.park_inline_peers(&cpus) {
+        return;
+    }
     let result = (|| {
         let cpu = &*cpus[b.core];
         let mut s = b.state.borrow_mut();
@@ -4299,6 +4383,9 @@ unsafe fn code_stored(data: *mut c_void, address: u64, size: usize) {
     let Some(cpus) = b.cpus.upgrade() else {
         return;
     };
+    if !b.park_inline_peers(&cpus) {
+        return;
+    }
     let core = b.core;
     let result = {
         let mut state = b.state.borrow_mut();
@@ -4324,6 +4411,9 @@ unsafe fn block_restarted(data: *mut c_void, pc: u64) {
     let Some(cpus) = b.cpus.upgrade() else {
         return;
     };
+    if !b.park_inline_peers(&cpus) {
+        return;
+    }
     let result = {
         let mut state = b.state.borrow_mut();
         if let Some(blocks) = state.blocks[b.core].as_mut() {
@@ -4344,6 +4434,9 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
     let Some(cpus) = b.cpus.upgrade() else {
         return;
     };
+    if !b.park_inline_peers(&cpus) {
+        return;
+    }
     let _callback_sample = callback_service_sample(b, &cpus, callback_timing::CallbackKind::Block);
     let core = b.core;
     let result = (|| {
@@ -4607,6 +4700,9 @@ unsafe fn written(
     let Some(cpus) = b.cpus.upgrade() else {
         return;
     };
+    if !b.park_inline_peers(&cpus) {
+        return;
+    }
     let _callback_sample = callback_service_sample(b, &cpus, callback_timing::CallbackKind::Store);
     let diagnostic_m4;
     let mut observed_reasons = 0u8;
@@ -4770,6 +4866,9 @@ unsafe fn access(data: *mut c_void, offset: u64, size: u32, value: Option<u64>) 
     let Some(cpus) = b.cpus.upgrade() else {
         return 0;
     };
+    if !b.park_inline_peers(&cpus) {
+        return 0;
+    }
     let mut sample = callback_service_sample(b, &cpus, callback_timing::CallbackKind::Mmio);
     let result = (|| {
         let address = b.base.checked_add(offset).ok_or("MMIO address overflow")?;

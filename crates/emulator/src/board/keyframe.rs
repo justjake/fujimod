@@ -95,6 +95,7 @@ impl State {
         // Exhaustive matching makes a new runtime field an explicit checkpoint
         // decision. Wiring/allocations are retained by this exact Board owner.
         let Self {
+            inline_peers: _,
             execution_policy,
             device_workers: _,
             parked_until_sgi: _,

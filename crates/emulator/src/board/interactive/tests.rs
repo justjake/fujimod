@@ -886,6 +886,66 @@ fn peer_dma_preserves_the_stopped_thumb_shadow_and_replaces_overlapping_code() {
     assert_eq!(board.read_register(M4, arm::CORE[6]).unwrap(), 9);
 }
 
+#[test]
+fn inline_thumb_cohort_observes_peer_store_before_the_device_deadline() {
+    use crate::board::mprofile::{Config, MemoryView};
+    use fujimod_emulator_cpu::{Model, arm};
+    use fujimod_emulator_cpu_unicorn::Library;
+    use std::ptr::NonNull;
+
+    let memory = cpu_memory::Memory::default();
+    let peer = worker::spawn_aprofile(1 << 20, memory.shared()).unwrap();
+    let thumb = Library::linked().unwrap().open(Model::CortexM4, 1 << 20).unwrap();
+    let backing = Backing::aligned_zeros(0x4000, 4096).unwrap();
+    let pointer = NonNull::new(backing.as_ptr()).unwrap();
+    for cpu in [&peer as &dyn Cpu, &thumb as &dyn Cpu] {
+        unsafe { cpu.map_physical(0, 0, 0x4000, 7, pointer).unwrap() };
+    }
+    set(&peer, Register::Pc, 0x100).unwrap();
+    set(&peer, Register::Pstate, 0x3c5).unwrap();
+    set(&peer, Register::X(1), 0x3000).unwrap();
+    set(&thumb, Register::Pc, 0x1001).unwrap();
+    set(&thumb, arm::CORE[1], 0x3000).unwrap();
+    set(&thumb, arm::CORE[2], 0x3004).unwrap();
+    set(&thumb, arm::CORE[13], 0x3f00).unwrap();
+    set(&thumb, Register::Arm32(arm::Register::Xpsr), 1 << 24).unwrap();
+    let mut bus = Bus::new(bus::Mode::Strict);
+    let device = bus.register(MMIO, 0x1000, Box::new(DeadlineSample {
+        due: Some(200),
+        armed_at: None,
+        samples: Vec::new(),
+    })).unwrap();
+    let mut board = Board::new(
+        vec![Box::new(peer), Box::new(thumb)],
+        bus,
+        Ratio::new(1, 1).unwrap(),
+        None,
+        vec![true; 2],
+        crate::board::memory::Memory::new(vec![(0, backing)], vec![BusMapping::ram(0, 0x4000)])
+            .unwrap(),
+    ).unwrap();
+    board.configure_mprofile(1, Config {
+        clock_hz: 1_000_000,
+        board_ticks_per_second: 1_000_000,
+        vector_base: 0,
+    }, vec![MemoryView { address: 0, physical: 0, size: 0x4000 }]).unwrap();
+    board.state.borrow_mut().settled.verify = 0;
+    board.write_physical(0, &0x3f00u32.to_le_bytes()).unwrap();
+    board.write_physical(4, &0x1001u32.to_le_bytes()).unwrap();
+    board.inline_mprofile_cohort = true;
+    board.inline_mprofile_ready = true;
+    board.set_block_execution(true);
+    board.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
+    a64_code(&board, 0, &[0x52800b40, 0xb9000020, 0x14000000]); // mov; str; b .
+    thumb_code(&board, 0x1000, &[0x6808, 0x2800, 0xd0fc, 0x6010, 0xbf30]); // poll; str; wfi
+    board.run_until(1024, 64).unwrap();
+    assert!(board.inline_cohort_runs > 0);
+    assert_eq!(samples(&board, device), [(200, 0x5a)]);
+    let mut answer = [0; 4];
+    board.read_physical(0x3004, &mut answer).unwrap();
+    assert_eq!(u32::from_le_bytes(answer), 0x5a);
+}
+
 struct MprofileDoorbell;
 impl Device for MprofileDoorbell {
     fn name(&self) -> &'static str {

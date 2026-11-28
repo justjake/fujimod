@@ -126,6 +126,7 @@ pub enum RunStatus {
 struct WakeupState {
     generation: Mutex<u64>,
     changed: Condvar,
+    interrupt: std::sync::atomic::AtomicU32,
 }
 /// Lossless event notification shared by the owner and asynchronous CPUs.
 #[derive(Clone, Default)]
@@ -137,6 +138,19 @@ impl RunWakeup {
             .generation
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+    /// A translated owner-thread run can use this flag to yield before its
+    /// next block. The owner clears it before dispatching any peer runs.
+    pub fn interrupt_flag(&self) -> &std::sync::atomic::AtomicU32 {
+        &self.0.interrupt
+    }
+    /// Latch an inline yield before an event can be observed, then wake the
+    /// owner after publication so a waiter cannot miss the event.
+    pub fn publish<T>(&self, send: impl FnOnce() -> T) -> T {
+        self.0.interrupt.store(1, std::sync::atomic::Ordering::Release);
+        let result = send();
+        self.notify();
+        result
     }
     pub fn notify(&self) {
         let mut generation = self
@@ -162,6 +176,23 @@ impl RunWakeup {
         }
     }
 }
+#[cfg(test)]
+mod run_wakeup_tests {
+    use super::*;
+
+    #[test]
+    fn publication_does_not_relatch_an_interrupt_after_the_owner_drains_the_event() {
+        let wakeup = RunWakeup::default();
+        let generation = wakeup.generation();
+        wakeup.publish(|| {
+            assert_eq!(wakeup.interrupt_flag().load(Ordering::Acquire), 1);
+            wakeup.interrupt_flag().store(0, Ordering::Release);
+        });
+        assert_eq!(wakeup.interrupt_flag().load(Ordering::Acquire), 0);
+        assert_eq!(wakeup.generation(), generation.wrapping_add(1));
+    }
+}
+
 /// Instruction accounting behavior selected by the execution owner.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ExecutionPolicy {

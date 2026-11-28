@@ -110,6 +110,15 @@ impl Epoch {
     }
 }
 
+struct Grant {
+    core: usize,
+    pc: u64,
+    start_instructions: u64,
+    instruction_limit: u64,
+    boundary: fujimod_perf::EngineEndReason,
+    request: Run,
+}
+
 struct Entry {
     core: usize,
     pc: u64,
@@ -128,7 +137,41 @@ struct Entry {
     exit: Option<Exit>,
 }
 
+pub(super) struct InlinePeers {
+    runs: Vec<(usize, RunToken)>,
+    wakeup: fujimod_emulator_cpu::RunWakeup,
+}
+
 impl State {
+    pub(super) fn park_inline_peers(&mut self, cpus: &[Rc<dyn Cpu>]) -> Result<(), String> {
+        let Some(peers) = self.inline_peers.take() else {
+            return Ok(());
+        };
+        for &(core, token) in &peers.runs {
+            cpus[core]
+                .request_pause(token)
+                .map_err(|error| error.to_string())?;
+        }
+        loop {
+            let generation = peers.wakeup.generation();
+            let mut running = false;
+            for &(core, token) in &peers.runs {
+                running |= matches!(
+                    cpus[core].poll_run(token).map_err(|error| error.to_string())?,
+                    RunStatus::Running
+                );
+            }
+            if !running {
+                break;
+            }
+            peers.wakeup.wait_for_change(generation);
+        }
+        for (core, _) in peers.runs {
+            self.sync(&*cpus[core], core)?;
+        }
+        Ok(())
+    }
+
     pub(super) fn account_interactive(&mut self, core: usize, delta: u64) -> Result<(), String> {
         let epoch = self
             .parallel
@@ -219,7 +262,12 @@ impl Board {
                 if !epoch.open(cores) {
                     return Ok(());
                 }
-                if let Some(lead) = self.cohort_lead {
+                let lead = self.cohort_lead.or_else(|| {
+                    mprofile
+                        .filter(|&core| !self.cpus[core].features().asynchronous_runs)
+                        .and_then(|_| std::num::NonZeroU64::new(quantum as u64))
+                });
+                if let Some(lead) = lead {
                     epoch.bound_segment(cores, lead);
                 }
             }
@@ -257,23 +305,24 @@ impl Board {
                     let boundary = epoch.boundary;
                     state.accounted[core] = 0;
                     let start_instructions = state.instructions[core];
-                    prepared.push((
+                    prepared.push(Grant {
                         core,
                         pc,
                         start_instructions,
-                        room,
+                        instruction_limit: room,
                         boundary,
-                        Run {
+                        request: Run {
                             begin,
                             until: None,
                             watchdog_us: 0,
                             instructions: (!(mprofile == Some(core) && blocks))
                                 .then_some(room.min(usize::MAX as u64) as usize),
                         },
-                    ));
+                    });
                 }
             }
             let withheld = cores.len() - prepared.len();
+            let used_inline = mprofile.is_some_and(|core| !self.cpus[core].features().asynchronous_runs);
             let result = self.interactive_segment(prepared, quantum, mprofile);
             if let Some(lead) = self.cohort_lead {
                 let state = self.state.borrow();
@@ -290,6 +339,9 @@ impl Board {
                 state.settled.clear();
             }
             result?;
+            if used_inline {
+                return Ok(());
+            }
         }
     }
 
@@ -382,13 +434,32 @@ impl Board {
     // Every segment joins all its workers before returning, including errors.
     fn interactive_segment(
         &mut self,
-        prepared: Vec<(usize, u64, u64, u64, fujimod_perf::EngineEndReason, Run)>,
+        prepared: Vec<Grant>,
         quantum: usize,
         mprofile: Option<usize>,
     ) -> Result<(), String> {
         let mut entries = Vec::with_capacity(prepared.len());
         let mut error = None;
-        for (core, pc, start_instructions, instruction_limit, boundary, request) in prepared {
+        let mut inline = None;
+        if mprofile.is_some_and(|core| !self.cpus[core].features().asynchronous_runs) {
+            self.run_wakeup
+                .interrupt_flag()
+                .store(0, std::sync::atomic::Ordering::Release);
+        }
+        for grant in prepared {
+            let core = grant.core;
+            if mprofile == Some(core) && !self.cpus[core].features().asynchronous_runs {
+                inline = Some(grant);
+                continue;
+            }
+            let Grant {
+                pc,
+                start_instructions,
+                instruction_limit,
+                boundary,
+                request,
+                ..
+            } = grant;
             let cpu = &self.cpus[core];
             let engine_run = fujimod_perf::engine_run(u8::try_from(core).unwrap_or(u8::MAX), true);
             match cpu.start_run(request) {
@@ -415,6 +486,12 @@ impl Board {
                     break;
                 }
             }
+        }
+        if error.is_none()
+            && let Some(grant) = inline
+            && let Err(err) = self.run_inline_mprofile(grant, quantum, &mut entries)
+        {
+            error = Some(err);
         }
         let mut barrier = false;
         loop {
@@ -582,6 +659,88 @@ impl Board {
             error.get_or_insert(e);
         }
         error.map_or(Ok(()), Err)
+    }
+
+    fn run_inline_mprofile(
+        &mut self,
+        grant: Grant,
+        quantum: usize,
+        peers: &mut [Entry],
+    ) -> Result<(), String> {
+        let Grant {
+            core,
+            pc,
+            start_instructions,
+            instruction_limit,
+            boundary,
+            request,
+        } = grant;
+        let cpu = &*self.cpus[core];
+        let mut accounting = cpu
+            .thumb_recovery_accounting()
+            .ok_or("inline Thumb accounting missing")?;
+        let slice = schedule::Slice::new(core, start_instructions, quantum, quantum)?;
+        {
+            let mut state = self.state.borrow_mut();
+            state.active_slice = Some(slice);
+            state.inline_peers = Some(InlinePeers {
+                runs: peers.iter().map(|entry| (entry.core, entry.token)).collect(),
+                wakeup: self.run_wakeup.clone(),
+            });
+        }
+        // The stopped owner lends the peer wakeup flag for this synchronous
+        // run. The wakeup outlives the C access, and only the flag is shared.
+        let pointer = std::ptr::from_ref(self.run_wakeup.interrupt_flag());
+        let previous = std::mem::replace(
+            &mut unsafe { accounting.as_mut() }.thumb_accounting.accounting.pause_requested,
+            pointer,
+        );
+        self.inline_core.set(Some(core));
+        let mut sample = fujimod_perf::engine_run(u8::try_from(core).unwrap_or(u8::MAX), true);
+        let outcome = cpu.run(request);
+        sample.stop();
+        self.inline_core.set(None);
+        unsafe { accounting.as_mut() }.thumb_accounting.accounting.pause_requested = previous;
+        self.inline_cohort_runs += 1;
+        let mut state = self.state.borrow_mut();
+        self.inline_cohort_callbacks += u64::from(state.inline_peers.is_none());
+        for entry in peers {
+            entry.interrupted_by_scheduler = true;
+        }
+        let parked = state.park_inline_peers(&self.cpus);
+        if matches!(
+            outcome,
+            Err(ExecutionError::Memory {
+                fault: Fault::ReadUnmapped
+                    | Fault::WriteUnmapped
+                    | Fault::ReadProtected
+                    | Fault::WriteProtected,
+                ..
+            })
+        ) {
+            state.settle_interrupted_block(cpu, core, scalar(cpu, Register::Pc)? & !1, true)?;
+        } else {
+            state.settle_block(core, None)?;
+        }
+        state.sync(cpu, core)?;
+        let instructions = state.instructions[core].saturating_sub(start_instructions);
+        self.inline_cohort_instructions += instructions;
+        let exit = outcome.as_ref().ok().copied();
+        sample.set_instructions(instructions);
+        sample.finish(super::engine_end_reason(
+            exit,
+            instructions,
+            instruction_limit,
+            boundary,
+            self.host_pause.get(),
+            outcome.is_err(),
+            false,
+        ));
+        parked?;
+        if let Some(error) = state.error.take() {
+            return Err(error);
+        }
+        state.finish_exit(cpu, core, pc, outcome.map_err(|error| error.to_string())?)
     }
 
     fn settle_interactive_entry(

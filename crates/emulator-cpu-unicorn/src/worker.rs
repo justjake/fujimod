@@ -769,9 +769,10 @@ fn read_scalar(cpu: &dyn Cpu, register: Register) -> Option<u64> {
     }
 }
 impl WorkerLoop {
-    fn notify_wakeup(&self) {
-        if let Some(wakeup) = self.wakeup.borrow().as_ref() {
-            wakeup.notify();
+    fn publish_event(&self, event: Event) -> Result<(), mpsc::SendError<Event>> {
+        match self.wakeup.borrow().as_ref() {
+            Some(wakeup) => wakeup.publish(|| self.events.send(event)),
+            None => self.events.send(event),
         }
     }
     fn callback_context(&self, callback: usize) -> *mut std::ffi::c_void {
@@ -827,9 +828,7 @@ impl WorkerLoop {
         let cpu = engine.cpu();
         let id = self.next_event.get();
         self.next_event.set(id.wrapping_add(1).max(1));
-        if self
-            .events
-            .send(Event::Callback {
+        if self.publish_event(Event::Callback {
                 id,
                 callback,
                 call,
@@ -841,7 +840,6 @@ impl WorkerLoop {
         {
             return CallbackResult::Error;
         }
-        self.notify_wakeup();
         loop {
             let message = match self.commands.borrow_mut().recv() {
                 Ok(message) => message,
@@ -885,7 +883,7 @@ impl WorkerLoop {
                     *self.wakeup.borrow_mut() = Some(wakeup);
                 }
                 Message::Run { id, .. } => {
-                    let _ = self.events.send(Event::RunComplete {
+                    let _ = self.publish_event(Event::RunComplete {
                         id,
                         result: Err(ExecutionError::Backend(
                             "nested Unicorn worker execution is refused".into(),
@@ -894,7 +892,6 @@ impl WorkerLoop {
                         pc: read_scalar(cpu, Register::Pc),
                         pstate: read_scalar(cpu, Register::Pstate),
                     });
-                    self.notify_wakeup();
                 }
                 Message::Shutdown => {
                     self.shutdown.set(true);
@@ -1144,14 +1141,13 @@ fn serve(
                 let progress = engine.progress();
                 let pc = read_scalar(cpu, Register::Pc);
                 let pstate = read_scalar(cpu, Register::Pstate);
-                let _ = events.send(Event::RunComplete {
+                let _ = context.publish_event(Event::RunComplete {
                     id,
                     result,
                     progress,
                     pc,
                     pstate,
                 });
-                context.notify_wakeup();
                 if context.shutdown.get() {
                     break;
                 }

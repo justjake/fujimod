@@ -361,16 +361,20 @@ impl Shared {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(wakeup);
     }
 
-    fn notify_run_wakeup(&self) {
-        if let Some(wakeup) = self
-            .run_wakeup
-            .lock()
+    fn publish_event(
+        &self,
+        events: &mpsc::SyncSender<Event>,
+        event: Event,
+    ) -> Result<(), mpsc::SendError<Event>> {
+        let wakeup = self.run_wakeup.lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_ref()
-        {
-            wakeup.notify();
+            .clone();
+        match wakeup {
+            Some(wakeup) => wakeup.publish(|| events.send(event)),
+            None => events.send(event),
         }
     }
+
 }
 
 /// One high-priority deadline timer for the lifetime of a vCPU core.
@@ -1408,11 +1412,8 @@ impl Processor {
         disconnected: &'static str,
     ) -> Result<(), ExecutionError> {
         self.publish_parked();
-        events
-            .send(event)
-            .map_err(|_| ExecutionError::Backend(disconnected.into()))?;
-        self.shared.notify_run_wakeup();
-        Ok(())
+        self.shared.publish_event(events, event)
+            .map_err(|_| ExecutionError::Backend(disconnected.into()))
     }
     fn run_exact(
         &mut self,
@@ -1876,8 +1877,7 @@ pub fn serve(
             Op::Run(request, policy, observe) => {
                 let result = p.run(request, policy, observe, &events, &commands);
                 p.publish_parked();
-                let _ = events.send(Event::Done(result));
-                p.shared.notify_run_wakeup();
+                let _ = p.shared.publish_event(&events, Event::Done(result));
             }
             op => {
                 let result = p.execute(op);
