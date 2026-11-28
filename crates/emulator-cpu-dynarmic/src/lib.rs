@@ -3996,6 +3996,72 @@ mod tests {
         }
     }
 
+    #[cfg(target_arch = "aarch64")]
+    #[test]
+    fn restoring_division_matches_steps_and_watches_its_back_edge() {
+        let code = 0x1000;
+        let remainder = 7;
+        let divisor = 4;
+        let place = 6;
+        let quotient = 3;
+        let mut words = [0xe1a0_0000u32; 64];
+        for shift in 0..4 {
+            let operand_shift = if shift == 0 { 0 } else { (shift << 7) | 32 };
+            words[shift as usize * 3] = 0xe150_0000 | remainder << 16 | divisor | operand_shift;
+            words[shift as usize * 3 + 1] =
+                0x2040_0000 | remainder << 16 | remainder << 12 | divisor | operand_shift;
+            words[shift as usize * 3 + 2] =
+                0x2180_0000 | quotient << 16 | quotient << 12 | place | operand_shift;
+        }
+        words[12] = 0xe350_0000 | remainder << 16;
+        words[13] = 0x11b0_0220 | place << 12 | place;
+        words[14] = 0x11a0_0220 | divisor << 12 | divisor;
+        words[15] = 0x1aff_ffef;
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        cpu.map_zeroed(code, 4096, 7).unwrap();
+        let raw: Vec<u8> = words.iter().flat_map(|word| word.to_le_bytes()).collect();
+        cpu.write_memory(code, &raw).unwrap();
+        let run = |batched, budget, operands: [u32; 4]| {
+            for (register, value) in [remainder, divisor, place, quotient]
+                .into_iter()
+                .zip(operands)
+            {
+                unsafe { ffi::dynarmic_set_reg(cpu.inst, register, value) };
+            }
+            cpu.set_cpsr(0xb000_00d3).unwrap();
+            cpu.set_loop_window(batched).unwrap();
+            cpu.run(Run {
+                begin: code,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(budget),
+            })
+            .unwrap();
+            assert_eq!(cpu.instruction_progress(), Some(budget as u64));
+            let registers = [remainder, divisor, place, quotient, 15]
+                .map(|reg| unsafe { ffi::dynarmic_get_reg(cpu.inst, reg) });
+            (registers, unsafe { ffi::dynarmic_get_cpsr(cpu.inst) })
+        };
+        for operands in [
+            [5678, 17 << 8, 1 << 8, 0x8000_0000], // Remainder after a partial final group.
+            [255 * 17, 17 << 8, 1 << 8, 0],       // Exact division.
+            [256 * 17, 17 << 8, 1 << 8, 0],       // Early exit after the first group.
+            [5678, 17 << 8, 3 << 8, 0],           // Multiple bits in the place.
+            [9000, 17 << 8 | 3, 1 << 8, 0],       // Unaligned divisor.
+            [u32::MAX, 17 << 8, 1 << 8, 0],       // Quotient exceeds the place range.
+        ] {
+            for budget in [9, 15, 16, 17, 32, 48, 49] {
+                assert_eq!(run(true, budget, operands), run(false, budget, operands));
+            }
+        }
+        // Change a word beyond the initial translated prefix and verify that
+        // the warmed fast entry observes the new fall-through behavior.
+        cpu.write_memory(code + 60, &0xe1a0_0000u32.to_le_bytes())
+            .unwrap();
+        let operands = [5678, 17 << 8, 1 << 8, 0];
+        assert_eq!(run(true, 48, operands), run(false, 48, operands));
+    }
+
     #[test]
     fn translated_vfp_arithmetic_tracks_enable_and_privilege() {
         let cpu = Core::new(Model::CortexA7).unwrap();

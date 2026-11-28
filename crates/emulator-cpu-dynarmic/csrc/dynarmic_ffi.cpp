@@ -10,6 +10,7 @@
 #include <array>
 #include <cstring>
 #include <atomic>
+#include <bit>
 #include <utility>
 
 using Dynarmic::ExclusiveMonitor;
@@ -191,6 +192,9 @@ private:
     };
 
     std::optional<std::uint32_t> ReadCheckedCode(VAddr address);
+#if defined(__aarch64__)
+    std::optional<Dynarmic::IR::A32RestoringDivision> MatchRestoringDivision(VAddr pc, uint32_t first);
+#endif
     std::optional<PrefetchedCode> prefetched_code;
     bool compiled_multiple_transfer = false;
     DynarmicCallbacks callbacks;
@@ -218,6 +222,55 @@ extern "C" void fujimod_dynarmic_guard_transfer(std::uint64_t ctx, std::uint64_t
 constexpr uint32_t exit_before_instruction = 0x01000000;
 constexpr uint32_t max_block_instructions = 24;
 
+#if defined(__aarch64__)
+std::optional<Dynarmic::IR::A32RestoringDivision> UserCallbacksImpl::MatchRestoringDivision(VAddr pc, uint32_t first) {
+    using Dynarmic::IR::A32RestoringDivision;
+    constexpr uint32_t bytes = A32RestoringDivision::instruction_count * 4;
+    if ((first & 0xfff0fff0) != 0xe1500000 || pc > UINT32_MAX - bytes) {
+        return std::nullopt;
+    }
+    const uint32_t remainder = (first >> 16) & 15;
+    const uint32_t divisor = first & 15;
+    const uint32_t remainder_operand = remainder << 16;
+    const uint32_t compare = 0xe1500000 | remainder_operand | divisor;
+    const uint32_t subtract = 0x20400000 | remainder_operand | (remainder << 12) | divisor;
+    if (ReadCheckedCode(pc + 4) != subtract) {
+        return std::nullopt;
+    }
+    const auto accumulate = ReadCheckedCode(pc + 8);
+    if (!accumulate) {
+        return std::nullopt;
+    }
+    const uint32_t quotient = (*accumulate >> 12) & 15;
+    const uint32_t place = *accumulate & 15;
+    const uint32_t registers = (1u << remainder) | (1u << divisor) | (1u << quotient) | (1u << place);
+    const uint32_t or_result = 0x21800000 | (quotient << 16) | (quotient << 12) | place;
+    if (std::popcount(registers) != 4 || (registers & (1u << 15)) != 0 || *accumulate != or_result) {
+        return std::nullopt;
+    }
+    for (uint32_t shift = 1; shift < 4; ++shift) {
+        const uint32_t lsr = (shift << 7) | (1 << 5);
+        const uint32_t group = pc + shift * 12;
+        if (ReadCheckedCode(group) != (compare | lsr)
+            || ReadCheckedCode(group + 4) != (subtract | lsr)
+            || ReadCheckedCode(group + 8) != (or_result | lsr)) {
+            return std::nullopt;
+        }
+    }
+    const auto branch = ReadCheckedCode(pc + bytes - 4);
+    // BNE back to the first comparison, relative to the architectural PC.
+    constexpr uint32_t branch_offset = (0u - (bytes + 4) / 4) & 0x00ffffff;
+    if (ReadCheckedCode(pc + 48) != (0xe3500000 | remainder_operand)
+        || ReadCheckedCode(pc + 52) != (0x11b00220 | (place << 12) | place)
+        || ReadCheckedCode(pc + 56) != (0x11a00220 | (divisor << 12) | divisor)
+        || branch != (0x1a000000 | branch_offset)) {
+        return std::nullopt;
+    }
+    return A32RestoringDivision{static_cast<uint8_t>(remainder), static_cast<uint8_t>(divisor),
+                                static_cast<uint8_t>(place), static_cast<uint8_t>(quotient)};
+}
+#endif
+
 bool UserCallbacksImpl::PreCodeReadHook(bool thumb, VAddr pc, IREmitter& ir) {
     const LocationDescriptor start{ir.block.Location()};
     if (start.SingleStepping()) return true;
@@ -225,6 +278,13 @@ bool UserCallbacksImpl::PreCodeReadHook(bool thumb, VAddr pc, IREmitter& ir) {
     prefetched_code.reset();
     if (entry) compiled_multiple_transfer = false;
     const auto word = thumb ? std::nullopt : ReadCheckedCode(pc);
+#if defined(__aarch64__)
+    if (entry && word) {
+        if (auto division = MatchRestoringDivision(pc, *word)) {
+            ir.block.SetRestoringDivision(*division);
+        }
+    }
+#endif
     const auto consume_word = [&] {
         if (word) {
             prefetched_code = PrefetchedCode{pc, *word};

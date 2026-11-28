@@ -1,0 +1,191 @@
+diff --git a/src/dynarmic/ir/basic_block.h b/src/dynarmic/ir/basic_block.h
+--- a/src/dynarmic/ir/basic_block.h
++++ b/src/dynarmic/ir/basic_block.h
+@@ -26,6 +26,14 @@
+ 
+ enum class Cond;
+ enum class Opcode;
++
++struct A32RestoringDivision {
++    static constexpr u32 instruction_count = 16;
++    u8 remainder;
++    u8 divisor;
++    u8 place;
++    u8 quotient;
++};
+ 
+ /**
+  * A basic block. It consists of zero or more instructions followed by exactly one terminal.
+@@ -139,6 +147,9 @@
+     /// Gets an immutable reference to the cycle count for this basic block.
+     const size_t& CycleCount() const;
+ 
++    void SetRestoringDivision(A32RestoringDivision division) { restoring_division = division; }
++    std::optional<A32RestoringDivision> RestoringDivision() const { return restoring_division; }
++
+ private:
+     /// Description of the starting location of this block
+     LocationDescriptor location;
+@@ -160,6 +171,7 @@
+ 
+     /// Number of cycles this block takes to execute.
+     size_t cycle_count = 0;
++    std::optional<A32RestoringDivision> restoring_division;
+ };
+ 
+ /// Returns a string representation of the contents of block. Intended for debugging.
+diff --git a/src/dynarmic/backend/arm64/a32_address_space.cpp b/src/dynarmic/backend/arm64/a32_address_space.cpp
+--- a/src/dynarmic/backend/arm64/a32_address_space.cpp
++++ b/src/dynarmic/backend/arm64/a32_address_space.cpp
+@@ -3,6 +3,7 @@
+  * SPDX-License-Identifier: 0BSD
+  */
+ 
++#include <algorithm>
+ #include <array>
+ 
+ #include <oaknut/feature_detection/feature_detection.hpp>
+@@ -612,7 +613,12 @@
+ void A32AddressSpace::RegisterNewBasicBlock(const IR::Block& block, const EmittedBlockInfo&) {
+     const A32::LocationDescriptor descriptor{block.Location()};
+     const A32::LocationDescriptor end_location{block.EndLocation()};
+-    const auto range = boost::icl::discrete_interval<u32>::closed(descriptor.PC(), end_location.PC() - 1);
++    // Also invalidate the fast entry if a word proved beyond this ordinary
++    // block's end changes.
++    const u32 end_pc = block.RestoringDivision()
++        ? std::max(end_location.PC(), descriptor.PC() + 4 * IR::A32RestoringDivision::instruction_count)
++        : end_location.PC();
++    const auto range = boost::icl::discrete_interval<u32>::closed(descriptor.PC(), end_pc - 1);
+     block_ranges.AddRange(range, descriptor);
+ }
+ 
+diff --git a/src/dynarmic/backend/arm64/emit_arm64.h b/src/dynarmic/backend/arm64/emit_arm64.h
+--- a/src/dynarmic/backend/arm64/emit_arm64.h
++++ b/src/dynarmic/backend/arm64/emit_arm64.h
+@@ -28,6 +28,7 @@
+ }  // namespace Dynarmic::FP
+ 
+ namespace Dynarmic::IR {
++struct A32RestoringDivision;
+ class Block;
+ class Inst;
+ enum class Cond;
+@@ -171,6 +172,7 @@
+ template<IR::Opcode op>
+ void EmitIR(oaknut::CodeGenerator& code, EmitContext& ctx, IR::Inst* inst);
+ void EmitRelocation(oaknut::CodeGenerator& code, EmitContext& ctx, LinkTarget link_target);
++void EmitA32RestoringDivision(oaknut::CodeGenerator& code, EmitContext& ctx, IR::A32RestoringDivision division);
+ void EmitBlockLinkRelocation(oaknut::CodeGenerator& code, EmitContext& ctx, const IR::LocationDescriptor& descriptor, BlockRelocationType type);
+ oaknut::Label EmitA32Cond(oaknut::CodeGenerator& code, EmitContext& ctx, IR::Cond cond);
+ oaknut::Label EmitA64Cond(oaknut::CodeGenerator& code, EmitContext& ctx, IR::Cond cond);
+diff --git a/src/dynarmic/backend/arm64/emit_arm64.cpp b/src/dynarmic/backend/arm64/emit_arm64.cpp
+--- a/src/dynarmic/backend/arm64/emit_arm64.cpp
++++ b/src/dynarmic/backend/arm64/emit_arm64.cpp
+@@ -303,6 +303,10 @@
+ 
+     ebi.entry_point = code.xptr<CodePtr>();
+ 
++    if (const auto division = block.RestoringDivision()) {
++        EmitA32RestoringDivision(code, ctx, *division);
++    }
++
+     const A32::LocationDescriptor location{block.Location()};
+     const auto check_budget = [&](u64 cost) {
+         if (!conf.enable_cycle_counting || !conf.check_cycle_budget || location.SingleStepping()) return;
+diff --git a/src/dynarmic/backend/arm64/emit_arm64_a32.cpp b/src/dynarmic/backend/arm64/emit_arm64_a32.cpp
+--- a/src/dynarmic/backend/arm64/emit_arm64_a32.cpp
++++ b/src/dynarmic/backend/arm64/emit_arm64_a32.cpp
+@@ -10,6 +10,8 @@
+ 
+ #include "dynarmic/backend/arm64/a32_jitstate.h"
+ #include "dynarmic/backend/arm64/abi.h"
++#include <bit>
++
+ #include "dynarmic/backend/arm64/emit_arm64.h"
+ #include "dynarmic/backend/arm64/emit_context.h"
+ #include "dynarmic/backend/arm64/fpsr_manager.h"
+@@ -97,6 +99,84 @@
+     EmitRelocation(code, ctx, LinkTarget::ReturnToDispatcher);
+ }
+ 
++static u64 TryRestoringDivision(A32JitState& state, s64 budget, u32 operands) {
++    constexpr u32 cost = IR::A32RestoringDivision::instruction_count;
++    if (budget < cost) {
++        return 0;
++    }
++    auto& remainder = state.regs[operands & 15];
++    auto& divisor = state.regs[(operands >> 4) & 15];
++    auto& place = state.regs[(operands >> 8) & 15];
++    auto& quotient = state.regs[operands >> 12];
++
++    // The usual division invariant aligns the scaled divisor with the
++    // one-bit place. Other incoming states execute the original block.
++    if (!std::has_single_bit(place) || (divisor & (place - 1)) != 0 || divisor == 0) {
++        return 0;
++    }
++    const u32 position = std::countr_zero(place);
++    const u32 unit = divisor >> position;
++    const u32 digit = remainder / unit;
++    if (digit > ((place - 1) << 1 | 1)) {
++        return 0;
++    }
++
++    u32 rest = remainder - digit * unit;
++    const u32 last_bit = rest != 0 ? 0 : digit == 0 ? position : std::countr_zero(digit);
++    const u32 groups = (position - last_bit) / 4 + 1;
++    const u32 ticks = groups * cost;
++    if (budget < ticks) {
++        return 0;
++    }
++
++    const u32 discarded = (groups - 1) * 4;
++    divisor >>= discarded;
++    place >>= discarded;
++    quotient |= digit;
++
++    if (rest != 0) {
++        // In a partial final group the remaining comparisons can reduce
++        // the remainder even after the shifted place becomes zero.
++        for (u32 shift = position % 4 + 1; shift != 4; ++shift) {
++            const u32 part = divisor >> shift;
++            if (rest >= part) {
++                rest -= part;
++            }
++        }
++    }
++    remainder = rest;
++    constexpr u32 zero = 1 << 30;
++    constexpr u32 carry = 1 << 29;
++    state.cpsr_nzcv = zero;
++    if (rest == 0) {
++        state.cpsr_nzcv |= carry;
++    } else {
++        if (place & 8) {
++            state.cpsr_nzcv |= carry;
++        }
++        place = 0;
++    }
++    return ticks;
++}
++
++void EmitA32RestoringDivision(oaknut::CodeGenerator& code, EmitContext& ctx, IR::A32RestoringDivision division) {
++    using namespace oaknut::util;
++    const u32 operands = u32(division.remainder) | u32(division.divisor) << 4
++                       | u32(division.place) << 8 | u32(division.quotient) << 12;
++    oaknut::Label ordinary;
++    code.MOV(X0, Xstate);
++    code.MOV(X1, Xticks);
++    code.MOV(W2, operands);
++    code.MOV(Xscratch0, reinterpret_cast<u64>(&TryRestoringDivision));
++    code.BLR(Xscratch0);
++    code.CBZ(X0, ordinary);
++    code.SUB(Xticks, Xticks, X0);
++    const auto location = A32::LocationDescriptor{ctx.block.Location()};
++    const auto next = location.AdvancePC(4 * IR::A32RestoringDivision::instruction_count);
++    EmitA32Terminal(code, ctx, IR::Term::LinkBlock{next}, location, false);
++    code.l(ordinary);
++}
++
+ void EmitA32Terminal(oaknut::CodeGenerator& code, EmitContext& ctx, IR::Term::LinkBlockFast terminal, IR::LocationDescriptor initial_location, bool is_single_step) {
+     EmitA32Terminal(code, ctx, IR::Term::LinkBlock{terminal.next}, initial_location, is_single_step);
+ }
