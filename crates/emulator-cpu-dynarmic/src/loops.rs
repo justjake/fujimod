@@ -1,5 +1,5 @@
 //! Run-limit bounded fast-forward of side-effect-free ARM loops.
-use super::{Core, ffi};
+use super::{Core, NativeAccess, ffi};
 use fujimod_emulator_cpu::{
     Access, Cpu, Hook, arm, armv7a,
     loop_proof::{self, Isa, Proof, RegisterLoop, State},
@@ -36,6 +36,7 @@ impl Core {
         cpsr: u32,
         word: u32,
         remaining: u64,
+        cached_fetch: bool,
     ) -> Result<bool, String> {
         if self.shared.device_accessed.get()
             || self.loops.mode.get() != LoopMode::Accelerate
@@ -60,7 +61,13 @@ impl Core {
         }
         let size = (address - start) as usize + 4;
         let mut bytes = [0; 64];
-        if self
+        if cached_fetch
+            && let Some(NativeAccess::Ram(pointer, _)) =
+                self.shared.native_access(start as u32, size, Access::Fetch)
+        {
+            // A checked native page already covers the whole loop in RAM.
+            unsafe { std::ptr::copy_nonoverlapping(pointer, bytes.as_mut_ptr(), size) };
+        } else if self
             .read_virtual(start, Access::Fetch, &mut bytes[..size])
             .is_err()
         {
