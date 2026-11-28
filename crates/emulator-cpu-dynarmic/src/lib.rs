@@ -329,6 +329,8 @@ struct NativeReadWindow {
     additional_reads: u64,
 }
 
+const NATIVE_PAGE_SLOTS: usize = 32;
+
 struct CoreShared {
     exclusive: RefCell<Option<BoardExclusive>>,
     observe_exclusive_stores: Cell<bool>,
@@ -368,7 +370,7 @@ struct CoreShared {
     touched_pages: RefCell<Vec<u32>>,
     observed_backings: RefCell<Vec<BackingObserver>>,
 
-    native_pages: [Cell<Option<NativePage>>; 24],
+    native_pages: [[Cell<Option<NativePage>>; NATIVE_PAGE_SLOTS]; 3],
     fault: RefCell<Option<ExecutionError>>,
     abort: Cell<Option<(u32, u32, Access)>>,
     inst: Cell<*mut ffi::DynarmicInstance>,
@@ -901,6 +903,10 @@ impl CoreShared {
             && permissions & 2 != 0
             && (access == Access::Write
                 || self.walk(address, Access::Write).ok().and_then(Result::ok) == Some(physical));
+        // Only the ARM64 emitter checks the write-protection tag on stores.
+        if !write_allowed && !cfg!(target_arch = "aarch64") {
+            return;
+        }
         let page = address >> 12;
         let slot = unsafe { self.direct_pages.get().add(page as usize) };
         let tagged = backing_page.map_addr(|p| p | usize::from(!write_allowed));
@@ -1012,10 +1018,15 @@ impl CoreShared {
         let generation = self.native_generation.get();
         let group = match access {
             Access::Read => 0,
-            Access::Write => 8,
-            Access::Fetch => 16,
+            Access::Write => 1,
+            Access::Fetch => 2,
         };
-        let slot = &self.native_pages[group + (page as usize & 7)];
+        // Fold region bits into the index so equally aligned sections can
+        // cache simultaneously, including a stack, data page, and MMIO.
+        let folded = page ^ (page >> 10);
+        let index = (folded ^ (folded >> NATIVE_PAGE_SLOTS.trailing_zeros())) as usize
+            & (NATIVE_PAGE_SLOTS - 1);
+        let slot = &self.native_pages[group][index];
         if let Some(cached) = slot.get()
             && cached.generation == generation
             && cached.page == page
