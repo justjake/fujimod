@@ -64,6 +64,23 @@ impl Window {
         }
     }
 
+    /// Arm the given proven pages without touching the grant. Called when a
+    /// slice starts, so the first block that leaves its own page still passes
+    /// the guard instead of calling the host for a page the shadow has
+    /// already proven.
+    pub fn seed_pages(&mut self, pages: &[u64]) {
+        let Some(mut recovery) = self.recovery else {
+            return;
+        };
+        let record = unsafe { recovery.as_mut() };
+        for &page_address in pages {
+            let page = page_address >> 10;
+            if page < 1024 {
+                record.thumb_page_bitmap[(page >> 6) as usize] |= 1u64 << (page & 63);
+            }
+        }
+    }
+
     #[inline]
     pub fn arm(&mut self, pc: u64, remaining: u64) {
         if let Some(mut recovery) = self.recovery {
@@ -81,6 +98,37 @@ impl Window {
             record.thumb_page = pc & !0x3ff;
             record.accounting.budget = self.granted;
         }
+    }
+
+    /// Arm every page whose copied bytes the code shadow has proven, so a
+    /// block that branches to another such page still passes the translated
+    /// guard instead of calling the host. `pc` is the block being admitted;
+    /// its own page is armed even when the shadow could not prove it, which is
+    /// the single-page behaviour `arm` already had.
+    #[inline]
+    pub fn arm_pages(&mut self, pc: u64, remaining: u64, pages: &[u64]) {
+        let Some(mut recovery) = self.recovery else {
+            self.arm(pc, remaining);
+            return;
+        };
+        self.granted = remaining.min(i64::MAX as u64) as i64;
+        let record = unsafe { recovery.as_mut() };
+        record.thumb_accounting.thumb_page = pc & !0x3ff;
+        // Replace, never widen: the caller's set is what the code shadow
+        // proves right now, so a page that changed behind the engine loses
+        // its bit instead of keeping one from an earlier proof.
+        record.thumb_page_bitmap = [0; 16];
+        for &page_address in pages {
+            let page = page_address >> 10;
+            if page < 1024 {
+                record.thumb_page_bitmap[(page >> 6) as usize] |= 1u64 << (page & 63);
+            }
+        }
+        let page = pc >> 10;
+        if page < 1024 {
+            record.thumb_page_bitmap[(page >> 6) as usize] |= 1u64 << (page & 63);
+        }
+        record.thumb_accounting.accounting.budget = self.granted;
     }
 
     /// The most recent block charged since this window was armed. The

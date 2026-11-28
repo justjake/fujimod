@@ -2285,6 +2285,19 @@ impl Board {
         }
         if let Some(blocks) = s.blocks[core].as_mut() {
             blocks.inline.clear_pages();
+            let seeds = self
+                .cpus
+                .get(core)
+                .map(|cpu| {
+                    s.code_shadow[core]
+                        .as_mut()
+                        .map(|shadow| shadow.proven_pages(&**cpu))
+                        .unwrap_or_default()
+                })
+                .unwrap_or_default();
+            if let Some(blocks) = s.blocks[core].as_mut() {
+                blocks.inline.seed_pages(&seeds);
+            }
         }
         s.settled.clear();
         Ok(true)
@@ -4475,11 +4488,31 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
         // replayed device read is not idempotent (`io_readx` serviced it
         // already). The classifier refuses those encodings; this keeps the
         // guarantee if one is reached through a different path.
+        // Every page the shadow has proven is a page the translated guard may
+        // enter without a host callback: the block there was scanned from the
+        // same copied bytes, and a page that changed behind the engine is not
+        // proven. Taking the set once here keeps the per-block cost at one
+        // page compare rather than one host callback per page transition.
+        let proven = if inline {
+            let page = pc & !0x3ff;
+            let mut pages = s.code_shadow[core]
+                .as_mut()
+                .map(|shadow| shadow.proven_pages(cpu))
+                .unwrap_or_default();
+            pages.retain(|&address| address != page);
+            pages
+        } else {
+            Vec::new()
+        };
         let blocks = s.blocks[core].as_mut().unwrap();
         blocks.room -= entries - 1;
         blocks.pending = Some((pc, bytes, entries, pc + last));
         if inline {
-            blocks.inline.arm(pc, window_room - entries);
+            // The grant stays inside this block's own window: a wider one lets
+            // the guest enter instructions past an unserviced device deadline,
+            // which the timeline refuses. What the grant buys is that every
+            // proven page may pass the guard, not that the slice grows.
+            blocks.inline.arm_pages(pc, window_room - entries, &proven);
         }
         Ok::<(), String>(())
     })();

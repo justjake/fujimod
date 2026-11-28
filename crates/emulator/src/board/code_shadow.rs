@@ -313,6 +313,40 @@ impl CodeShadow {
         // read, and the slice is used before the processor runs again.
         Some(unsafe { std::slice::from_raw_parts(host?.as_ptr().add(offset as usize), len) })
     }
+    /// The 1 KiB pages whose copied bytes are known equal to guest memory now,
+    /// limited to the low 1 MiB the translated guard's bitmap addresses. A
+    /// proven 4 KiB page proves each of its four 1 KiB sub-pages, and the
+    /// guard arms sub-pages. Each page is compared first when something else
+    /// may have written since its copy, so a page that changed behind the
+    /// engine is absent rather than armed.
+    pub(super) fn proven_pages(&mut self, cpu: &dyn Cpu) -> Vec<u64> {
+        if self.unproven || self.changed {
+            return Vec::new();
+        }
+        let epoch = self.epoch;
+        let mut proven = Vec::new();
+        for (&address, page) in self.pages.iter_mut() {
+            if address >= 1 << 20 {
+                continue;
+            }
+            if page.verified != epoch {
+                let scratch = self
+                    .scratch
+                    .get_or_insert_with(|| Box::new([0; PAGE as usize]));
+                if page.differs(cpu, address, scratch) {
+                    continue;
+                }
+                page.verified = epoch;
+            }
+            for offset in [0, 0x400, 0x800, 0xc00] {
+                let sub = address + offset;
+                if sub < 1 << 20 {
+                    proven.push(sub);
+                }
+            }
+        }
+        proven
+    }
     /// Touch the pages an instruction at `pc` can occupy, and the page after
     /// its own: a translation that starts in one page ends within the next.
     /// `checked` reports whether a whole page is ordinary RAM of this
