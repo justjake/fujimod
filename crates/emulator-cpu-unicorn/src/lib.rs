@@ -1949,6 +1949,9 @@ unsafe extern "C" fn classify(data: *mut c_void, address: u64, word: u32) -> i32
         InstructionDisposition::ExecuteItSafe => 0,
         InstructionDisposition::ExecuteThumbThreadOnly => 32,
         InstructionDisposition::ExecuteThumbRamLoad => 64,
+        // Keep the observe bit for engines that do not recognize this guard
+        // request. Only a supporting decoder clears it.
+        InstructionDisposition::ExecuteThumbRamTableBranch => 128 | 4,
         InstructionDisposition::Observe => 1,
         InstructionDisposition::ObserveAndEndBlock => 2,
         InstructionDisposition::ExecuteAndEndBlock if context.native_execute_end => 8,

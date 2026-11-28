@@ -557,6 +557,14 @@ pub(super) fn is_guarded_multi_load(word: u32) -> bool {
         && !(writeback && list & (1 << base) != 0)
 }
 
+/// TBB/TBH with an ordinary index and a register or PC-relative table.
+pub(super) fn is_table_branch(word: u32) -> bool {
+    let base = (word >> 16) & 15;
+    word & 0xfff0_ffe0 == 0xe8d0_f000
+        && (base <= 12 || base == 15)
+        && word & 15 <= 12
+}
+
 /// A status read that includes IPSR and can use the controller's exception
 /// number when the backend supports publishing it.
 pub(super) fn is_exception_status_read(word: u32) -> bool {

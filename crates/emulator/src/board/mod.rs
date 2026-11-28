@@ -4512,6 +4512,10 @@ fn block_classify_transfers(word: u32) -> fujimod_emulator_cpu::Translation {
         classification.instruction =
             fujimod_emulator_cpu::InstructionDisposition::ExecuteThumbRamLoad;
         classification.observe_block = false;
+    } else if mprofile_blocks::is_table_branch(word) {
+        classification.instruction =
+            fujimod_emulator_cpu::InstructionDisposition::ExecuteThumbRamTableBranch;
+        classification.observe_block = true;
     } else if mprofile_blocks::is_pc_pop(word) || mprofile_blocks::is_bx_lr(word) {
         classification.instruction =
             fujimod_emulator_cpu::InstructionDisposition::ExecuteThumbThreadOnly;

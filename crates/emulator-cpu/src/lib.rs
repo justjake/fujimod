@@ -605,6 +605,9 @@ pub enum InstructionDisposition {
     /// Execute a multiple Thumb load only after checking its entire span
     /// for direct, unobserved RAM. Other spans use isolated execution.
     ExecuteThumbRamLoad,
+    /// Execute a Thumb table branch with a guarded RAM table access when
+    /// supported. Other backends keep the block observed.
+    ExecuteThumbRamTableBranch,
     Observe,
     ObserveAndEndBlock,
     /// Execute the instruction in translated code, then end its translated

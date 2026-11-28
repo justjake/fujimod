@@ -1065,6 +1065,10 @@ fn terminal_pushes_match_observer_on_same_page_ram_and_partial_fault() {
 }
 
 fn single_m4_board(blocks: bool, program: &[u16], stack: u32) -> Board {
+    single_m4_with_bus(blocks, program, stack, Bus::new(bus::Mode::Strict))
+}
+
+fn single_m4_with_bus(blocks: bool, program: &[u16], stack: u32, bus: Bus) -> Board {
     use factory::*;
     let graph = Graph {
         decoders: vec![],
@@ -1098,7 +1102,7 @@ fn single_m4_board(blocks: bool, program: &[u16], stack: u32) -> Board {
     let board = graph
         .build(
             Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
-            Bus::new(bus::Mode::Strict),
+            bus,
             None,
         )
         .unwrap();
@@ -1648,6 +1652,87 @@ fn guarded_multi_load_reads_a_device_exactly_once_in_both_modes() {
             let result = outcome(&board);
             let expected = if base == 0x18000 { [1, 2] } else { [7, 1] };
             assert_eq!(&result.registers[1..3], &expected);
+        }
+    }
+}
+
+#[test]
+fn guarded_table_branches_match_ram_mmio_and_mapping_edge_faults() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    };
+    struct Table(Arc<AtomicU64>);
+    impl fujimod_emulator_devices::Device for Table {
+        fn name(&self) -> &'static str {
+            "branch-table"
+        }
+        fn read(&mut self, _: &mut fujimod_emulator_devices::Cx<'_>, _: u64, _: u8) -> u64 {
+            self.0.fetch_add(1, Ordering::Relaxed);
+            2
+        }
+        fn write(&mut self, _: &mut fujimod_emulator_devices::Cx<'_>, _: u64, _: u8, _: u64) {}
+    }
+    fn run(
+        blocks: bool,
+        halfword: bool,
+        pc_relative: bool,
+        address: u32,
+        mmio: bool,
+    ) -> (Outcome, Result<(), String>, u64, u64) {
+        // The table value 2 branches over the sentinel and increments R6.
+        let word = if halfword { 0xf011 } else { 0xf001 };
+        let branch = if pc_relative { 0xe8df } else { 0xe8d0 };
+        let entry = if pc_relative { 2 } else { 0x26ee };
+        let program = [
+            0x2100, 0x4803, branch, word, entry, 0xbf00, 0x3601, 0xe7f9,
+            address as u16, (address >> 16) as u16,
+        ];
+        let reads = Arc::new(AtomicU64::new(0));
+        let mut bus = Bus::new(bus::Mode::Strict);
+        if mmio {
+            bus.register(0xff91_0000, 0x1000, Box::new(Table(reads.clone()))).unwrap();
+        }
+        let mut board = single_m4_with_bus(blocks, &program, 0x17000, bus);
+        board.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
+        board.state.borrow_mut().settled.verify = 0;
+        board.set_poll_loops(false);
+        if mmio {
+            board.map_mmio(0, 0x18000, 0x1000, 0xff91_0000).unwrap();
+        } else if address < 0x18000 {
+            let bytes: &[u8] = if address == 0x17fff { &[2] } else { &[2, 0] };
+            board.write_physical(address.into(), bytes).unwrap();
+        }
+        let result = board.run_until(501, 501).map(|_| ());
+        let callbacks = board.state.borrow().blocks[0].as_ref().unwrap().block_callbacks;
+        (outcome(&board), result, reads.load(Ordering::Relaxed), callbacks)
+    }
+    for (halfword, pc_relative, address, mmio) in [
+        (false, false, 0x12001, false),
+        (true, false, 0x12002, false),
+        (false, true, 0x12000, false),
+        (true, true, 0x12000, false),
+        (false, false, 0x18000, true),
+        (true, false, 0x18000, true),
+        (true, false, 0x17fff, false),
+    ] {
+        let reference = run(false, halfword, pc_relative, address, mmio);
+        let candidate = run(true, halfword, pc_relative, address, mmio);
+        assert_eq!(candidate.0.registers, reference.0.registers);
+        assert_eq!(candidate.0.state, reference.0.state);
+        assert_eq!(candidate.2, reference.2);
+        if address == 0x17fff {
+            assert!(reference.1.is_err() && candidate.1.is_err());
+        } else {
+            reference.1.unwrap();
+            candidate.1.unwrap();
+            let branches = candidate.0.registers[6];
+            assert!(branches > 100 && branches < 200, "{branches}");
+            if mmio {
+                assert!((branches..=branches + 1).contains(&candidate.2));
+            } else {
+                assert!(candidate.3 < branches / 2, "{} callbacks for {branches} branches", candidate.3);
+            }
         }
     }
 }
