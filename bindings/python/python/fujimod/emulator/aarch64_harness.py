@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import bisect
 import hashlib
 import json
 from collections.abc import Callable, Iterable, Mapping
@@ -12,10 +13,12 @@ from fujimod._native import emulator as _native
 
 from .board import make_board
 from .definition import Asset, Definition, Image
-from .driver_harness import _intersect, _merge, _subtract
+from .driver_harness import _intersect, _merge
 
 Span = tuple[int, bytes]
 Range = tuple[int, int]
+# Written spans a reusable caller keeps for reset(); past it, it is not reset.
+_RESET_WRITES = 1 << 16
 
 
 class Observation(TypedDict):
@@ -89,6 +92,56 @@ def _receipt(address: int, size: int) -> dict[str, int]:
 
 def _contains(ranges: Iterable[Range], address: int, size: int) -> bool:
     return any(a <= address and address + size <= b for a, b in ranges)
+
+
+def _page_span(begin: int, end: int) -> Range:
+    """``[begin, end)`` widened to whole 16 KiB RAM pages."""
+    return begin & ~0x3FFF, (end + 0x3FFF) & ~0x3FFF
+
+
+class _Spans:
+    """Sorted, pairwise disjoint ranges with logarithmic lookups."""
+
+    def __init__(self, ranges: Iterable[Range] = ()) -> None:
+        self.ranges = sorted(ranges)
+        self.starts = [a for a, _ in self.ranges]
+
+    def holding(self, address: int, size: int) -> Range | None:
+        """The one range that holds ``[address, address + size)``, if any."""
+        index = bisect.bisect_right(self.starts, address) - 1
+        if index >= 0 and address + size <= self.ranges[index][1]:
+            return self.ranges[index]
+        return None
+
+    def overlaps(self, begin: int, end: int) -> bool:
+        """Whether any range overlaps ``[begin, end)``: only the last range
+        that starts before ``end`` can, since the ranges are disjoint."""
+        index = bisect.bisect_left(self.starts, end) - 1
+        return index >= 0 and self.ranges[index][1] > begin
+
+    def insert(self, span: Range) -> None:
+        index = bisect.bisect_left(self.ranges, span)
+        self.ranges.insert(index, span)
+        self.starts.insert(index, span[0])
+
+
+def _difference(ranges: Iterable[Range], holes: _Spans) -> list[Range]:
+    """The parts of ``ranges`` outside every one of the disjoint ``holes``,
+    merged, as ``_subtract`` gives them."""
+    result = []
+    for lo, hi in ranges:
+        index = max(bisect.bisect_right(holes.starts, lo) - 1, 0)
+        cursor = lo
+        while index < len(holes.ranges) and holes.ranges[index][0] < hi:
+            hole_lo, hole_hi = holes.ranges[index]
+            if hole_hi > cursor:
+                if hole_lo > cursor:
+                    result.append((cursor, hole_lo))
+                cursor = hole_hi
+            index += 1
+        if cursor < hi:
+            result.append((cursor, hi))
+    return _merge(result)
 
 
 @dataclass(frozen=True)
@@ -226,6 +279,10 @@ class Aarch64DriverHarness:
     ``Aarch64Inputs.devices`` set and its declared windows. No reset, MMU,
     cache or boot state is inferred. Unknown instruction families stop before
     execution.
+
+    A caller created with ``reusable=True`` can be :meth:`reset` to start
+    again with another RAM fixture that needs the same RAM pages, instead of
+    creating a fresh caller for each call.
     """
 
     def __init__(
@@ -236,9 +293,14 @@ class Aarch64DriverHarness:
         patches: Iterable[Span] = (),
         quantum: int = 1000,
         interrupts: Mapping[str, object] | None = None,
+        reusable: bool = False,
     ) -> None:
         if not isinstance(inputs, Aarch64Inputs):
             raise TypeError("AArch64 caller requires Aarch64Inputs")
+        if type(reusable) is not bool:
+            raise TypeError("Reusable declaration must be a bool")
+        if reusable and (inputs.devices is not None or interrupts is not None):
+            raise ValueError("A reusable caller declares no devices or interrupts")
         if interrupts is not None and not isinstance(interrupts, Mapping):
             raise TypeError("Interrupts must be a mapping with a 'kind' discriminator")
         if interrupts is not None and inputs.devices is not None:
@@ -251,6 +313,9 @@ class Aarch64DriverHarness:
         self._stubs: list[dict[str, object]] = []
         self._stops: list[dict[str, object]] = []
         self._observers: list[dict[str, object]] = []
+        self._stub_addresses: set[int] = set()
+        self._stop_addresses: set[int] = set()
+        self._observer_addresses: set[int] = set()
         self._handlers: dict[int, Callable[[StubContext], int]] = {}
         self._allocations: list[Span] = []
         self._alloc_next = inputs.scratch[0]
@@ -259,24 +324,19 @@ class Aarch64DriverHarness:
         self._image_ranges = [
             (i.address, i.address + len(i.data)) for i in inputs.images
         ]
-        reserved = [
-            *self._image_ranges,
-            inputs.stack,
-            inputs.scratch,
-            (inputs.return_address, inputs.return_address + 4),
-        ]
-        fixture_ranges = []
-        for address, data in self._fixture:
-            span = _range(address, address + len(data))
-            blocked = [
+        # Aarch64Inputs refuses overlapping images, so one lookup finds the
+        # only image that can hold an address.
+        self._image_spans = _Spans(self._image_ranges)
+        self._reserved_pages = _merge([
+            _page_span(a, b)
+            for a, b in [
+                *self._image_ranges,
+                inputs.stack,
                 inputs.scratch,
                 (inputs.return_address, inputs.return_address + 4),
             ]
-            if not _contains([inputs.stack], address, len(data)):
-                blocked.append(inputs.stack)
-            if any(span[0] < b and a < span[1] for a, b in blocked + fixture_ranges):
-                raise ValueError("RAM fixture overlaps an image or caller reservation")
-            fixture_ranges.append(span)
+        ])
+        self._fixture_ranges(self._fixture)
         for address, data in self._patches:
             _range(address, address + len(data))
             if (
@@ -287,9 +347,8 @@ class Aarch64DriverHarness:
                 raise ValueError(
                     "Code patch requires aligned words within a declared image"
                 )
-        pages = _merge([
-            (a & ~0x3FFF, (b + 0x3FFF) & ~0x3FFF) for a, b in reserved + fixture_ranges
-        ])
+        pages = list(self.pages_for(self._fixture))
+        self._ram_pages = tuple(pages)
         devices = inputs.devices
         windows = list(devices.windows) if devices else []
         if any(a < d and c < b for a, b in pages for c, d in windows):
@@ -357,6 +416,9 @@ class Aarch64DriverHarness:
         )
         self._execution = dict(definition.execution)
         self._devices = json.loads(json.dumps(dict(definition.devices)))
+        # Each result carries its own copy of these declarations.
+        self._execution_json = json.dumps(self._execution)
+        self._devices_json = json.dumps(self._devices)
         self._device_assets = [
             {
                 "name": asset.name,
@@ -372,11 +434,114 @@ class Aarch64DriverHarness:
             self._expected_images = [
                 (i.address, self.read(i.address, len(i.data))) for i in inputs.images
             ]
+            self._expected_by_address = dict(self._expected_images)
+            # The state reset() returns to: images and patches, before the
+            # fixture and any call.
+            self._pristine: _native.Checkpoint | None = (
+                self.board.checkpoint() if reusable else None
+            )
             for address, data in self._fixture:
                 self.board.write_memory(address, data)
         except BaseException:
             self.board.close()
             raise
+        # Memory written since creation or the last reset, besides the
+        # fixture and allocations: each call's stores and stub writes.
+        self._written: list[Range] = []
+        self._resettable = reusable
+
+    def _fixture_ranges(self, fixture: list[Span]) -> _Spans:
+        """Each fixture span, checked against the caller reservations and the
+        other spans."""
+        inputs = self.inputs
+        ranges = _Spans()
+        for address, data in fixture:
+            span = _range(address, address + len(data))
+            blocked = [
+                inputs.scratch,
+                (inputs.return_address, inputs.return_address + 4),
+            ]
+            if not _contains([inputs.stack], address, len(data)):
+                blocked.append(inputs.stack)
+            if any(span[0] < b and a < span[1] for a, b in blocked) or (
+                ranges.overlaps(*span)
+            ):
+                raise ValueError("RAM fixture overlaps an image or caller reservation")
+            ranges.insert(span)
+        return ranges
+
+    def pages_for(self, ram_fixture: Iterable[Span]) -> tuple[Range, ...]:
+        """The 16 KiB RAM pages a caller with these inputs maps for this
+        fixture: those of the images and reservations, and the fixture's."""
+        return tuple(
+            _merge(
+                self._reserved_pages
+                + [_page_span(a, a + len(data)) for a, data in ram_fixture]
+            )
+        )
+
+    @property
+    def ram_pages(self) -> tuple[Range, ...]:
+        """The 16 KiB RAM pages this caller maps."""
+        return self._ram_pages
+
+    @property
+    def resettable(self) -> bool:
+        """Whether :meth:`reset` can start this caller again: it is open, it
+        was created reusable, and its calls recorded every write."""
+        return self._resettable and not self._closed
+
+    def reset(self, *, ram_fixture: Iterable[Span]) -> None:
+        """Start again as a fresh caller with the same inputs, patches,
+        stubs, stops and observers and this RAM fixture would: the processor
+        state and every written byte return to their state at creation,
+        allocations are released, and the fixture is written. The fixture
+        must need the same RAM pages (:meth:`pages_for`), so reads after a
+        call reach exactly the memory a fresh caller's would."""
+        pristine = self._pristine
+        if not self._resettable or self._closed or pristine is None:
+            raise RuntimeError("Reset requires an open caller created reusable")
+        fixture = [(a, bytes(data)) for a, data in ram_fixture]
+        ranges = self._fixture_ranges(fixture)
+        if self.pages_for(fixture) != self._ram_pages:
+            raise ValueError("RAM fixture needs other RAM pages than this caller")
+        # Bytes the new fixture writes again need no return to creation.
+        written = _difference(
+            _merge(
+                [(a, a + len(d)) for a, d in self._fixture + self._allocations]
+                + self._written
+            ),
+            ranges,
+        )
+        # The checkpoint restores the processor and the pages the processor
+        # wrote; host writes (fixture, stub writes, allocations) are returned
+        # to their bytes at creation here, and restored pages that hold a
+        # patch get it again.
+        self.board.restore_checkpoint(pristine)
+        for begin, end in written:
+            self.board.write_memory(begin, self._initial_bytes(begin, end))
+        for address, data in self._patches:
+            self.board.write_memory(address, data)
+        for address, data in fixture:
+            self.board.write_memory(address, data)
+        self._fixture, self._allocations = fixture, []
+        self._alloc_next = self.inputs.scratch[0]
+        self._written, self._failed = [], False
+
+    def _initial_bytes(self, begin: int, end: int) -> bytes:
+        """Memory at creation, before the fixture: image bytes with their
+        patches, zero elsewhere."""
+        data = bytearray(end - begin)
+        spans = self._image_spans
+        index = max(bisect.bisect_right(spans.starts, begin) - 1, 0)
+        for low, high in spans.ranges[index:]:
+            if low >= end:
+                break
+            if high > begin:
+                image = self._expected_by_address[low]
+                start, stop = max(low, begin), min(high, end)
+                data[start - begin : stop - begin] = image[start - low : stop - low]
+        return bytes(data)
 
     def __enter__(self) -> Self:
         return self
@@ -425,12 +590,10 @@ class Aarch64DriverHarness:
         if (
             type(target) is not int
             or target & 3
-            or not _contains(self._image_ranges, target, 4)
+            or self._image_spans.holding(target, 4) is None
         ):
             raise ValueError("Stub requires an aligned address inside a declared image")
-        if not isinstance(label, str) or any(
-            s["address"] == target for s in self._stubs
-        ):
+        if not isinstance(label, str) or target in self._stub_addresses:
             raise ValueError("Stub needs a unique address and text label")
         reads = tuple(reads)
         if any(
@@ -459,6 +622,7 @@ class Aarch64DriverHarness:
         dynamic = not isinstance(returns, int)
         if not isinstance(returns, int):
             self._handlers[target] = returns
+        self._stub_addresses.add(target)
         self._stubs.append({
             "address": target,
             "returns": 0 if dynamic else _word(returns),
@@ -471,17 +635,32 @@ class Aarch64DriverHarness:
     def stop_at(self, address: int, *, label: str = "") -> None:
         if type(address) is not int or address & 3 or not isinstance(label, str):
             raise ValueError("Stop requires an aligned address and text label")
-        if any(stop["address"] == address for stop in self._stops):
+        if address in self._stop_addresses:
             raise ValueError("Stop address already declared")
+        self._stop_addresses.add(address)
         self._stops.append({"address": address, "label": label})
 
     def observe_at(self, address: int, *, label: str = "") -> None:
         """Record architectural registers before an admitted instruction, then continue."""
         if type(address) is not int or address & 3 or not isinstance(label, str):
             raise ValueError("Observer requires an aligned address and text label")
-        if any(observer["address"] == address for observer in self._observers):
+        if address in self._observer_addresses:
             raise ValueError("Observer address already declared")
+        self._observer_addresses.add(address)
         self._observers.append({"address": address, "label": label})
+
+    def _record_writes(self, result: dict[str, object]) -> None:
+        """Remember what a call wrote, so reset() can return it. A caller
+        whose calls wrote too many separate spans is no longer reset."""
+        stores = cast(list[dict[str, int]], result["stores"])
+        hits = cast(list[StubHit], result["stub_hits"])
+        self._written += [(s["address"], s["address"] + s["size"]) for s in stores]
+        self._written += [
+            (w["address"], w["address"] + w["size"]) for h in hits for w in h["writes"]
+        ]
+        if len(self._written) > _RESET_WRITES:
+            self._written = _merge(self._written)
+        self._resettable = len(self._written) <= _RESET_WRITES
 
     def _callback(
         self, address: int, arguments: list[int], snapshots: list[Span]
@@ -544,24 +723,22 @@ class Aarch64DriverHarness:
             default_code if allowed_code is None else [_range(*r) for r in allowed_code]
         )
         if not executable or any(
-            a & 3 or b & 3 or not _contains(self._image_ranges, a, b - a)
+            a & 3 or b & 3 or self._image_spans.holding(a, b - a) is None
             for a, b in executable
         ):
             raise ValueError("Allowed code must be aligned spans of declared images")
         if not _contains(executable, entry, 4):
             raise ValueError("Initial entry must lie within declared executable code")
+        code = _Spans(executable)
         if any(
-            a < address + len(data) and address < b
-            for a, b in executable
+            code.overlaps(address, address + len(data))
             for address, data in self._fixture
         ):
             raise ValueError("RAM fixture overlaps executable bytes")
         for a, b in executable:
-            base, expected = next(
-                (base, data)
-                for base, data in self._expected_images
-                if base <= a and b <= base + len(data)
-            )
+            # Each span lies inside one image (checked above).
+            base = cast(Range, self._image_spans.holding(a, b - a))[0]
+            expected = self._expected_by_address[base]
             if self.read(a, b - a) != expected[a - base : b - base]:
                 raise ValueError("Code image differs from declared bytes and patches")
         reg_values, vector_values = [], []
@@ -577,12 +754,12 @@ class Aarch64DriverHarness:
             + [(a, a + len(d)) for a, d in self._fixture + self._allocations]
             + [self.inputs.stack]
         )
-        writable = _subtract(
+        writable = _difference(
             _merge(
                 [(a, a + len(d)) for a, d in self._fixture + self._allocations]
                 + [self.inputs.stack]
             ),
-            executable,
+            code,
         )
         if allowed_stores is not None:
             writable = _merge(
@@ -618,12 +795,16 @@ class Aarch64DriverHarness:
             "vector_registers": vector_values,
             "fragment_exit": dict(fragment_exit or {}),
         }
+        # A call that ends without a result may have written anywhere.
+        resettable, self._resettable = self._resettable, False
         result = _json_object(
             json.loads(
                 self.board.native.call_aarch64(json.dumps(options), self._callback)
             )
         )
         self._failed = result["failure"] is not None
+        if resettable:
+            self._record_writes(result)
         result.update(
             images=[
                 dict(name=i.name, **_receipt(i.address, len(i.data)))
@@ -641,8 +822,8 @@ class Aarch64DriverHarness:
             readable=[list(r) for r in readable],
             caller=options,
             profile=dict(self.inputs.identity or {}),
-            execution=json.loads(json.dumps(self._execution)),
-            devices=json.loads(json.dumps(self._devices)),
+            execution=json.loads(self._execution_json),
+            devices=json.loads(self._devices_json),
             device_assets=[dict(asset) for asset in self._device_assets],
             native_identity={
                 "version": _native.VERSION,

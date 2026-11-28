@@ -5,9 +5,13 @@ or locate files. Pass declared bytes to ``make_board`` or use
 ``Board.from_inputs`` for explicit paths to a catalog runtime's inputs.
 """
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Literal
+
+# One to 128 ASCII letters, digits, '-', '_' or '.', starting with a letter or digit.
+_ASSET_ID = re.compile(r"[0-9A-Za-z][0-9A-Za-z._-]{0,127}")
 
 
 @dataclass(frozen=True)
@@ -18,18 +22,7 @@ class Asset:
     size: int
 
     def __post_init__(self) -> None:
-        if (
-            type(self.id) is not str
-            or not self.id
-            or len(self.id) > 128
-            or not self.id[0].isascii()
-            or not self.id[0].isalnum()
-            or not all(
-                character.isascii() and (character.isalnum() or character in "-_.")
-                for character in self.id
-            )
-            or self.id in (".", "..")
-        ):
+        if type(self.id) is not str or not _ASSET_ID.fullmatch(self.id):
             raise ValueError("Asset id must be a bounded identifier")
         if type(self.size) is not int or not 0 <= self.size < 1 << 64:
             raise ValueError("Asset size must be an unsigned 64-bit integer")

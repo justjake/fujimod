@@ -5,6 +5,7 @@ from collections.abc import Callable
 from typing import cast
 
 import pytest
+from fujimod.emulator import aarch64_harness
 from fujimod.emulator.aarch64_harness import (
     Aarch64DriverHarness,
     Aarch64Image,
@@ -504,3 +505,121 @@ def test_system_read_mismatch_is_rejected_before_execution() -> None:
         pytest.raises((ValueError, RuntimeError), match="model value"),
     ):
         h.call(CODE, system_reads=[("CurrentEL", 0)])
+
+
+@pytest.mark.parametrize("name", ["a-b_c.d", "0", "x" * 128])
+def test_image_names_of_ascii_letters_digits_and_separators_are_accepted(
+    name: str,
+) -> None:
+    assert Aarch64Image(name, CODE, words(0xD65F03C0)).name == name
+
+
+@pytest.mark.parametrize("name", ["cöde", "٣", "-code", ".", "code\n"])
+def test_image_names_outside_bounded_ascii_identifiers_are_refused(name: str) -> None:
+    with pytest.raises(ValueError):
+        Aarch64Image(name, CODE, words(0xD65F03C0))
+
+
+def reusable_inputs() -> Aarch64Inputs:
+    # stp x29,x30,[sp,#-16]!; retry: ldxr w2,[x1]; add w2,w2,#1; stxr w3,w2,[x1];
+    # cbnz w3,retry; bl CODE+36; ldp x29,x30,[sp],#16; ret; brk; CODE+36: the callee.
+    code = words(
+        0xA9BF7BFD,
+        0x885F7C22,
+        0x11000442,
+        0x88037C22,
+        0x35FFFFA3,
+        0x94000004,
+        0xA8C17BFD,
+        0xD65F03C0,
+        0xD4200000,
+        0xD65F03C0,
+    )
+    return Aarch64Inputs(
+        images=(Aarch64Image("code", CODE, code),),
+        stack=(SP - 0x1000, SP + 64),
+        stack_pointer=SP,
+        return_address=RETURN,
+        scratch=(BASE + 0xC000, BASE + 0x10000),
+    )
+
+
+def out_parameter(context: StubContext) -> int:
+    context.write(context.arg(1) + 8, b"\x11" * 8)
+    return 7
+
+
+def test_reset_starts_a_reusable_caller_as_a_fresh_one_with_the_new_fixture() -> None:
+    # The first call writes the stack (stp), the fixture through the exclusive
+    # monitor (stxr) and through a stub; an allocation writes scratch memory.
+    first = [(DATA, struct.pack("<I", 41) + bytes(28))]
+    second = [(DATA + 4, struct.pack("<I", 9) + bytes(12)), (DATA, bytes(4))]
+    with (
+        Aarch64DriverHarness(reusable_inputs(), ram_fixture=first, reusable=True) as h,
+        Aarch64DriverHarness(reusable_inputs(), ram_fixture=second) as fresh,
+    ):
+        for caller in (h, fresh):
+            caller.stub(CODE + 36, returns=out_parameter, label="callee")
+        result = h.call(CODE, args=(0, DATA), max_instructions=40)
+        assert result["returned"] and result["return_value"] == 7, result["failure"]
+        assert h.read(DATA, 16) == struct.pack("<I", 42) + bytes(4) + b"\x11" * 8
+        h.alloc(b"scratch bytes")
+        assert h.resettable and h.ram_pages == h.pages_for(second)
+        h.reset(ram_fixture=second)
+        for begin, end in [(SP - 0x1000, SP + 64), (DATA, DATA + 32)]:
+            assert h.read(begin, end - begin) == fresh.read(begin, end - begin)
+        assert h.read(BASE + 0xC000, 16) == bytes(16)
+        again, expected = (
+            caller.call(CODE, args=(0, DATA + 4), max_instructions=40)
+            for caller in (h, fresh)
+        )
+        for key in ("returned", "return_value", "stores", "stub_hits", "registers"):
+            assert again[key] == expected[key], key
+        assert h.read(DATA, 32) == fresh.read(DATA, 32)
+        assert h.alloc(b"x") == fresh.alloc(b"x")
+
+
+def test_reset_starts_again_after_a_failed_call() -> None:
+    with Aarch64DriverHarness(
+        reusable_inputs(), ram_fixture=[(DATA, bytes(32))], reusable=True
+    ) as h:
+        h.stub(CODE + 36, returns=out_parameter, label="callee")
+        refused = h.call(CODE, args=(0, BASE + 0xA000), max_instructions=40)
+        assert not refused["returned"]
+        with pytest.raises(RuntimeError, match="fresh caller"):
+            h.call(CODE, args=(0, DATA))
+        h.reset(ram_fixture=[(DATA, bytes(32))])
+        result = h.call(CODE, args=(0, DATA), max_instructions=40)
+        assert result["returned"] and h.read(DATA, 4) == struct.pack("<I", 1)
+
+
+def test_reset_refuses_other_pages_and_callers_not_created_reusable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fixture = [(DATA, bytes(32))]
+    elsewhere = [(BASE + 0x20000, bytes(16))]
+    with Aarch64DriverHarness(reusable_inputs(), ram_fixture=fixture) as plain:
+        assert not plain.resettable
+        with pytest.raises(RuntimeError, match="reusable"):
+            plain.reset(ram_fixture=fixture)
+    with pytest.raises(ValueError, match="no devices or interrupts"):
+        Aarch64DriverHarness(
+            reusable_inputs(),
+            ram_fixture=fixture,
+            interrupts={"kind": "none"},
+            reusable=True,
+        )
+    with Aarch64DriverHarness(
+        reusable_inputs(), ram_fixture=fixture, reusable=True
+    ) as h:
+        assert h.pages_for(elsewhere) != h.ram_pages
+        with pytest.raises(ValueError, match="other RAM pages"):
+            h.reset(ram_fixture=elsewhere)
+        # A call that writes more separate spans than a caller keeps for its
+        # reset leaves it unresettable.
+        monkeypatch.setattr(aarch64_harness, "_RESET_WRITES", 1)
+        h.stub(CODE + 36, returns=out_parameter, label="callee")
+        assert h.call(CODE, args=(0, DATA), max_instructions=40)["returned"]
+        assert not h.resettable
+        with pytest.raises(RuntimeError, match="reusable"):
+            h.reset(ram_fixture=fixture)
