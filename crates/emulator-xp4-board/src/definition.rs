@@ -248,6 +248,7 @@ pub struct Definition {
         Vec<(u8, u16)>,
         Option<fujimod_emulator_xp4_io::rtc::StagedConfig>,
         Vec<u8>,
+        Option<fujimod_emulator_xp4_io::checksum_power_serial::AlarmConfig>,
     )>,
     #[serde(default)]
     pub imaging: Option<(

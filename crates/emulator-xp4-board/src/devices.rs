@@ -420,6 +420,7 @@ impl Devices {
         disable_writes: Vec<(u8, u16)>,
         rtc: Option<fujimod_emulator_xp4_io::rtc::StagedConfig>,
         retained_registers: Vec<u8>,
+        alarm: Option<fujimod_emulator_xp4_io::checksum_power_serial::AlarmConfig>,
     ) -> Result<(), String> {
         let pins = self
             .pins
@@ -436,6 +437,7 @@ impl Devices {
             disable_writes,
             rtc,
             retained_registers,
+            alarm,
         )?;
         self.spi_input(base, Box::new(part))
     }

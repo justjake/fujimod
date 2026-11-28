@@ -1,5 +1,6 @@
 //! Four-byte power-peer frames: seven-bit register, write flag, data and checksum.
-//! Fixed inputs, inert disables, stored registers and an RTC law are declared.
+//! Fixed inputs, inert disables, stored registers, a wake alarm and an RTC law
+//! are declared.
 use crate::{
     rtc::{StagedClock, StagedConfig},
     spi::Input,
@@ -9,6 +10,16 @@ use fujimod_emulator_ip::socionext::gpio::SharedPins;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
+
+/// A declared wake alarm. Writing 1 to `enable` arms it with the countdown last
+/// written to the stored register `seconds`; writing 0 disarms it. The peer keeps
+/// the armed countdown for the host. It does not count down or power the board on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AlarmConfig {
+    pub enable: u8,
+    pub seconds: u8,
+}
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -24,6 +35,10 @@ struct State {
     retained_registers: BTreeSet<u8>,
     stored: BTreeMap<u8, u16>,
     retained_written: BTreeSet<u8>,
+    #[serde(default)]
+    alarm: Option<AlarmConfig>,
+    #[serde(default)]
+    armed_seconds: Option<u16>,
     edge: u64,
     phase: u8,
     frame: [u8; 4],
@@ -46,6 +61,7 @@ impl ChecksumPowerSerial {
         disable_writes: Vec<(u8, u16)>,
         rtc: Option<StagedConfig>,
         retained_registers: Vec<u8>,
+        alarm: Option<AlarmConfig>,
     ) -> Result<Self, String> {
         if port >= 16 || pin >= 16 || inputs.keys().any(|r| *r > 127) {
             return Err(
@@ -78,6 +94,18 @@ impl ChecksumPowerSerial {
                     .into(),
             );
         }
+        if alarm.is_some_and(|a| {
+            a.enable > 127
+                || !retained.contains(&a.seconds)
+                || retained.contains(&a.enable)
+                || disables.iter().any(|(register, _)| *register == a.enable)
+                || rtc.as_ref().is_some_and(|r| r.owns(a.enable))
+        }) {
+            return Err(
+                "Power alarm requires a seven-bit enable register without command overlap and a stored countdown register"
+                    .into(),
+            );
+        }
         let rtc = rtc.map(StagedClock::new).transpose()?;
         Ok(Self {
             pins,
@@ -93,6 +121,8 @@ impl ChecksumPowerSerial {
                 retained_registers: retained,
                 stored: BTreeMap::new(),
                 retained_written: BTreeSet::new(),
+                alarm,
+                armed_seconds: None,
                 edge: 0,
                 phase: 0,
                 frame: [0; 4],
@@ -121,6 +151,8 @@ impl ChecksumPowerSerial {
                 .retained_written
                 .iter()
                 .any(|r| !s.retained_registers.contains(r) || !state.stored.contains_key(r))
+            || state.alarm != s.alarm
+            || (state.armed_seconds.is_some() && state.alarm.is_none())
             || state.phase > 3
         {
             return Err("Invalid checksum power SPI checkpoint or physical input".into());
@@ -201,6 +233,21 @@ impl Input for ChecksumPowerSerial {
                         // reset retention or power-domain transition.
                         s.stored.insert(register, value);
                         s.retained_written.insert(register);
+                        u16::from(s.frame[3])
+                    } else if let Some(alarm) = s.alarm.filter(|a| a.enable == register) {
+                        s.armed_seconds = match value {
+                            0 => None,
+                            1 => Some(
+                                *s.stored
+                                    .get(&alarm.seconds)
+                                    .ok_or("Power alarm enable requires a written countdown")?,
+                            ),
+                            _ => {
+                                return Err(format!(
+                                    "Unsupported power alarm control register{register} value0x{value:04x}"
+                                ));
+                            }
+                        };
                         u16::from(s.frame[3])
                     } else if s.disable_writes.contains(&(register, value)) {
                         // No countdown/alarm is implemented or armed. A declared
@@ -295,6 +342,7 @@ mod tests {
             vec![],
             None,
             vec![],
+            None,
         )
         .unwrap();
         let mut gpio = Gpio::new(BASE, pins).unwrap();
@@ -395,6 +443,7 @@ mod tests {
             vec![],
             None,
             vec![65, 66],
+            None,
         )
         .unwrap();
         select(&mut gpio, true);
@@ -470,6 +519,7 @@ mod tests {
                     disables,
                     None,
                     retained,
+                    None,
                 )
                 .is_err()
             );
@@ -503,6 +553,7 @@ mod tests {
                 vec![],
                 Some(rtc),
                 vec![100],
+                None,
             )
             .is_err()
         );
@@ -522,6 +573,7 @@ mod tests {
             vec![(65, 0)],
             None,
             vec![],
+            None,
         )
         .unwrap();
         select(&mut gpio, true);
@@ -571,6 +623,114 @@ mod tests {
                     invalid,
                     None,
                     vec![],
+                    None,
+                )
+                .is_err()
+            );
+        }
+    }
+
+    fn packet(header: u16, value: u16) -> [u16; 4] {
+        let high = value >> 8;
+        let low = value & 255;
+        [header, high, low, !(header + high + low) & 255]
+    }
+
+    #[test]
+    fn declared_alarm_arms_from_the_stored_countdown_and_disarms_on_zero() {
+        let pins = Pins::new([0; 16]);
+        let mut gpio = Gpio::new(BASE, pins.clone()).unwrap();
+        let mut peer = ChecksumPowerSerial::new(
+            pins,
+            12,
+            5,
+            true,
+            false,
+            [(25, 0x10)].into(),
+            vec![],
+            None,
+            vec![37],
+            Some(AlarmConfig {
+                enable: 25,
+                seconds: 37,
+            }),
+        )
+        .unwrap();
+        select(&mut gpio, true);
+        assert!(
+            frame(&mut peer, packet(0x99, 1))
+                .unwrap_err()
+                .contains("written countdown")
+        );
+        assert_eq!(peer.save()["armed_seconds"], Value::Null);
+        select(&mut gpio, false);
+        select(&mut gpio, true);
+        frame(&mut peer, packet(0x99, 0)).unwrap();
+        frame(&mut peer, packet(0xa5, 30)).unwrap();
+        assert_eq!(peer.save()["armed_seconds"], Value::Null);
+        frame(&mut peer, packet(0x99, 1)).unwrap();
+        assert_eq!(peer.save()["armed_seconds"], 30);
+        assert_eq!(&frame(&mut peer, packet(25, 0)).unwrap()[1..3], &[0, 0x10]);
+        let armed = peer.save();
+        frame(&mut peer, packet(0x99, 0)).unwrap();
+        assert_eq!(peer.save()["armed_seconds"], Value::Null);
+        peer.restore(&armed).unwrap();
+        assert_eq!(peer.save()["armed_seconds"], 30);
+        assert!(
+            frame(&mut peer, packet(0x99, 2))
+                .unwrap_err()
+                .contains("alarm control register25 value0x0002")
+        );
+        assert_eq!(peer.save()["armed_seconds"], 30);
+        let mut changed = armed.clone();
+        changed["alarm"] = serde_json::json!({"enable": 25, "seconds": 38});
+        assert!(peer.restore(&changed).is_err());
+    }
+
+    #[test]
+    fn peer_without_a_declared_alarm_refuses_arming_and_armed_checkpoints() {
+        let (mut peer, _) = selected();
+        let mut armed = peer.save();
+        armed["armed_seconds"] = 30.into();
+        assert!(peer.restore(&armed).is_err());
+        assert!(
+            frame(&mut peer, packet(0x99, 1))
+                .unwrap_err()
+                .contains("Unsupported checksum power SPI write register25")
+        );
+    }
+
+    #[test]
+    fn alarm_configuration_refuses_unstored_countdowns_and_command_overlap() {
+        let alarm = AlarmConfig {
+            enable: 25,
+            seconds: 37,
+        };
+        for (disables, retained, alarm) in [
+            (vec![], vec![], alarm),
+            (vec![], vec![25, 37], alarm),
+            (vec![(25, 0)], vec![37], alarm),
+            (
+                vec![],
+                vec![37],
+                AlarmConfig {
+                    enable: 128,
+                    seconds: 37,
+                },
+            ),
+        ] {
+            assert!(
+                ChecksumPowerSerial::new(
+                    Pins::new([0; 16]),
+                    12,
+                    5,
+                    true,
+                    false,
+                    BTreeMap::new(),
+                    disables,
+                    None,
+                    retained,
+                    Some(alarm),
                 )
                 .is_err()
             );
