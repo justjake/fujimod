@@ -1,0 +1,83 @@
+diff --git a/src/dynarmic/backend/arm64/emit_arm64.cpp b/src/dynarmic/backend/arm64/emit_arm64.cpp
+index 67ea3d15..4b4b39b6 100644
+--- a/src/dynarmic/backend/arm64/emit_arm64.cpp
++++ b/src/dynarmic/backend/arm64/emit_arm64.cpp
+@@ -77,33 +77,53 @@ void EmitIR<IR::Opcode::CallHostFunction>(oaknut::CodeGenerator& code, EmitConte
+     const u64 function = args[0].GetImmediateU64();
+     const auto inline_guard = function == reinterpret_cast<std::uintptr_t>(&fujimod_dynarmic_guard_transfer)
+         ? DecodeGuardSpan(static_cast<u32>(args[2].GetImmediateU64())) : std::nullopt;
+-    ctx.reg_alloc.PrepareForCall(args[1], args[2], args[3]);
+-    oaknut::Label slow, done;
+-    if (inline_guard) {
+-        const auto offset = inline_guard->offset;
+-        if (offset >= 0) {
+-            code.ADD(Wscratch1, W2, static_cast<u32>(offset));
+-        } else {
+-            code.SUB(Wscratch1, W2, static_cast<u32>(-offset));
+-        }
+-        code.UBFX(Xscratch0, Xscratch1, 12, 20);
+-        code.LDR(Xscratch0, Xpagetable, Xscratch0, LSL, 3);
+-        code.CBZ(Xscratch0, slow);
+-        if (inline_guard->write) {
+-            code.TBNZ(Xscratch0, 0, slow);
+-            if (ctx.conf.state_observe_stores_offset != 0) {
+-                code.LDRB(Wscratch0, Xstate, ctx.conf.state_observe_stores_offset);
+-                code.CBNZ(Wscratch0, slow);
+-            }
++    if (!inline_guard) {
++        ctx.reg_alloc.PrepareForCall(args[1], args[2], args[3]);
++        code.MOV(Xscratch0, function);
++        code.BLR(Xscratch0);
++        return;
++    }
++
++    auto Wbase = ctx.reg_alloc.ReadW(args[3]);
++    ctx.fpsr.Spill();
++    ctx.reg_alloc.SpillFlags();
++    RegAlloc::Realize(Wbase);
++    const auto slow = GenSharedLabel(), done = GenSharedLabel();
++    const auto offset = inline_guard->offset;
++    if (offset >= 0) {
++        code.ADD(Wscratch1, Wbase, static_cast<u32>(offset));
++    } else {
++        code.SUB(Wscratch1, Wbase, static_cast<u32>(-offset));
++    }
++    code.UBFX(Xscratch0, Xscratch1, 12, 20);
++    code.LDR(Xscratch0, Xpagetable, Xscratch0, LSL, 3);
++    code.CBZ(Xscratch0, *slow);
++    if (inline_guard->write) {
++        code.TBNZ(Xscratch0, 0, *slow);
++        if (ctx.conf.state_observe_stores_offset != 0) {
++            code.LDRB(Wscratch0, Xstate, ctx.conf.state_observe_stores_offset);
++            code.CBNZ(Wscratch0, *slow);
+         }
+-        code.AND(Wscratch1, Wscratch1, 4095);
+-        code.CMP(Wscratch1, 4096 - inline_guard->length);
+-        code.B(LS, done);
+-        code.l(slow);
+     }
+-    code.MOV(Xscratch0, function);
+-    code.BLR(Xscratch0);
+-    code.l(done);
++    code.AND(Wscratch1, Wscratch1, 4095);
++    code.CMP(Wscratch1, 4096 - inline_guard->length);
++    code.B(HI, *slow);
++    code.l(*done);
++
++    // A mapped span only needs the guest base. Marshal arguments and preserve
++    // the caller's registers when a span actually requires the host callback.
++    ctx.deferred_emits.emplace_back([&code, slow, done, function, base = *Wbase,
++                                    context = args[1].GetImmediateU64(), word = args[2].GetImmediateU64()] {
++        code.l(*slow);
++        ABI_PushRegisters(code, ABI_CALLER_SAVE, 0);
++        code.MOV(W2, base);
++        code.MOV(X0, context);
++        code.MOV(X1, word);
++        code.MOV(Xscratch0, function);
++        code.BLR(Xscratch0);
++        ABI_PopRegisters(code, ABI_CALLER_SAVE, 0);
++        code.B(*done);
++    });
+ }
+
+ template<>
