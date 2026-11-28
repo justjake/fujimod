@@ -2,10 +2,7 @@
 use super::{Core, NativeAccess, ffi};
 use fujimod_emulator_cpu::{
     Access, Cpu, Hook, arm, armv7a,
-    loop_proof::{
-        self, DivisionRestoreLoop, DivisionScaleLoop, Isa, Proof, RegisterLoop, ShiftCountLoop,
-        State, WordFillLoop,
-    },
+    loop_proof::{self, Isa, Proof, RegisterLoop, ShiftCountLoop, State, WordFillLoop},
     loops::LoopMode,
 };
 use std::cell::{Cell, RefCell};
@@ -25,32 +22,12 @@ pub(super) fn is_word_fill_branch(word: u32) -> bool {
     word == 0x1aff_fffc // BNE to the head of a three-instruction loop.
 }
 
-pub(super) fn is_division_scale_branch(word: u32) -> bool {
-    word == 0x3aff_fffa // BCC to the head of a five-instruction loop.
-}
-
-pub(super) fn is_division_restore_branch(word: u32) -> bool {
-    word == 0x1aff_ffef // BNE to the head of a sixteen-instruction loop.
-}
-
-fn decode_counted_loop(branch: u32, body: &[u32]) -> Option<Advance> {
+pub(super) extern "C" fn is_counted_loop(branch: u32, first: u32, second: u32, third: u32) -> bool {
     if is_word_fill_branch(branch) {
-        WordFillLoop::decode(body.try_into().ok()?).map(Advance::WordFill)
-    } else if is_shift_count_branch(branch) {
-        ShiftCountLoop::decode(body.try_into().ok()?).map(Advance::ShiftCount)
-    } else if is_division_scale_branch(branch) {
-        DivisionScaleLoop::decode(body.try_into().ok()?).map(Advance::DivisionScale)
-    } else if is_division_restore_branch(branch) {
-        DivisionRestoreLoop::decode(body.try_into().ok()?).map(Advance::DivisionRestore)
+        WordFillLoop::decode([first, second]).is_some()
     } else {
-        None
+        is_shift_count_branch(branch) && ShiftCountLoop::decode([first, second, third]).is_some()
     }
-}
-
-pub(super) unsafe extern "C" fn is_counted_loop(branch: u32, body: *const u32, len: u32) -> bool {
-    // The translator supplies `len` checked words from its local array.
-    let body = unsafe { std::slice::from_raw_parts(body, len as usize) };
-    decode_counted_loop(branch, body).is_some()
 }
 
 #[derive(Default)]
@@ -65,8 +42,6 @@ enum Advance {
     Counter(RegisterLoop),
     ShiftCount(ShiftCountLoop),
     WordFill(WordFillLoop),
-    DivisionScale(DivisionScaleLoop),
-    DivisionRestore(DivisionRestoreLoop),
     General(Proof),
 }
 
@@ -135,13 +110,14 @@ impl Core {
         if !entry.as_ref().is_some_and(|entry| {
             entry.address == address && entry.privileged == privileged && entry.bytes == bytes
         }) {
-            let (words, _) = bytes[..size - 4].as_chunks::<4>();
-            let mut body = [0u32; 15];
-            for (decoded, encoded) in body.iter_mut().zip(words) {
-                *decoded = u32::from_le_bytes(*encoded);
-            }
-            let advance = if let Some(counted) = decode_counted_loop(word, &body[..words.len()]) {
-                Some(counted)
+            let advance = if is_shift_count_branch(word) {
+                let (words, _) = bytes[..size].as_chunks::<4>();
+                let body = std::array::from_fn(|index| u32::from_le_bytes(words[index]));
+                ShiftCountLoop::decode(body).map(Advance::ShiftCount)
+            } else if is_word_fill_branch(word) {
+                let (words, _) = bytes[..size].as_chunks::<4>();
+                let body = std::array::from_fn(|index| u32::from_le_bytes(words[index]));
+                WordFillLoop::decode(body).map(Advance::WordFill)
             } else if word >> 28 == 10 {
                 RegisterLoop::decode(start, &bytes[..size], |word| {
                     privileged && armv7a::data_cache_set_way(word)
@@ -171,18 +147,6 @@ impl Core {
                 advanced
             }
             Advance::ShiftCount(proof) => {
-                let Some(advanced) = proof.advance(before, remaining) else {
-                    return Ok(false);
-                };
-                advanced
-            }
-            Advance::DivisionScale(proof) => {
-                let Some(advanced) = proof.advance(before, remaining) else {
-                    return Ok(false);
-                };
-                advanced
-            }
-            Advance::DivisionRestore(proof) => {
                 let Some(advanced) = proof.advance(before, remaining) else {
                     return Ok(false);
                 };
