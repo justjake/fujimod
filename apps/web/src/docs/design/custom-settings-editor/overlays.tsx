@@ -3,7 +3,7 @@ import { For } from 'solid-js';
 
 import { Confirmation } from '../../../design/confirmation';
 import { Chevron } from '../../../design/controls';
-import { DETAIL } from '../../../design/materials';
+import { ACCENT, BODY, CAPTION, DIM, TITLE } from '../../../design/materials';
 import {
   PICTURE_LEFT,
   PICTURE_WIDTH,
@@ -175,10 +175,7 @@ export function FilmSwitchModal(props: { s: UnifiedState; update: (s: UnifiedSta
     <Confirmation
       title="SAVE FILM CHANGES?"
       message={`Switching to ${target()?.name ?? 'another film'} will replace edits to ${active().name}.`}
-      actions={options().map((opt) => ({
-        label: opt.label,
-        destructive: opt.id === 'discard',
-      }))}
+      actions={options().map((opt) => opt.label)}
       focused={modal().focus}
       onSelect={(i) => {
         const opt = options()[i];
@@ -195,7 +192,7 @@ export function ReflectConfirmModal(props: { s: UnifiedState; update: (s: Unifie
     <Confirmation
       title="REFLECT SHOOTING COND.?"
       message="Current recipe and RAW adjustments will be replaced by this photo's shooting settings."
-      actions={[{ label: 'REPLACE SETTINGS', destructive: true }, { label: 'CANCEL' }]}
+      actions={['REPLACE SETTINGS', 'CANCEL']}
       focused={modal().focus}
       onSelect={(i) => props.update(applyReflectModalChoice(props.s, i === 0))}
       onCancel={() => props.update({ ...props.s, reflectModal: null })}
@@ -310,18 +307,21 @@ export function Keyboard(props: { s: UnifiedState; t: Typing; update: (s: Unifie
         >
           <Chevron dir="left" size={22} />
         </button>
-        <span class={`font-semibold tracking-[0.1em] text-white ${DETAIL}`}>{title()}</span>
+        <span class={`font-semibold text-white ${BODY}`}>{title()}</span>
       </div>
       <div
         class="flex grow flex-col justify-center gap-[6px] px-[20px]"
         style={{ background: 'var(--m-text-area)' }}
       >
-        <span class="text-[14px] leading-none font-semibold tracking-[0.1em] text-white/55">
+        <span class={`font-semibold ${CAPTION}`} style={{ color: DIM }}>
           {fieldLabel()}
         </span>
-        <span class="text-[29px] leading-[36px] whitespace-pre text-white">
+        <span class={`leading-[36px] whitespace-pre text-white ${TITLE}`}>
           {t().text.slice(0, t().cursor)}
-          <span class="inline-block h-[28px] w-[3px] translate-y-[4px] bg-[#0a6bdc]" />
+          <span
+            class="inline-block h-[28px] w-[3px] translate-y-[4px]"
+            style={{ background: ACCENT }}
+          />
           {t().text.slice(t().cursor)}
         </span>
       </div>

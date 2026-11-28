@@ -1,7 +1,20 @@
 import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
-import { ACCENT, CHOSEN, CHOSEN_INK, HEADING, SMALL, TEXT, TRACK, WELL } from './materials';
+import {
+  ACCENT,
+  BODY,
+  CAPTION,
+  CHOSEN,
+  CHOSEN_INK,
+  DIM,
+  EDITED,
+  INNER,
+  RADIUS,
+  TRACK,
+  VALUE,
+  WELL,
+} from './materials';
 
 /* The editors' row controls: the choice strip and the slider card, shared by
    the custom settings editor and the film editor. Both take touch (a tap
@@ -176,21 +189,9 @@ function RowCard(props: {
   handlers: ReturnType<typeof useDialGesture>['handlers'];
   children: JSX.Element;
 }) {
-  const chevrons = (title: boolean) => (
-    <For each={[0, 1] as const}>
-      {(side) => (
-        <span
-          class={`pointer-events-none absolute z-10 flex items-center justify-center ${title ? 'top-[6px] h-[28px] w-[16px]' : 'inset-y-0 px-[3px]'}`}
-          style={{
-            [side ? 'right' : 'left']: title ? '10px' : side === 0 && props.changed ? '7px' : '0',
-            color: (side ? props.atEnd : props.atStart) ? 'rgb(255 255 255 / 0.25)' : '#fff',
-          }}
-        >
-          <Chevron dir={side ? 'right' : 'left'} size={16} />
-        </span>
-      )}
-    </For>
-  );
+  const named = () => props.name !== undefined;
+  /* The well sits inside the card, clear of the focus stripe. */
+  const inset = () => (named() ? 8 : 0);
   return (
     <div
       class="relative shrink-0 overflow-hidden select-none"
@@ -199,48 +200,66 @@ function RowCard(props: {
         height: `${props.height ?? 88}px`,
         'touch-action': 'pan-y',
         ...TRACK(props.focused),
+        'border-radius': `${RADIUS}px`,
       }}
       {...props.handlers}
     >
-      <Show when={props.name !== undefined}>
-        <Show when={props.focused}>{chevrons(true)}</Show>
+      <Show when={named()}>
         <span
-          class={`absolute top-[9px] left-[34px] flex items-center gap-[6px] ${TEXT} tracking-[0.06em]`}
-          style={{ color: props.focused ? '#fff' : 'rgb(255 255 255 / 0.7)' }}
+          class={`absolute top-[10px] left-[12px] flex items-center gap-[6px] ${BODY}`}
+          style={{ color: props.focused ? '#fff' : DIM }}
         >
           {props.name}
-          {/* Changed from the film as opened: the same dot the rail uses. */}
+          {/* Changed from what was opened. */}
           <Show when={props.changed}>
-            <span class="size-[8px] rounded-full" style={{ background: ACCENT }} />
+            <span class="size-[8px] rounded-full" style={{ background: EDITED }} />
           </Show>
         </span>
         {props.trailing}
       </Show>
       <div
-        class="absolute inset-x-0 bottom-0 overflow-hidden"
+        class="absolute overflow-hidden"
         style={{
-          top: props.name === undefined ? '0' : 'auto',
-          height: props.name === undefined ? 'auto' : '44px',
+          left: `${inset() ? inset() + 4 : 0}px`,
+          right: `${inset()}px`,
+          bottom: `${inset()}px`,
+          top: named() ? 'auto' : '0',
+          height: named() ? '40px' : 'auto',
           ...WELL,
-          'border-radius': props.name === undefined ? 'inherit' : '0 0 13px 13px',
+          'border-radius': named() ? `${INNER}px` : 'inherit',
         }}
       >
         {props.children}
-        <Show when={props.focused && props.name === undefined}>{chevrons(false)}</Show>
+        {/* Focused, LEFT and RIGHT step: a chevron at each end, dim at the
+            end the value cannot go past. */}
+        <Show when={props.focused}>
+          <For each={[0, 1] as const}>
+            {(side) => (
+              <span
+                class="pointer-events-none absolute inset-y-0 z-10 flex items-center px-[3px]"
+                style={{
+                  [side ? 'right' : 'left']: '0',
+                  color: (side ? props.atEnd : props.atStart) ? 'rgb(255 255 255 / 0.25)' : '#fff',
+                }}
+              >
+                <Chevron dir={side ? 'right' : 'left'} size={14} />
+              </span>
+            )}
+          </For>
+        </Show>
       </div>
-      {/* Focus is drawn last, over the recessed strip, so it is the same
-          bright outline as everywhere else. */}
-      <Show when={props.focused}>
+      {/* The well fills an unnamed card, so focus is drawn over it. */}
+      <Show when={props.focused && !named()}>
         <span
           class="pointer-events-none absolute inset-0 z-20 rounded-[inherit]"
           style={{ 'box-shadow': 'var(--m-focus-edge)' }}
         />
       </Show>
       {/* Without a name, changed is a dot at the card's left edge. */}
-      <Show when={props.name === undefined && props.changed}>
+      <Show when={!named() && props.changed}>
         <span
-          class="absolute top-1/2 left-[3px] z-10 size-[6px] -translate-y-1/2 rounded-full"
-          style={{ background: ACCENT }}
+          class="absolute top-1/2 left-[6px] z-10 size-[6px] -translate-y-1/2 rounded-full"
+          style={{ background: EDITED }}
         />
       </Show>
     </div>
@@ -269,6 +288,7 @@ export function Choice(props: {
   onFocus?: () => void;
 }) {
   let track: HTMLDivElement | undefined;
+  const well = () => wellWidth(props.width, props.name !== undefined);
   /** Each cell's center and width along the strip, measured once laid out. */
   const [cells, setCells] = createSignal<{ center: number; width: number }[]>([]);
   createEffect(
@@ -305,7 +325,8 @@ export function Choice(props: {
     onFocus: () => props.onFocus?.(),
     /* A tap chooses the cell under the finger. */
     tap: (x, box) => {
-      const local = (x - box.left) * (props.width / box.width) + offset();
+      const inset = props.name === undefined ? 0 : 12;
+      const local = (x - box.left) * (props.width / box.width) - inset + offset();
       const c = cells();
       if (c.length === 0) return;
       let best = 0;
@@ -321,10 +342,10 @@ export function Choice(props: {
     const c = cells();
     if (c.length === 0) return 0;
     const last = c[c.length - 1];
-    return Math.max(0, last.center + last.width / 2 + 8 - props.width);
+    return Math.max(0, last.center + last.width / 2 + 18 - well());
   });
   const offset = createMemo(() => {
-    const raw = at(dial.shown(), 'center') - props.width / 2;
+    const raw = at(dial.shown(), 'center') - well() / 2;
     return Math.max(0, Math.min(maxScroll(), raw));
   });
   const plate = createMemo(() => at(dial.shown(), 'width'));
@@ -350,11 +371,12 @@ export function Choice(props: {
       {/* Chosen cell plate, tracking the chosen cell cleanly. */}
       <Show when={cells().length > 0}>
         <span
-          class="absolute inset-y-[5px] rounded-[9px]"
+          class="absolute inset-y-[4px]"
           style={{
             left: `${plateLeft()}px`,
             width: `${plate()}px`,
             ...CHOSEN,
+            'border-radius': `${INNER - 2}px`,
             transition: dial.active() ? 'none' : 'left 150ms ease-out, width 150ms ease-out',
           }}
         />
@@ -362,7 +384,7 @@ export function Choice(props: {
       <div class="absolute inset-0" style={{ 'mask-image': mask() }}>
         <div
           ref={(element) => (track = element)}
-          class="absolute inset-y-0 left-0 flex items-stretch gap-[2px] py-[5px] pl-[6px]"
+          class="absolute inset-y-0 left-0 flex items-stretch gap-[2px] py-[4px] pl-[18px]"
           style={{
             transform: `translateX(${-offset()}px)`,
             transition: motion(),
@@ -372,10 +394,10 @@ export function Choice(props: {
           <For each={[...props.items]}>
             {(item, i) => {
               const distance = () => Math.abs(i() - dial.shown());
-              const ink = () => (distance() < 0.5 ? CHOSEN_INK : 'rgb(255 255 255 / 0.72)');
+              const ink = () => (distance() < 0.5 ? CHOSEN_INK : DIM);
               return (
                 <span
-                  class={`relative flex shrink-0 items-center justify-center text-[18px] leading-none font-semibold whitespace-nowrap ${typeof item === 'string' ? 'px-[7px]' : 'px-[4px]'}`}
+                  class={`relative flex shrink-0 items-center justify-center font-medium whitespace-nowrap ${BODY} ${typeof item === 'string' ? 'px-[8px]' : 'px-[4px]'}`}
                   style={{ color: ink() }}
                 >
                   {typeof item === 'string' ? item : item.art(ink())}
@@ -455,13 +477,14 @@ export function Dial(props: {
   });
   const shown = dial.shown;
   const active = dial.active;
+  const center = () => wellWidth(props.width, props.name !== undefined) / 2;
   return (
     <RowCard
       name={props.name}
       trailing={
         <span
-          class={`absolute top-[6px] right-[34px] origin-right font-semibold tabular-nums transition-transform duration-100 ${HEADING}`}
-          style={{ color: '#fff', transform: active() ? 'scale(1.2)' : 'none' }}
+          class={`absolute top-[6px] right-[8px] flex h-[30px] items-center rounded-full px-[10px] ${VALUE}`}
+          style={{ color: '#fff', background: 'rgb(255 255 255 / 0.1)' }}
         >
           {label(props.value)}
         </span>
@@ -486,7 +509,7 @@ export function Dial(props: {
         <div
           class="absolute inset-y-0 left-0"
           style={{
-            transform: `translateX(${props.width / 2 - shown() * SPACING}px)`,
+            transform: `translateX(${center() - shown() * SPACING}px)`,
             transition: active() ? 'none' : 'transform 160ms ease-out',
             'will-change': 'transform',
           }}
@@ -495,35 +518,42 @@ export function Dial(props: {
             {(i) => {
               const major = () => (i - Math.round(zero())) % MAJOR === 0;
               const near = () => (active() ? Math.max(0, 1 - Math.abs(i - shown()) / 2.5) : 0);
+              /* With a name the value reads in its pill, so the label under
+                 the needle steps aside rather than colliding with it. */
+              const clear = () =>
+                props.name === undefined
+                  ? 1
+                  : Math.min(1, Math.max(0, (Math.abs(i - shown()) * SPACING - 10) / 14));
               return (
                 <>
                   <Show when={major()}>
                     <span
-                      class={`absolute top-[3px] -translate-x-1/2 font-medium tabular-nums ${SMALL}`}
+                      class={`absolute top-[3px] -translate-x-1/2 font-medium tabular-nums ${CAPTION}`}
                       style={{
                         left: `${i * SPACING}px`,
-                        color: `rgb(255 255 255 / ${0.55 + near() * 0.45})`,
+                        color: `rgb(255 255 255 / ${(0.5 + near() * 0.4) * clear()})`,
+                        'letter-spacing': '0',
                       }}
                     >
                       {label(props.min + i * props.step)}
                     </span>
                   </Show>
                   <span
-                    class="fm-round absolute bottom-[6px] w-[3px] -translate-x-1/2 rounded-[1.5px]"
+                    class="fm-round absolute bottom-[4px] w-[2px] -translate-x-1/2 rounded-[1px]"
                     style={{
                       left: `${i * SPACING}px`,
-                      height: `${major() ? 20 : 12}px`,
-                      background: `rgb(255 255 255 / ${(major() ? 0.75 : 0.45) + near() * 0.25})`,
+                      height: `${major() ? 14 : 9}px`,
+                      background: `rgb(255 255 255 / ${(major() ? 0.6 : 0.35) + near() * 0.25})`,
                     }}
                   />
                   <Show when={i < count() - 1 && SPACING >= 15}>
                     <For each={[1, 2]}>
                       {(third) => (
                         <span
-                          class="fm-round absolute bottom-[6px] h-[7px] w-[2px] -translate-x-1/2 rounded-[1px]"
+                          class="fm-round absolute bottom-[4px] h-[5px] w-[1px] -translate-x-1/2"
                           style={{
                             left: `${(i + third / 3) * SPACING}px`,
-                            background: 'rgb(255 255 255 / 0.28)',
+                            background: 'rgb(255 255 255 / 0.22)',
                           }}
                         />
                       )}
@@ -540,17 +570,23 @@ export function Dial(props: {
           <div class="absolute inset-x-0 bottom-0 h-[4px]" style={{ background: track() }} />
         )}
       </Show>
+      {/* The needle: the menu's color, the well's full height. */}
       <span
-        class="fm-round absolute bottom-[4px] w-[4px] -translate-x-1/2 rounded-[2px] transition-[height] duration-100"
+        class="fm-round absolute inset-y-[3px] w-[3px] -translate-x-1/2 rounded-[1.5px]"
         style={{
-          left: `${props.width / 2}px`,
-          height: active() ? '30px' : '24px',
-          background: 'var(--m-mark)',
+          left: `${center()}px`,
+          background: ACCENT,
           'box-shadow': '0 0 0 1px rgb(0 0 0 / 0.55)',
         }}
       />
     </RowCard>
   );
+}
+
+/** The width of a card's well: the whole card without a name, inset
+ * inside a named card's frame. */
+function wellWidth(width: number, named: boolean) {
+  return named ? width - 20 : width;
 }
 
 /** Two to four options side by side, the chosen one a white plate: ON/OFF and
@@ -565,16 +601,23 @@ export function Switch(props: {
 }) {
   return (
     <div
-      class="flex h-[47px] shrink-0 items-center gap-[4px] px-[5px]"
-      style={{ ...TRACK(props.focused), width: props.width ? `${props.width}px` : undefined }}
+      class="flex h-[48px] shrink-0 items-center gap-[4px] pr-[4px] pl-[8px]"
+      style={{
+        ...TRACK(props.focused),
+        'border-radius': `${RADIUS}px`,
+        width: props.width ? `${props.width}px` : undefined,
+      }}
       onPointerDown={() => props.onFocus?.()}
     >
       <For each={[...props.items]}>
         {(item, i) => (
           <button
             type="button"
-            class={`flex h-[37px] grow basis-0 items-center justify-center rounded-[10px] font-medium ${TEXT}`}
-            style={props.value === i() ? CHOSEN : { color: 'rgb(255 255 255 / 0.6)' }}
+            class={`flex h-[40px] grow basis-0 items-center justify-center font-medium ${BODY}`}
+            style={{
+              ...(props.value === i() ? CHOSEN : { color: DIM }),
+              'border-radius': `${INNER}px`,
+            }}
             onClick={() => props.pick(i())}
           >
             {item}
@@ -582,5 +625,21 @@ export function Switch(props: {
         )}
       </For>
     </div>
+  );
+}
+
+/** The check that marks the choice in effect, in the current color. */
+export function Check(props: { size?: number }) {
+  return (
+    <svg width={props.size ?? 18} height={props.size ?? 18} viewBox="0 0 18 18">
+      <path
+        d="M3 9.5l4 4 8-9"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.6"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </svg>
   );
 }

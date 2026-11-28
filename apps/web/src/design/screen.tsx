@@ -1,7 +1,7 @@
 import { For, Show, createSignal, onSettled } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
-import { ACCENT, GLASS, SMALL } from './materials';
+import { CAPTION, GLASS, INNER, ON } from './materials';
 
 /** The camera's screen, in its own pixels. */
 export const SCREEN = { width: 720, height: 480 } as const;
@@ -147,30 +147,31 @@ export function CameraKeys(props: { send: (key: CameraKey) => void }) {
   );
 }
 
-/** A key hint over the picture: the key's glyph on a white plate, and what it does. */
-export function KeyHint(props: {
-  glyph: string;
-  label?: string;
-  tap?: () => void;
-  accent?: boolean;
-}) {
+/** A key hint over the picture: the key's glyph on a plate, and what it
+ * does. A state that is on (FILM ONLY, A|B, LIVE) inverts the chip. */
+export function KeyHint(props: { glyph: string; label?: string; tap?: () => void; on?: boolean }) {
   return (
     <button
       type="button"
-      class="flex h-[36px] items-center gap-[8px] rounded-[12px] px-[7px] whitespace-nowrap"
-      style={{ ...GLASS, ...(props.accent ? { background: ACCENT } : {}) }}
+      class="flex h-[36px] items-center gap-[8px] px-[6px] whitespace-nowrap"
+      style={{ ...(props.on ? ON : GLASS), 'border-radius': `${INNER + 2}px` }}
       onClick={(e) => {
         e.stopPropagation();
         props.tap?.();
       }}
     >
       <span
-        class={`flex h-[26px] min-w-[26px] items-center justify-center rounded-[6px] bg-white px-[4px] font-semibold text-black ${SMALL}`}
+        class={`flex h-[26px] min-w-[26px] items-center justify-center rounded-[5px] px-[4px] font-semibold ${CAPTION}`}
+        style={
+          props.on
+            ? { background: '#000', color: '#fff', 'letter-spacing': '0' }
+            : { background: '#fff', color: '#000', 'letter-spacing': '0' }
+        }
       >
         {props.glyph}
       </span>
       <Show when={props.label}>
-        <span class={`pr-[3px] font-light tracking-[0.04em] ${SMALL}`}>{props.label}</span>
+        <span class={`pr-[4px] font-medium ${CAPTION}`}>{props.label}</span>
       </Show>
     </button>
   );
