@@ -27,6 +27,7 @@ execute_process(
     COMMAND_ERROR_IS_FATAL ANY)
 add_subdirectory("${DYNARMIC_SOURCE}" "${CMAKE_CURRENT_BINARY_DIR}/dynarmic")
 
+find_package(Boost 1.57 REQUIRED)
 add_library(dynarmic_ffi STATIC csrc/dynarmic_ffi.cpp)
 target_compile_features(dynarmic_ffi PRIVATE cxx_std_20)
-target_link_libraries(dynarmic_ffi PRIVATE dynarmic merry::mcl)
+target_link_libraries(dynarmic_ffi PRIVATE dynarmic merry::mcl Boost::boost)
