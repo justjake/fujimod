@@ -65,6 +65,10 @@
         "input_connection_id": "companion-peer-ready",
         "rise_ns": 30000000,
         "latch_high": true
+      },
+      {
+        "output_connection_id": "sensor-power-enable",
+        "input_connection_id": "sensor-power-sense"
       }
     ],
     "thermal_connection_ids": [
@@ -255,6 +259,30 @@
     {
       "id": "companion-peer-bus",
       "kind": "microcontroller"
+    },
+    {
+      "id": "sensor-power-enable",
+      "kind": "sensor",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 4,
+          "pin": 4,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "sensor-power-sense",
+      "kind": "sensor",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 4,
+          "pin": 4,
+          "active_level": true
+        }
+      ]
     },
     {
       "id": "stabilizer-driver-bus",

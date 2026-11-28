@@ -379,13 +379,62 @@ mod tests {
     }
 
     #[test]
+    fn xh2s_movie_start_selects_the_dial_position_and_routes_recorder_dma() {
+        let windows = BootState::for_firmware("xh2s-730", None)
+            .unwrap()
+            .with_catalog_windows(
+                &fujimod_catalog_resolution::ResolvedConfiguration::bundled("xh2s-730").unwrap(),
+            )
+            .unwrap()
+            .device;
+        let adc = windows.iter().find(|window| window.kind == "adc").unwrap();
+        // ADC channel 3 reads the mode dial; 3774 is its Movie position.
+        assert_eq!(adc.options["samples"][3].as_integer(), Some(3774));
+        let dma = windows
+            .iter()
+            .find(|window| window.kind == "general-dma")
+            .unwrap();
+        // Recorder DDR training waits for the channel-1 completion on INTID 238.
+        assert_eq!(dma.options["a53_irq_base"].as_integer(), Some(237));
+    }
+
+    #[test]
+    fn xh2s_movie_statistics_are_in_boot_sram() {
+        // The Movie exposure task reads its statistics banks from boot SRAM (first read at
+        // 0xff801060): the manifest declares that RAM, so the statistics window is RAM-backed.
+        let state = BootState::for_firmware("xh2s-730", None)
+            .unwrap()
+            .with_catalog_windows(
+                &fujimod_catalog_resolution::ResolvedConfiguration::bundled("xh2s-730").unwrap(),
+            )
+            .unwrap();
+        let address = 0xff80_1060;
+        assert!(
+            state
+                .ram
+                .iter()
+                .any(|region| (region.base..region.base + region.size).contains(&address))
+        );
+        let statistics = state
+            .device
+            .iter()
+            .find(|window| (window.base..window.base + window.size).contains(&address))
+            .unwrap();
+        assert_eq!(statistics.kind, "imaging-statistics");
+        assert_eq!(
+            statistics.options.get("ram").and_then(toml::Value::as_bool),
+            Some(true)
+        );
+    }
+
+    #[test]
     fn statistics_banks_in_boot_sram_are_ram_backed() {
         for (firmware, ram) in [
             ("x100vi-131", true),
             ("xe5-112", true),
             ("xh2-530", true),
             ("xt5-431", true),
-            ("xh2s-730", false),
+            ("xh2s-730", true),
             ("xm5-130", false),
         ] {
             let windows = BootState::for_firmware(firmware, None)
