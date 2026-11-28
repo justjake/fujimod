@@ -203,11 +203,11 @@ fn xt5_431_startup_is_the_stock_selector_startup() {
     }
 }
 
-/// The GFX100RF 1.14 boot header copies 0x20000 bytes and its bootstrap puts the stock stack's
-/// 0x4000 bytes at 0x1b600 of them, so its recipe declares that extent. Every other XP5 recipe
-/// has the stack above the copied setup and declares nothing.
+/// A recipe declares the stock stack's extent exactly when the bootstrap puts the stack inside
+/// the copied setup, and the declaration ends at the stack top. The GFX100RF 1.14 boot header
+/// copies 0x20000 bytes and its bootstrap puts the stack's 0x4000 bytes at 0x1b600 of them.
 #[test]
-fn only_gfx100rf_114_declares_a_stock_stack_inside_its_copied_setup() {
+fn recipes_declare_a_stock_stack_exactly_when_it_lies_inside_the_copied_setup() {
     let catalog = fujimod_catalog::ReferenceCatalog::bundled().unwrap();
     let mut declaring = vec![];
     for id in catalog.firmware_ids() {
@@ -219,11 +219,16 @@ fn only_gfx100rf_114_declares_a_stock_stack_inside_its_copied_setup() {
             None => assert!(copied_end < setup.stack, "{id}"),
             Some(declared) => {
                 assert!(setup.stack <= copied_end, "{id}");
+                assert_eq!(
+                    setup.base + (declared.offset + declared.size) as u64,
+                    setup.stack,
+                    "{id}"
+                );
                 declaring.push((id.to_string(), declared.offset, declared.size));
             }
         }
     }
-    assert_eq!(declaring, [("gfx100rf-114".to_string(), 0x1b600, 0x4000)]);
+    assert!(declaring.contains(&("gfx100rf-114".to_string(), 0x1b600, 0x4000)));
     let setup = Recipe::bundled("gfx100rf-114")
         .unwrap()
         .unwrap()
