@@ -6,6 +6,9 @@ export interface OtaFile {
 export interface SdBootV2Release {
   firmware: string;
   version: string;
+  /** The release date, `YYYY-MM-DD`, and its full commit, when the manifest lists them. */
+  date?: string;
+  commit?: string;
   /** File layer paths, such as `/firmware.patch`, mapped to their store files. */
   fs: Record<string, OtaFile>;
 }
@@ -51,7 +54,9 @@ export function validateOtaRelease(value: unknown, firmware: string): SdBootV2Re
     !release.fs ||
     typeof release.fs !== 'object' ||
     Array.isArray(release.fs) ||
-    Object.keys(release.fs).length > 32
+    Object.keys(release.fs).length > 32 ||
+    (release.date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(release.date)) ||
+    (release.commit !== undefined && !/^[0-9a-f]{1,40}$/.test(release.commit))
   )
     throw Error(`The ${firmware} release manifest is invalid.`);
   const names = new Map<string, string>();
@@ -77,6 +82,8 @@ export function validateOtaRelease(value: unknown, firmware: string): SdBootV2Re
   return {
     firmware,
     version: release.version,
+    ...(release.date && { date: release.date }),
+    ...(release.commit && { commit: release.commit }),
     fs: Object.fromEntries(
       Object.entries(release.fs).map(([path, file]) => [
         path,
@@ -106,6 +113,8 @@ export function sdBootV2FirstInstallManifest(release: SdBootV2Release) {
   return {
     gen: 1,
     version: release.version,
+    ...(release.date && { date: release.date }),
+    ...(release.commit && { commit: release.commit }),
     fs: Object.fromEntries(
       Object.entries(release.fs)
         .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
