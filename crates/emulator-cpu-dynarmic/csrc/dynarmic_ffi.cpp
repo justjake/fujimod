@@ -358,6 +358,7 @@ DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks) {
     conf.optimizations = conf.optimizations & ~Dynarmic::OptimizationFlag::FastDispatch;
 #endif
     conf.enable_cycle_counting = true;
+    conf.check_cycle_budget = true;
     conf.guard_native_writes = true;
     conf.hook_hint_instructions = true;
     conf.hook_isb = false;

@@ -11,8 +11,10 @@ set(DYNARMIC_FRONTENDS A32 CACHE STRING "")
 # This keeps recursive submodule checkouts unchanged on developer and CI hosts.
 find_package(Git REQUIRED)
 set(DYNARMIC_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/dynarmic-source")
-set(DYNARMIC_PATCH "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-embedder.patch")
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${DYNARMIC_PATCH}")
+set(DYNARMIC_PATCHES
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/arm64-embedder.patch"
+    "${CMAKE_CURRENT_SOURCE_DIR}/patches/x64-exact-budget.patch")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${DYNARMIC_PATCHES})
 file(REMOVE_RECURSE "${DYNARMIC_SOURCE}")
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/vendor/dynarmic/"
     DESTINATION "${DYNARMIC_SOURCE}"
@@ -20,7 +22,7 @@ file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/vendor/dynarmic/"
 execute_process(
     COMMAND "${CMAKE_COMMAND}" -E env --unset=GIT_DIR --unset=GIT_WORK_TREE
         "GIT_CEILING_DIRECTORIES=${CMAKE_CURRENT_BINARY_DIR}"
-        "${GIT_EXECUTABLE}" apply --no-index "${DYNARMIC_PATCH}"
+        "${GIT_EXECUTABLE}" apply --no-index ${DYNARMIC_PATCHES}
     WORKING_DIRECTORY "${DYNARMIC_SOURCE}"
     COMMAND_ERROR_IS_FATAL ANY)
 add_subdirectory("${DYNARMIC_SOURCE}" "${CMAKE_CURRENT_BINARY_DIR}/dynarmic")
