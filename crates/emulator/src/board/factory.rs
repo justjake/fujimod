@@ -182,12 +182,6 @@ pub fn validate_engine(
 
 pub(super) struct Engines {
     unicorn: Option<Library>,
-    #[cfg(all(
-        feature = "dynarmic",
-        any(target_arch = "aarch64", target_arch = "x86_64"),
-        any(target_os = "linux", target_os = "macos")
-    ))]
-    dynarmic_code: fujimod_emulator_cpu_dynarmic::CodeVisibility,
     #[cfg(not(target_os = "emscripten"))]
     unicorn_workers: bool,
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
@@ -265,12 +259,6 @@ impl Engines {
         }
         Ok(Self {
             unicorn,
-            #[cfg(all(
-                feature = "dynarmic",
-                any(target_arch = "aarch64", target_arch = "x86_64"),
-                any(target_os = "linux", target_os = "macos")
-            ))]
-            dynarmic_code: Default::default(),
             #[cfg(not(target_os = "emscripten"))]
             unicorn_workers: unicorn_workers(graph, options),
             #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
@@ -283,6 +271,12 @@ impl Engines {
         options: &Options,
         translation_cache_size_bytes: u32,
         memory: &fujimod_emulator_cpu_unicorn::memory::Memory,
+        #[cfg(all(
+            feature = "dynarmic",
+            any(target_arch = "aarch64", target_arch = "x86_64"),
+            any(target_os = "linux", target_os = "macos")
+        ))]
+        code_tracker: &fujimod_emulator_cpu::code::CodeTracker,
     ) -> Result<Box<dyn Cpu>, String> {
         let model = processor.model;
         if processor.cpu_backend == RunCpuBackend::Dynarmic {
@@ -292,9 +286,9 @@ impl Engines {
                 any(target_os = "linux", target_os = "macos")
             ))]
             return Ok(Box::new(
-                fujimod_emulator_cpu_dynarmic::Core::new_with_code_visibility(
+                fujimod_emulator_cpu_dynarmic::Core::new_with_code_tracker(
                     model,
-                    self.dynarmic_code.clone(),
+                    code_tracker.clone(),
                 )?,
             ));
             #[cfg(not(all(
@@ -601,7 +595,20 @@ impl Graph {
         let cpus = self
             .processors
             .iter()
-            .map(|p| engines.cpu(p, &options, translation_cache_size_bytes, &memory))
+            .map(|p| {
+                engines.cpu(
+                    p,
+                    &options,
+                    translation_cache_size_bytes,
+                    &memory,
+                    #[cfg(all(
+                        feature = "dynarmic",
+                        any(target_arch = "aarch64", target_arch = "x86_64"),
+                        any(target_os = "linux", target_os = "macos")
+                    ))]
+                    &ram.code_tracker,
+                )
+            })
             .collect::<Result<Vec<_>, _>>()?;
         for (core, cpu) in cpus.iter().enumerate() {
             for a in self.mappings.iter().filter(|a| a.core == core) {

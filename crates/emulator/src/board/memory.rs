@@ -77,6 +77,12 @@ pub struct Memory {
     regions: Vec<(u64, Backing)>,
     mappings: RefCell<Vec<BusMapping>>,
     trackers: Vec<fujimod_emulator_cpu::memory::pages::Tracker>,
+    #[cfg(all(
+        feature = "dynarmic",
+        any(target_arch = "aarch64", target_arch = "x86_64"),
+        any(target_os = "linux", target_os = "macos")
+    ))]
+    pub(super) code_tracker: fujimod_emulator_cpu::code::CodeTracker,
     pub(super) observation: RefCell<Option<std::rc::Weak<RefCell<super::observation::Records>>>>,
     pub(super) preservation:
         RefCell<Option<std::rc::Weak<RefCell<super::preservation::PreservationRecords>>>>,
@@ -404,10 +410,7 @@ impl Memory {
             regions,
             mappings: RefCell::new(mappings),
             trackers,
-            observation: Default::default(),
-            preservation: Default::default(),
-            continuation: Default::default(),
-            write_watch: Default::default(),
+            ..Default::default()
         })
     }
     pub(super) fn clear_preservation(

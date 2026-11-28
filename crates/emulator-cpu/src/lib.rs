@@ -12,6 +12,7 @@ use std::sync::{Arc, Condvar, Mutex};
 pub mod arm;
 pub mod arm64;
 pub mod armv7a;
+pub mod code;
 pub mod exclusive;
 pub mod loop_proof;
 pub mod loops;
