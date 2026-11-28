@@ -187,7 +187,7 @@ pub enum Value {
 pub enum Event {
     Before(u64),
     /// Any other architectural trap; the worker returns it from the run.
-    Trap,
+    Trap(Trap),
     /// A data abort with its instruction already decoded by the worker.
     Mmio(Trap, MmioAccess),
     Done(Result<Exit, ExecutionError>),
@@ -1377,7 +1377,7 @@ impl Processor {
         if matches!(trap.syndrome >> 26, 0x24 | 0x25) {
             Event::Mmio(trap, self.prepare_mmio())
         } else {
-            Event::Trap
+            Event::Trap(trap)
         }
     }
     fn send_event(
@@ -1501,7 +1501,7 @@ impl Processor {
                         virtual_address: 0,
                         physical_address: 0,
                     };
-                    self.send_event(events, Event::Trap, "HVF trap owner disconnected")?;
+                    self.send_event(events, Event::Trap(trap), "HVF trap owner disconnected")?;
                     if !self.paused(commands)? {
                         return Ok(Exit::Trap(trap));
                     }
@@ -1760,7 +1760,7 @@ impl Processor {
                         };
                         Event::Mmio(trap, access)
                     } else {
-                        Event::Trap
+                        Event::Trap(trap)
                     };
                     self.send_event(events, event, "HVF trap owner disconnected")?;
                     let handled = self.paused(commands)?;

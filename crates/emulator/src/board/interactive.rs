@@ -490,26 +490,33 @@ impl Board {
                     }
                 }
             }
-            let mut callback_barrier = false;
+            let mut callback_serviced = false;
+            let exit_barrier = entries.iter().any(|entry| {
+                entry.done
+                    && (!in_place
+                        || entry.watch_or_observer_stop
+                        || entry
+                            .exit
+                            .is_some_and(|exit| !matches!(exit, Exit::Stopped)))
+            });
             if in_place
                 && !barrier
                 && error.is_none()
-                && !entries.iter().any(|entry| entry.done)
+                && !exit_barrier
                 && let Some(index) = entries.iter().position(|entry| entry.pending)
             {
+                callback_serviced = true;
                 match self.service_interactive_callback(&mut entries, index, quantum) {
                     Ok(false) => continue,
-                    Ok(true) => callback_barrier = true,
-                    Err(e) => {
-                        error = Some(e);
-                        callback_barrier = true;
-                    }
+                    Ok(true) => (),
+                    Err(e) => error = Some(e),
                 }
             }
             if !barrier
-                && (callback_barrier
+                && (callback_serviced
                     || error.is_some()
-                    || entries.iter().any(|e| e.done || e.pending))
+                    || exit_barrier
+                    || entries.iter().any(|entry| entry.pending))
             {
                 barrier = true;
                 // The M-profile owner must finish admitting a shortened
@@ -533,6 +540,11 @@ impl Board {
                         error.get_or_insert_with(|| e.to_string());
                     }
                 }
+            }
+            if callback_serviced {
+                // The callback may have parked peers or resumed its issuer.
+                // Observe their current states before draining the barrier.
+                continue;
             }
             if entries.iter().all(|e| e.done) {
                 break;
@@ -650,7 +662,17 @@ impl Board {
                 state.power_off,
             )
         };
-        let result = self.cpus[core].service_pending_callback(token);
+        let cpu = &*self.cpus[core];
+        let result = cpu.service_pending_callback_with_trap(token, &mut |trap| {
+            if trap.syndrome >> 26 != 0x18 {
+                return Ok(false);
+            }
+            let mut state = self.state.borrow_mut();
+            state.system_register(cpu, core, trap.syndrome)?;
+            state.due(&self.cpus)?;
+            state.push_pins(&self.cpus)?;
+            Ok(true)
+        });
         entries[index].pending = false;
         let mut state = self.state.borrow_mut();
         let peers = state.callback_peers.take().unwrap();

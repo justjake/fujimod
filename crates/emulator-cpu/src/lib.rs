@@ -975,6 +975,15 @@ pub trait Cpu {
             "backend does not support owner-serviced callbacks".into(),
         ))
     }
+    /// Service a parked callback. A framework trap handled by the owner can
+    /// resume the same run when the backend supports this.
+    fn service_pending_callback_with_trap(
+        &self,
+        run: RunToken,
+        _handle: &mut dyn FnMut(Trap) -> Result<bool, ExecutionError>,
+    ) -> Result<(), ExecutionError> {
+        self.service_pending_callback(run)
+    }
     /// Reject one callback parked by [`Cpu::poll_run`] without invoking its
     /// owner callback. This lets a failed cluster barrier drain worker threads
     /// without permitting additional device or memory effects.
