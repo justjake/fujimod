@@ -510,7 +510,6 @@ pub enum NativeOutputChannelInputsClock {
     Throughput { bytes_per_tick: u64 },
 }
 
-
 /// Closed NativeOutputChannelInputsGeometry selection.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -936,7 +935,6 @@ pub enum NativeImageInputInputsClockSource {
     },
     Sensor,
 }
-
 
 /// Declared NativeImageInputInputsClock startup inputs and execution limits.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

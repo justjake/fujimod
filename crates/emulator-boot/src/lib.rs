@@ -309,13 +309,10 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
     )
     .map_err(|error| format!("firmware observation facts: {error}"))?;
     let quantum = execution_policy.quantum;
-    let board_ticks_per_second = resolved
-        .inputs
-        .as_ref()
-        .and_then(|inputs| match inputs {
-            RunInputs::Xp5(inputs) => Some(inputs.ticks_per_second),
-            RunInputs::Exr2(_) | RunInputs::Xp4(_) => None,
-        });
+    let board_ticks_per_second = resolved.inputs.as_ref().and_then(|inputs| match inputs {
+        RunInputs::Xp5(inputs) => Some(inputs.ticks_per_second),
+        RunInputs::Exr2(_) | RunInputs::Xp4(_) => None,
+    });
     let dram_address_space_limit_bytes = resolved.dram_address_space_limit_bytes()?;
     let execution = graph::assemble(
         &resolved.reference,
@@ -934,6 +931,10 @@ pub fn startup_path(resolved: &ResolvedConfiguration) -> Result<StartupPath, Str
             "body {} has no device list yet",
             resolved.reference.body.id
         )),
+        (None, "xp5") => Err(format!(
+            "body {} declares no XP5 startup inputs yet",
+            resolved.reference.body.id
+        )),
         _ => Err(format!(
             "{} cannot be opened as a camera",
             resolved.configuration.id
@@ -959,10 +960,7 @@ pub fn boot_rom_use(resolved: &ResolvedConfiguration) -> Result<BootRomUse, Stri
     Ok(match startup_path(resolved)? {
         StartupPath::Exr2 => BootRomUse::Required,
         StartupPath::Application => BootRomUse::Unused,
-        StartupPath::Xp5 => xp5::boot_rom_use(
-            &resolved.configuration.firmware_id,
-            resolved.start,
-        ),
+        StartupPath::Xp5 => xp5::boot_rom_use(&resolved.configuration.firmware_id, resolved.start),
     })
 }
 
@@ -1165,10 +1163,8 @@ pub fn open(resolved: ResolvedConfiguration, inputs: StartupInputs) -> Result<Ca
 /// Whether a configuration runs on EXR II, either from declared startup inputs
 /// or from a body construction that carries its reset values.
 fn is_exr2_run(resolved: &ResolvedConfiguration) -> bool {
-    matches!(
-        resolved.inputs.as_ref(),
-        Some(RunInputs::Exr2(_))
-    ) || (resolved.inputs.is_none() && exr2::available(resolved))
+    matches!(resolved.inputs.as_ref(), Some(RunInputs::Exr2(_)))
+        || (resolved.inputs.is_none() && exr2::available(resolved))
 }
 
 /// Optional instruction-entry trace shared by native boot workflows.

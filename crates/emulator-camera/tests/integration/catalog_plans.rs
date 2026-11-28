@@ -20,55 +20,56 @@ enum Expected {
 }
 
 use Expected::{Gap, Rec, Started};
-use StartupPath::{Exr2, Xp5};
+use StartupPath::{Application, Exr2, Xp5};
 
-const NO_RUN: &str = "has no run configuration yet";
 const NO_DEVICE_LIST: &str = "has no device list yet";
+const NO_XP5_INPUTS: &str = "declares no XP5 startup inputs yet";
+const NO_DRAM: &str = "declares no DRAM address space";
 const PLAN: &str = "starts from an application startup plan";
 
 /// Every bundled firmware and what its plan reaches.
 const EXPECTED: &[(&str, Expected)] = &[
-    ("gfx100rf-112", Gap(NO_RUN)),
-    ("gfx100rf-114", Gap(NO_RUN)),
-    ("gfx100s-213", Gap(NO_RUN)),
+    ("gfx100rf-112", Gap(NO_XP5_INPUTS)),
+    ("gfx100rf-114", Gap(NO_XP5_INPUTS)),
+    ("gfx100s-213", Gap(PLAN)),
     ("gfx50r-311", Gap(PLAN)),
-    ("x100f-212", Gap(NO_RUN)),
-    ("x100s-121", Gap(NO_DEVICE_LIST)),
-    ("x100t-111", Gap(NO_DEVICE_LIST)),
-    ("x100v-301", Gap(NO_RUN)),
+    ("x100f-212", Gap(NO_DRAM)),
+    ("x100s-121", Started(Exr2)),
+    ("x100t-111", Started(Exr2)),
+    ("x100v-301", Gap(PLAN)),
     ("x100vi-131", Started(Xp5)),
-    ("x20-103", Gap(NO_DEVICE_LIST)),
-    ("x30-103", Gap(NO_DEVICE_LIST)),
+    ("x20-103", Started(Exr2)),
+    ("x30-103", Started(Exr2)),
     ("x70-110", Rec(Exr2)),
-    ("xa1-150", Gap(NO_DEVICE_LIST)),
-    ("xa2-130", Gap(NO_DEVICE_LIST)),
-    ("xa3-222", Gap(NO_RUN)),
+    ("xa1-150", Started(Exr2)),
+    ("xa2-130", Started(Exr2)),
+    ("xa3-222", Gap(NO_DEVICE_LIST)),
     ("xe2-411", Rec(Exr2)),
     ("xe2s-111", Rec(Exr2)),
-    ("xe4-201", Gap(NO_RUN)),
-    ("xe5-110", Gap(NO_RUN)),
-    ("xe5-111", Gap(NO_RUN)),
-    ("xe5-112", Started(Xp5)),
-    ("xh2-530", Started(Xp5)),
+    ("xe4-201", Started(Application)),
+    ("xe5-110", Gap(NO_DRAM)),
+    ("xe5-111", Gap(NO_DRAM)),
+    ("xe5-112", Rec(Xp5)),
+    ("xh2-530", Rec(Xp5)),
     ("xh2-533", Started(Xp5)),
-    ("xh2s-730", Started(Xp5)),
-    ("xm1-101", Gap(NO_RUN)),
-    ("xm1-120", Gap(NO_RUN)),
+    ("xh2s-730", Rec(Xp5)),
+    ("xm1-101", Started(Exr2)),
+    ("xm1-120", Started(Exr2)),
     ("xm1-150", Rec(Exr2)),
     ("xm5-130", Started(Xp5)),
-    ("xpro3-200", Gap(NO_RUN)),
-    ("xq1-121", Gap(NO_DEVICE_LIST)),
-    ("xq2-101", Gap(NO_DEVICE_LIST)),
-    ("xs10-311", Gap(PLAN)),
-    ("xs20-330", Gap(NO_RUN)),
-    ("xt1-552", Gap(NO_DEVICE_LIST)),
+    ("xpro3-200", Gap(PLAN)),
+    ("xq1-121", Started(Exr2)),
+    ("xq2-101", Started(Exr2)),
+    ("xs10-311", Started(Application)),
+    ("xs20-330", Gap(NO_XP5_INPUTS)),
+    ("xt1-552", Started(Exr2)),
     ("xt10-131", Rec(Exr2)),
-    ("xt2-441", Gap(PLAN)),
-    ("xt20-211", Gap(PLAN)),
-    ("xt3-511", Gap(PLAN)),
-    ("xt30-201", Gap(NO_RUN)),
-    ("xt4-212", Gap(PLAN)),
-    ("xt5-431", Started(Xp5)),
+    ("xt2-441", Started(Application)),
+    ("xt20-211", Started(Application)),
+    ("xt3-511", Started(Application)),
+    ("xt30-201", Started(Application)),
+    ("xt4-212", Started(Application)),
+    ("xt5-431", Rec(Xp5)),
 ];
 
 /// What one firmware's plan reaches, or its refusal.
@@ -147,7 +148,7 @@ fn a_body_opens_its_newest_firmware_and_names_refusals() {
             .contains("body xh2s has no firmware 9.99; the catalog has 7.30")
     );
     assert!(refusal("x70", FirmwareChoice::Empty).contains("cannot start from an empty flash"));
-    assert!(refusal("x100t", FirmwareChoice::Newest).contains("body x100t has no device list yet"));
+    assert!(refusal("xa3", FirmwareChoice::Newest).contains("body xa3 has no device list yet"));
     assert!(refusal("no-such-body", FirmwareChoice::Newest).contains("not in the catalog"));
 }
 

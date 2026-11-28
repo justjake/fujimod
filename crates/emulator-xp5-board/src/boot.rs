@@ -739,7 +739,9 @@ type FlashInput<'a> = (
 );
 
 /// The body's hardware facts beyond its parts and wiring.
-fn body_hardware(selection: &ResolvedSelection) -> Option<&fujimod_catalog::assembly::BodyHardware> {
+fn body_hardware(
+    selection: &ResolvedSelection,
+) -> Option<&fujimod_catalog::assembly::BodyHardware> {
     selection.body.hardware.as_ref()
 }
 
@@ -1718,12 +1720,14 @@ fn block_window(
             match connectors.as_slice() {
                 [] => {}
                 [connector] => {
-                    let connected = part_inputs.iter().find_map(|input| match input {
+                    let connected = part_inputs.iter().find_map(|input| {
+                        match input {
                         fujimod_catalog_configuration::application::ApplicationPartInput::HdmiSink {
                             part_id,
                             connected,
                         } if part_id == &connector.id => Some(*connected),
                         _ => None,
+                    }
                     });
                     options.insert(
                         "sink_connected".into(),
@@ -1820,7 +1824,9 @@ fn block_window(
         BlockDevice::Renderer { .. } => "renderer",
         BlockDevice::ImagingPhy { .. } => "imaging-phy",
         BlockDevice::ImagingInput { .. } => {
-            if body_hardware(selection).is_some_and(|hardware| hardware.idle_status_blocks.contains(&block.id)) {
+            if body_hardware(selection)
+                .is_some_and(|hardware| hardware.idle_status_blocks.contains(&block.id))
+            {
                 options.insert("idle_status".into(), toml::Value::Boolean(true));
             }
             "imaging-input"
@@ -1972,7 +1978,10 @@ fn block_window(
         BlockDevice::Pl022 { .. } if port_device(selection, block)?.is_some() => {
             port_device(selection, block)?.expect("checked above")
         }
-        BlockDevice::Pl022 { source_hz, .. } if body_hardware(selection).is_some_and(|hardware| hardware.polled_serial_blocks.contains(&block.id)) => {
+        BlockDevice::Pl022 { source_hz, .. }
+            if body_hardware(selection)
+                .is_some_and(|hardware| hardware.polled_serial_blocks.contains(&block.id)) =>
+        {
             options.insert("source_hz".into(), integer(*source_hz));
             let endpoints = serial_endpoints(selection, block, part_inputs)?;
             if !endpoints.is_empty() {
@@ -2003,7 +2012,8 @@ fn block_window(
                 options.insert("gic_line".into(), integer(u64::from(line)));
             }
             if body_hardware(selection)
-                .is_some_and(|hardware| hardware.unobserved_interrupt_blocks.contains(&block.id)) {
+                .is_some_and(|hardware| hardware.unobserved_interrupt_blocks.contains(&block.id))
+            {
                 options.insert(
                     "companion_irq_unconnected".into(),
                     toml::Value::Boolean(true),

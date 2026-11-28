@@ -151,7 +151,6 @@ impl RunConfiguration {
     }
 }
 
-
 /// Intended operation selected by a run configuration.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -204,7 +203,6 @@ impl RunInstructionRate {
         Ok(())
     }
 }
-
 
 /// Browser camera attachments: a virtual card, still-capture policy and LCD preview cadence.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -659,7 +657,6 @@ pub enum RunExecutionScope {
     #[serde(rename = "offline-boot-development")]
     OfflineBootDevelopment,
 }
-
 
 /// A host test signal presented to an audio serial receiver.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

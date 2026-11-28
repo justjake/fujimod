@@ -70,9 +70,7 @@ fn catalog_start(resolved: &ResolvedConfiguration, update: &[u8]) -> Result<Star
         .application_startup
         .as_ref()
         .ok_or_else(|| {
-            format!(
-                "firmware {firmware} declares no application startup; name an application plan"
-            )
+            format!("firmware {firmware} declares no application startup; name an application plan")
         })?;
     let inverted: Vec<u8> = update.iter().map(|byte| !byte).collect();
     let digest = |data: &[u8]| format!("{:x}", Sha256::digest(data));

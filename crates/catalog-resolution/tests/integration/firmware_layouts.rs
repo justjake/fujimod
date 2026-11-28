@@ -82,9 +82,7 @@ fn xt3_boot_wires_the_touch_bus_to_a_declared_byte_i2c_controller() {
         .unwrap()
         .soc;
     let inputs = resting("xt3");
-    let wired = inputs
-        .byte_i2c_inputs
-        .expect("declared byte I2C buses");
+    let wired = inputs.byte_i2c_inputs.expect("declared byte I2C buses");
     assert_eq!(wired.keys().collect::<Vec<_>>(), ["2"]);
     let bus = soc
         .blocks
@@ -109,10 +107,7 @@ fn xt3_discovery_inputs_release_the_x_t3_buttons() {
     let catalog = fujimod_catalog::ReferenceCatalog::bundled().unwrap();
     let body = catalog.body("xt3").expect("declared X-T3 body");
     let inputs = resting("xt3");
-    let levels = inputs
-        .gpio_input
-        .expect("declared GPIO levels")
-        .levels;
+    let levels = inputs.gpio_input.expect("declared GPIO levels").levels;
     for id in [
         "xt3-shutter-s1",
         "xt3-shutter-s2",

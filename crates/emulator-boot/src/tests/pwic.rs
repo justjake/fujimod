@@ -4,23 +4,21 @@ use super::*;
 fn catalog_capture_power_fields_match_the_native_recipe() {
     let body: Value =
         serde_json::from_str(include_str!("../../../../catalog/bodies/x70/body.json")).unwrap();
-    for (path, masks) in [(
-        "/hardware/board/controllers/control_bus1/replies",
-        "pwic_write_masks",
-    )] {
-        let parts = body.pointer(path).unwrap();
-        assert!(
-            parts["pwic_values"]
-                .as_array()
-                .unwrap()
-                .contains(&json!([1, 0])),
-            "{path}"
-        );
-        assert!(
-            parts[masks].as_array().unwrap().contains(&json!([1, 0x1f])),
-            "{path}"
-        );
-    }
+    let parts = body
+        .pointer("/hardware/board/controllers/control_bus1/replies")
+        .unwrap();
+    assert!(
+        parts["pwic_values"]
+            .as_array()
+            .unwrap()
+            .contains(&json!([1, 0]))
+    );
+    assert!(
+        parts["pwic_write_masks"]
+            .as_array()
+            .unwrap()
+            .contains(&json!([1, 0x1f]))
+    );
 }
 
 #[test]

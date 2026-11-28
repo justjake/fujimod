@@ -173,10 +173,7 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
     if let Some(engine) = request.engine {
         resolved.override_engine(engine)?;
     }
-    if !matches!(
-        resolved.start,
-        RunStart::Loader | RunStart::Rom
-    ) {
+    if !matches!(resolved.start, RunStart::Loader | RunStart::Rom) {
         return Err("This camera cannot start from the firmware file alone.".into());
     }
     let update = checked_update(&resolved, &request.update)?;

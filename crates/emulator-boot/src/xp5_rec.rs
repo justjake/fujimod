@@ -42,8 +42,8 @@ fn intact(session: &Session, readiness: &RecReadiness) -> Result<bool, String> {
 
 /// A frame drawn by the firmware: more than one color.
 fn drawn(rgba: &[u8]) -> bool {
-    rgba.chunks_exact(4)
-        .any(|pixel| pixel != rgba.get(..4).unwrap_or_default())
+    let (pixels, _) = rgba.as_chunks::<4>();
+    pixels.iter().any(|pixel| Some(pixel) != pixels.first())
 }
 
 fn report(
@@ -81,7 +81,8 @@ pub fn to_rec(
     ticks_per_second: u64,
     instruction_limit: u64,
 ) -> Result<RecReport, String> {
-    let limits = crate::host::Limits::new(session, Some(instruction_limit), None, ticks_per_second)?;
+    let limits =
+        crate::host::Limits::new(session, Some(instruction_limit), None, ticks_per_second)?;
     let window = ticks_per_second * OBSERVE_EVERY_MILLISECONDS / 1000;
     let settle = ticks_per_second.saturating_mul(readiness.settle_milliseconds) / 1000;
     let mut held_since = None;
@@ -110,14 +111,15 @@ pub fn to_rec(
         let advanced = limits.step(session, quantum, None, Some(now.saturating_add(window)))?;
         for frame in session.board.take_frames() {
             if held_since.is_some() && drawn(&frame.rgba) {
-                drawn_output = Some(drawn_output.map_or(frame.output, |output: usize| {
-                    output.min(frame.output)
-                }));
+                drawn_output = Some(
+                    drawn_output.map_or(frame.output, |output: usize| output.min(frame.output)),
+                );
             }
         }
         if !advanced {
             let mut stopped = report(session, readiness, "quiescent", None)?;
-            stopped.failure = Some("the board is quiescent without an input or device deadline".into());
+            stopped.failure =
+                Some("the board is quiescent without an input or device deadline".into());
             return Ok(stopped);
         }
     }

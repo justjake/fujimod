@@ -176,7 +176,10 @@ impl ApplicationStartup {
                 .words
                 .iter()
                 .any(|word| word.offset % 4 != 0 || word.offset + 4 > handoff.size)
-            || self.flash.as_ref().is_some_and(|flash| !digest(&flash.sha256))
+            || self
+                .flash
+                .as_ref()
+                .is_some_and(|flash| !digest(&flash.sha256))
         {
             return Err(format!(
                 "firmware {} application startup is invalid",

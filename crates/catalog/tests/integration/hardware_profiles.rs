@@ -98,7 +98,11 @@ fn resting_inputs_declare_no_session_choices() {
         panic!("X70 resting inputs");
     };
     inputs.usb.connected = true;
-    assert!(body.validate("x70").unwrap_err().contains("camera description"));
+    assert!(
+        body.validate("x70")
+            .unwrap_err()
+            .contains("camera description")
+    );
 }
 
 fn body(id: &str) -> Body {

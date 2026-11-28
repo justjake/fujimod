@@ -201,7 +201,6 @@ pub struct CommandRegisters {
     pub read_frames: Vec<(u64, Vec<u64>)>,
 }
 
-
 /// Declared focus facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -215,15 +214,6 @@ pub struct Focus {
     /// Declared steps per mm.
     pub steps_per_mm: f64,
 }
-
-
-
-
-
-
-
-
-
 
 /// Declared transports facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -267,10 +257,6 @@ pub struct RoutesOptions {
 pub struct Routes {
     /// The part on the route: its register file, panel, lens unit, stabilizer
     /// or command stream. The plan model checks its fields when a board is built.
-    #[cfg_attr(
-        all(target_arch = "wasm32", not(target_os = "emscripten")),
-        tsify(type = "unknown")
-    )]
     pub endpoint: serde_json::Value,
     /// Declared gpio.
     pub gpio: String,
@@ -452,7 +438,6 @@ pub enum Protocol {
     },
 }
 
-
 /// Explicit H.264 compression implementation, selected before construction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -581,10 +566,6 @@ pub enum ConstructionModel {
         /// Radiometric capture: the sensor frames, exposure and aperture wires,
         /// calibration and lens projection; the plan model checks its fields.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[cfg_attr(
-            all(target_arch = "wasm32", not(target_os = "emscripten")),
-            tsify(type = "unknown")
-        )]
         radiometric: Option<serde_json::Value>,
         /// Focus position wire.
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -669,17 +650,9 @@ pub enum ConstructionModel {
         /// The sensor: its frame wire, or its frames, controls and
         /// calibration; the plan model checks its fields.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[cfg_attr(
-            all(target_arch = "wasm32", not(target_os = "emscripten")),
-            tsify(type = "unknown")
-        )]
         sensor: Option<serde_json::Value>,
         /// The shutter output: its wire or its output index.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[cfg_attr(
-            all(target_arch = "wasm32", not(target_os = "emscripten")),
-            tsify(type = "unknown")
-        )]
         shutter_output: Option<serde_json::Value>,
         /// statistics grid.
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -753,10 +726,6 @@ pub enum ConstructionModel {
         clock_irq: Irqs,
         /// Aperture and ND optics the motor positions; the plan model checks its fields.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[cfg_attr(
-            all(target_arch = "wasm32", not(target_os = "emscripten")),
-            tsify(type = "unknown")
-        )]
         optics: Option<serde_json::Value>,
     },
     /// Image scaler.
@@ -857,10 +826,6 @@ pub enum ConstructionModel {
         irq: Irqs,
         /// The SDIO module: its firmware size and protocol and its own parts.
         /// The plan model checks its fields when a board is built.
-        #[cfg_attr(
-            all(target_arch = "wasm32", not(target_os = "emscripten")),
-            tsify(type = "unknown")
-        )]
         module: serde_json::Value,
     },
     /// serial-audio hardware.

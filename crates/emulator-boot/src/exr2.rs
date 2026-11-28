@@ -17,7 +17,9 @@ use std::collections::BTreeSet;
 pub(super) fn construction_board(
     resolved: &ResolvedConfiguration,
 ) -> Option<&fujimod_catalog::profiles::BodyBoard> {
-    resolved.board().filter(|board| board.construction.is_some())
+    resolved
+        .board()
+        .filter(|board| board.construction.is_some())
 }
 
 /// Whether the body's board exports a native construction.
@@ -112,9 +114,7 @@ pub(super) fn assemble(
         card_node(selection, card, high_speed, &mut nodes)?;
     }
     let mut wires = serde_json::to_value(&construction.wires)
-        .map_err(|error| {
-            format!("body {} board wires: {error}", selection.body.id)
-        })?
+        .map_err(|error| format!("body {} board wires: {error}", selection.body.id))?
         .as_object()
         .cloned()
         .ok_or_else(|| "construction wires are not an object".to_string())?;

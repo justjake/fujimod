@@ -30,7 +30,14 @@ fn render(schema: &Value, references: &mut BTreeSet<String>) -> Result<String, S
     if schema == &Value::Bool(false) {
         return Ok("never".into());
     }
-    if schema == &Value::Bool(true) || schema == &serde_json::json!({}) {
+    // A schema that only documents its value (any JSON) is `unknown`.
+    if schema == &Value::Bool(true)
+        || schema.as_object().is_some_and(|object| {
+            object
+                .keys()
+                .all(|key| matches!(key.as_str(), "description" | "title" | "default"))
+        })
+    {
         return Ok("unknown".into());
     }
     if let Some(reference) = schema.get("$ref").and_then(Value::as_str) {

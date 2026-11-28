@@ -168,6 +168,9 @@ class ApplicationFrameInput(TypedDict, total=False):
     period_ticks: Required[int]
 
 
+type ApplicationKind = Literal["xp4", "xpp"]
+
+
 class ApplicationLadderInput(TypedDict, total=False):
     basis: Required[str]
     released: Required[int]
@@ -226,6 +229,27 @@ class ApplicationPartInputVariant5(TypedDict, total=False):
     connected: Required[bool]
     kind: Required[Literal["hdmi_sink"]]
     part_id: Required[str]
+
+
+ApplicationStartup = TypedDict(
+    "ApplicationStartup",
+    {
+        "$schema": Required["str"],
+        "assets": NotRequired["list[str]"],
+        "cores": Required["int"],
+        "firmware_id": Required["str"],
+        "firmware_sha256": Required["str"],
+        "flash": NotRequired["FlashContents | None"],
+        "id": Required["str"],
+        "images": Required["list[PlacedImage]"],
+        "kind": Required["ApplicationKind"],
+        "labels": NotRequired["list[int]"],
+        "loader_handoff": Required["LoaderHandoff"],
+        "registers": Required["list[tuple[object, int]]"],
+        "schema": Required["int"],
+    },
+    total=False,
+)
 
 
 class ApplicationStatisticsInput(TypedDict, total=False):
@@ -1476,25 +1500,6 @@ class ConstructionActivity(TypedDict, total=False):
     selection: Required[ConstructionSelection]
 
 
-type ConstructionClock = (
-    ConstructionClockVariant0 | ConstructionClockVariant1 | ConstructionClockVariant2
-)
-
-
-class ConstructionClockVariant0(TypedDict, total=False):
-    kind: Required[Literal["fixed"]]
-
-
-class ConstructionClockVariant1(TypedDict, total=False):
-    kind: Required[Literal["encoder_stages"]]
-    ticks_per_quantum: Required[int]
-
-
-class ConstructionClockVariant2(TypedDict, total=False):
-    kind: Required[Literal["microstep_stages"]]
-    ticks_per_quantum: Required[int]
-
-
 class ConstructionCommandRegisters(TypedDict, total=False):
     address: Required[int]
     commands: Required[list[int]]
@@ -1510,58 +1515,20 @@ class ConstructionCore(TypedDict, total=False):
     line: Required[int]
 
 
-class ConstructionCounters(TypedDict, total=False):
-    channel: Required[int]
-    divider: Required[int]
-
-
 type ConstructionEmpty = dict[str, Never]
 
 
-type ConstructionEndpoint = (
-    ConstructionEndpointVariant0
-    | ConstructionEndpointVariant1
-    | ConstructionEndpointVariant2
-)
-
-
-class ConstructionEndpointVariant0(TypedDict, total=False):
-    completion: Required[list[ConstructionIrqs]]
-    focus: NotRequired[ConstructionFocus | None]
-    gpio: Required[str]
-    kind: Required[Literal["lens-unit"]]
-    nd: NotRequired[ConstructionNdFilter | None]
-    optics: NotRequired[ConstructionOptics | None]
-    options: Required[ConstructionLensunitOptions]
-    pulses: Required[str]
-
-
-class ConstructionEndpointVariant1(TypedDict, total=False):
-    kind: Required[Literal["panel"]]
-    options: Required[ConstructionPanelOptions]
-
-
-class ConstructionEndpointVariant2(TypedDict, total=False):
-    kind: Required[Literal["registers"]]
-    options: Required[ConstructionRegistersOptions]
-
-
-class ConstructionFocus(TypedDict, total=False):
-    infinity_position: Required[int]
-    output: Required[str]
-    steps_per_mm: Required[int]
+class ConstructionExtraRegisters(TypedDict, total=False):
+    address: Required[int]
+    masks: Required[list[list[int]]]
+    modes: Required[list[int]]
+    values: Required[list[list[int]]]
 
 
 class ConstructionHardware(TypedDict, total=False):
     base: Required[int]
     irq: Required[int]
     parts: Required[ConstructionParts]
-
-
-class ConstructionHome(TypedDict, total=False):
-    pin: Required[ConstructionPin]
-    side: Required[str]
-    threshold: Required[int]
 
 
 class ConstructionIrqs(TypedDict, total=False):
@@ -1572,13 +1539,6 @@ class ConstructionIrqsIrqs(TypedDict, total=False):
     edge: Required[str]
     outputs: Required[list[ConstructionIrqs]]
     pin: Required[ConstructionPin]
-
-
-class ConstructionLensunitOptions(TypedDict, total=False):
-    encoder: NotRequired[str | None]
-    motors: Required[list[ConstructionMotors]]
-    protocol: Required[ConstructionProtocol]
-    zoom: NotRequired[str | None]
 
 
 type ConstructionModel = (
@@ -1627,6 +1587,17 @@ type ConstructionModel = (
     | ConstructionModelVariant42
     | ConstructionModelVariant43
     | ConstructionModelVariant44
+    | ConstructionModelVariant45
+    | ConstructionModelVariant46
+    | ConstructionModelVariant47
+    | ConstructionModelVariant48
+    | ConstructionModelVariant49
+    | ConstructionModelVariant50
+    | ConstructionModelVariant51
+    | ConstructionModelVariant52
+    | ConstructionModelVariant53
+    | ConstructionModelVariant54
+    | ConstructionModelVariant55
 )
 
 
@@ -1673,6 +1644,10 @@ class ConstructionModelVariant15(TypedDict, total=False):
     activity: NotRequired[ConstructionActivity | None]
     images: Required[str]
     kind: Required[Literal["external-frames"]]
+    phase_edges: NotRequired[str | None]
+    position: NotRequired[str | None]
+    radiometric: NotRequired[object]
+    sensor_clock: NotRequired[str | None]
     statistics: Required[str]
 
 
@@ -1732,8 +1707,8 @@ class ConstructionModelVariant24(TypedDict, total=False):
     phase_irqs: Required[list[ConstructionCore]]
     raw_irq: Required[ConstructionCore]
     readback_irq: Required[ConstructionCore]
-    sensor: NotRequired[str | None]
-    shutter_output: NotRequired[str | None]
+    sensor: NotRequired[object]
+    shutter_output: NotRequired[object]
     statistics_grid: NotRequired[str | None]
 
 
@@ -1776,53 +1751,59 @@ class ConstructionModelVariant3(TypedDict, total=False):
 
 
 class ConstructionModelVariant30(TypedDict, total=False):
-    irq: Required[ConstructionCore]
-    kind: Required[Literal["image-transfer"]]
+    kind: Required[Literal["window-analysis"]]
+    routes: Required[str]
 
 
 class ConstructionModelVariant31(TypedDict, total=False):
-    bank: Required[str]
-    kind: Required[Literal["parameters"]]
+    clock_irq: Required[ConstructionIrqs]
+    gpio: Required[str]
+    kind: Required[Literal["i2c-motor-bridge"]]
+    optics: NotRequired[object]
+    pulses: Required[str]
+    registers: Required[str]
 
 
 class ConstructionModelVariant32(TypedDict, total=False):
-    kind: Required[Literal["phase-detection"]]
-    routes: Required[str]
+    irq: Required[ConstructionCore]
+    kind: Required[Literal["scaler"]]
 
 
 class ConstructionModelVariant33(TypedDict, total=False):
-    gpio: Required[str]
-    kind: Required[Literal["power"]]
+    kind: Required[Literal["serial-audio-duplex"]]
+    routes: Required[str]
 
 
 class ConstructionModelVariant34(TypedDict, total=False):
-    kind: Required[Literal["reset"]]
+    irq: Required[ConstructionCore]
+    kind: Required[Literal["prefilter"]]
 
 
 class ConstructionModelVariant35(TypedDict, total=False):
-    kind: Required[Literal["scanout"]]
+    irq: Required[ConstructionCore]
+    kind: Required[Literal["raw-statistics"]]
 
 
 class ConstructionModelVariant36(TypedDict, total=False):
-    kind: Required[Literal["sdhci-clocks"]]
-    words: Required[list[list[int]]]
+    irq: Required[ConstructionCore]
+    kind: Required[Literal["still-processor"]]
 
 
 class ConstructionModelVariant37(TypedDict, total=False):
-    irq: Required[ConstructionIrqs]
-    kind: Required[Literal["sdio-host"]]
-    module: Required[ConstructionModule]
+    irq: Required[ConstructionCore]
+    kind: Required[Literal["warp"]]
+    stream: Required[str]
 
 
 class ConstructionModelVariant38(TypedDict, total=False):
-    kind: Required[Literal["serial-audio"]]
-    sinks: Required[list[ConstructionEmpty]]
+    irq: Required[ConstructionCore]
+    kind: Required[Literal["jpeg-encoder"]]
+    stream: Required[str]
 
 
 class ConstructionModelVariant39(TypedDict, total=False):
-    kind: Required[Literal["serial-audio-transmitter"]]
-    routes: Required[str]
-    sinks: Required[list[ConstructionSerialAudioSink]]
+    irq: Required[ConstructionCore]
+    kind: Required[Literal["jpeg-decoder"]]
 
 
 class ConstructionModelVariant4(TypedDict, total=False):
@@ -1830,34 +1811,89 @@ class ConstructionModelVariant4(TypedDict, total=False):
 
 
 class ConstructionModelVariant40(TypedDict, total=False):
-    kind: Required[Literal["serial-dma"]]
+    kind: Required[Literal["sata-host"]]
 
 
 class ConstructionModelVariant41(TypedDict, total=False):
+    irq: Required[ConstructionCore]
+    kind: Required[Literal["image-transfer"]]
+
+
+class ConstructionModelVariant42(TypedDict, total=False):
+    bank: Required[str]
+    kind: Required[Literal["parameters"]]
+
+
+class ConstructionModelVariant43(TypedDict, total=False):
+    kind: Required[Literal["phase-detection"]]
+    routes: Required[str]
+
+
+class ConstructionModelVariant44(TypedDict, total=False):
+    gpio: Required[str]
+    kind: Required[Literal["power"]]
+
+
+class ConstructionModelVariant45(TypedDict, total=False):
+    kind: Required[Literal["reset"]]
+
+
+class ConstructionModelVariant46(TypedDict, total=False):
+    kind: Required[Literal["scanout"]]
+
+
+class ConstructionModelVariant47(TypedDict, total=False):
+    kind: Required[Literal["sdhci-clocks"]]
+    words: Required[list[list[int]]]
+
+
+class ConstructionModelVariant48(TypedDict, total=False):
+    irq: Required[ConstructionIrqs]
+    kind: Required[Literal["sdio-host"]]
+    module: Required[object]
+
+
+class ConstructionModelVariant49(TypedDict, total=False):
+    kind: Required[Literal["serial-audio"]]
+    sinks: Required[list[ConstructionEmpty]]
+
+
+class ConstructionModelVariant5(TypedDict, total=False):
+    kind: Required[Literal["companion"]]
+
+
+class ConstructionModelVariant50(TypedDict, total=False):
+    kind: Required[Literal["serial-audio-transmitter"]]
+    routes: Required[str]
+    sinks: Required[list[ConstructionSerialAudioSink]]
+
+
+class ConstructionModelVariant51(TypedDict, total=False):
+    kind: Required[Literal["serial-dma"]]
+
+
+class ConstructionModelVariant52(TypedDict, total=False):
     kind: Required[Literal["spi-controller"]]
     routes: Required[list[ConstructionRoutes]]
 
 
-class ConstructionModelVariant42(TypedDict, total=False):
+class ConstructionModelVariant53(TypedDict, total=False):
     frames: Required[str]
+    grid: NotRequired[str | None]
     images: Required[str]
     kind: Required[Literal["statistics"]]
     routes: Required[str]
 
 
-class ConstructionModelVariant43(TypedDict, total=False):
+class ConstructionModelVariant54(TypedDict, total=False):
     cable: NotRequired[str | None]
-    endpoints: NotRequired[str | None]
+    endpoints: NotRequired[ConstructionUsbEndpointWiring | None]
     kind: Required[Literal["usb"]]
 
 
-class ConstructionModelVariant44(TypedDict, total=False):
+class ConstructionModelVariant55(TypedDict, total=False):
     controllers: Required[list[str]]
     kind: Required[Literal["vector-gpu"]]
-
-
-class ConstructionModelVariant5(TypedDict, total=False):
-    kind: Required[Literal["companion"]]
 
 
 class ConstructionModelVariant6(TypedDict, total=False):
@@ -1880,52 +1916,12 @@ class ConstructionModelVariant9(TypedDict, total=False):
     kind: Required[Literal["dram-phy"]]
 
 
-class ConstructionModule(TypedDict, total=False):
-    firmware_bytes: Required[int]
-    protocol: Required[str]
-
-
-class ConstructionMotors(TypedDict, total=False):
-    counters: Required[list[ConstructionCounters]]
-    home: NotRequired[ConstructionHome | None]
-    initial_position: Required[int]
-    settle_ticks: Required[int]
-    ticks_per_step: Required[int]
-    travel_limits: Required[list[int]]
-
-
-class ConstructionNdFilter(TypedDict, total=False):
-    aperture: Required[str]
-    factor: Required[int]
-    insert_mask: Required[int]
-    register: Required[int]
-    remove_mask: Required[int]
-    transmission: Required[str]
-
-
 class ConstructionNodes(TypedDict, total=False):
     boot_entries: Required[list[str]]
     dependencies: Required[list[str]]
     model: Required[ConstructionModel]
     name: Required[str]
     windows: Required[list[ConstructionWindows]]
-
-
-class ConstructionOptics(TypedDict, total=False):
-    output: Required[str]
-    positions: Required[list[list[int]]]
-
-
-class ConstructionOptionsClock(TypedDict, total=False):
-    initial_seconds: NotRequired[int | None]
-    maximum_seconds: Required[int]
-    registers: Required[list[int]]
-    started: Required[int]
-    ticks_per_second: Required[int]
-
-
-class ConstructionPanelOptions(TypedDict, total=False):
-    used_mask: Required[int]
 
 
 type ConstructionParts = ConstructionPartsVariant0 | ConstructionPartsVariant1
@@ -1947,6 +1943,7 @@ class ConstructionPartsVariant0(TypedDict, total=False):
 
 class ConstructionPartsVariant1(TypedDict, total=False):
     connected: NotRequired[bool | None]
+    extra_registers: NotRequired[list[ConstructionExtraRegisters]]
     kind: Required[Literal["secondary"]]
     pwic_address: Required[int]
     pwic_masks: Required[list[list[int]]]
@@ -1971,25 +1968,8 @@ class ConstructionProfile(TypedDict, total=False):
     wires: Required[dict[str, ConstructionWire]]
 
 
-type ConstructionProtocol = ConstructionProtocolVariant0
-
-
-class ConstructionProtocolVariant0(TypedDict, total=False):
-    clock: Required[list[ConstructionClock]]
-    kind: Required[Literal["banked"]]
-    positive_direction_high: Required[bool]
-    stop_response: Required[str]
-
-
-class ConstructionRegistersOptions(TypedDict, total=False):
-    clock: NotRequired[ConstructionOptionsClock | None]
-    readable: Required[bool]
-    registers: Required[list[list[int]]]
-    status_registers: Required[list[int]]
-
-
 class ConstructionRoutes(TypedDict, total=False):
-    endpoint: Required[ConstructionEndpoint]
+    endpoint: Required[object]
     gpio: Required[str]
     options: Required[ConstructionRoutesOptions]
 
@@ -2048,6 +2028,12 @@ class ConstructionTransports(TypedDict, total=False):
     receive: Required[bool]
 
 
+class ConstructionUsbEndpointWiring(TypedDict, total=False):
+    dma_irq: Required[ConstructionIrqs]
+    irq: Required[ConstructionIrqs]
+    ram_bytes: Required[int]
+
+
 class ConstructionWindows(TypedDict, total=False):
     base: Required[int]
     size: Required[int]
@@ -2058,6 +2044,12 @@ type ConstructionWire = ConstructionWireKind | ConstructionWireVariant0
 
 type ConstructionWireKind = Literal[
     "software-pulse",
+    "bridge-registers",
+    "exposure",
+    "frame-period",
+    "image-grid",
+    "optical-position",
+    "stream",
     "aperture",
     "focus",
     "irq-routes",
@@ -3261,6 +3253,12 @@ class FlashCodeRange(TypedDict, total=False):
     size: Required[int]
 
 
+class FlashContents(TypedDict, total=False):
+    dat_offset: Required[int]
+    sha256: Required[str]
+    size: Required[int]
+
+
 class FlashControl(TypedDict, total=False):
     offset: Required[int]
     sha256: Required[str]
@@ -3360,6 +3358,11 @@ class GpioScannerVariant1(TypedDict, total=False):
     lower: Required[int]
     source: Required[int]
     upper: Required[int]
+
+
+class HandoffWord(TypedDict, total=False):
+    offset: Required[int]
+    value: Required[int]
 
 
 class HardwareAfExtraction(TypedDict, total=False):
@@ -3836,6 +3839,15 @@ class HomeSwitch(TypedDict, total=False):
 type HomeSwitchSide = Literal["above", "below"]
 
 
+class IdentityCheck(TypedDict, total=False):
+    address: Required[int]
+    sha256: Required[str]
+    size: Required[int]
+
+
+type ImageEncoding = Literal["raw", "method4"]
+
+
 type InputBinding = InputBindingVariant0 | InputBindingVariant1 | InputBindingVariant2
 
 
@@ -3995,6 +4007,14 @@ type LensProtocol = Literal["banked", "three-byte", "mixed-width", "dc-zoom"]
 
 
 type LensStopResponse = Literal["settled"]
+
+
+class LoaderHandoff(TypedDict, total=False):
+    address: Required[int]
+    fill: Required[int]
+    sha256: Required[str]
+    size: Required[int]
+    words: Required[list[HandoffWord]]
 
 
 class LocatedInput(TypedDict, total=False):
@@ -4232,6 +4252,8 @@ type NativeControlBusProfile = Literal[
     "endpoint7-stationary-and9-heartbeat-latched-irq-unmeasured",
     "declared-register-status-pair-latched-irq-unmeasured",
     "usbcharge-disconnected-pwic-startup-tagged",
+    "declared-bus1-register-replies-unmeasured",
+    "endpoint7-stationary-z-plus-1g",
 ]
 
 
@@ -4284,13 +4306,20 @@ type NativeImageInputInputsClockMode = Literal[
 ]
 
 
-class NativeImageInputInputsClockSource(TypedDict, total=False):
+type NativeImageInputInputsClockSource = (
+    NativeImageInputInputsClockSourceVariant0
+    | NativeImageInputInputsClockSourceVariant1
+)
+
+
+class NativeImageInputInputsClockSourceVariant0(TypedDict, total=False):
     first_delay_ticks: NotRequired[int | None]
-    kind: Required[NativeImageInputInputsClockSourceKind]
+    kind: Required[Literal["periodic"]]
     period_ticks: Required[int]
 
 
-type NativeImageInputInputsClockSourceKind = Literal["periodic"]
+class NativeImageInputInputsClockSourceVariant1(TypedDict, total=False):
+    kind: Required[Literal["sensor"]]
 
 
 type NativeImageInputInputsCommand = Literal["packed_writes", "packed_words"]
@@ -4320,12 +4349,19 @@ class NativeKeyNames(TypedDict, total=False):
 type NativeLzInputsResize = Literal["declared_packed_pyramid"]
 
 
-class NativeOutputChannelInputsClock(TypedDict, total=False):
-    kind: Required[NativeOutputChannelInputsClockKind]
+type NativeOutputChannelInputsClock = (
+    NativeOutputChannelInputsClockVariant0 | NativeOutputChannelInputsClockVariant1
+)
+
+
+class NativeOutputChannelInputsClockVariant0(TypedDict, total=False):
+    kind: Required[Literal["fixed"]]
     ticks: Required[int]
 
 
-type NativeOutputChannelInputsClockKind = Literal["fixed"]
+class NativeOutputChannelInputsClockVariant1(TypedDict, total=False):
+    bytes_per_tick: Required[int]
+    kind: Required[Literal["throughput"]]
 
 
 type NativeOutputChannelInputsGeometry = Literal["skip_incomplete"]
@@ -4378,12 +4414,34 @@ type NativeScanoutInputsRectangleProfile = Literal[
 ]
 
 
-class NativeStatisticsInputsClock(TypedDict, total=False):
-    kind: Required[NativeStatisticsInputsClockKind]
+class NativeSerialAudioReceive(TypedDict, total=False):
+    max_transfer_bytes: Required[int]
+    ram_bytes: Required[int]
+    sample: Required[int]
+    sample_rate: Required[int]
+    ticks_per_second: Required[int]
+
+
+class NativeSerialAudioTransmit(TypedDict, total=False):
+    max_transfer_bytes: Required[int]
+    minimum_ticks: Required[int]
+    ram_bytes: Required[int]
+    ticks_per_byte: Required[int]
+
+
+type NativeStatisticsInputsClock = (
+    NativeStatisticsInputsClockVariant0 | NativeStatisticsInputsClockVariant1
+)
+
+
+class NativeStatisticsInputsClockVariant0(TypedDict, total=False):
+    kind: Required[Literal["fixed"]]
     ticks: Required[int]
 
 
-type NativeStatisticsInputsClockKind = Literal["fixed"]
+class NativeStatisticsInputsClockVariant1(TypedDict, total=False):
+    bytes_per_tick: Required[int]
+    kind: Required[Literal["throughput"]]
 
 
 class NativeUsbEndpoints(TypedDict, total=False):
@@ -4861,6 +4919,14 @@ type PictureLayout = Literal["abgr8888-straight"]
 type PixelFormat = Literal["bgra8888"]
 
 
+class PlacedImage(TypedDict, total=False):
+    address: Required[int]
+    dat_offset: Required[int]
+    encoding: Required[ImageEncoding]
+    sha256: Required[str]
+    size: Required[int]
+
+
 class PowerControlAssembly(TypedDict, total=False):
     channel: Required[int]
     connection_id: Required[str]
@@ -5058,6 +5124,27 @@ class RecIdle(TypedDict, total=False):
     mode_size: Required[int]
     pending_mode_address: NotRequired[int | None]
     rec_mode: Required[int]
+
+
+RecReadiness = TypedDict(
+    "RecReadiness",
+    {
+        "$schema": Required["str"],
+        "firmware_id": Required["str"],
+        "firmware_sha256": Required["str"],
+        "id": Required["str"],
+        "identity_checks": Required["list[IdentityCheck]"],
+        "menu_active": Required["StateWord"],
+        "pending_mode": Required["StateWord"],
+        "rec_system_mode": Required["int"],
+        "rec_ui_mode": Required["int"],
+        "schema": Required["int"],
+        "settle_milliseconds": Required["int"],
+        "system_mode": Required["StateWord"],
+        "ui_mode": Required["StateWord"],
+    },
+    total=False,
+)
 
 
 type RegionSize = RegionSizeVariant0 | RegionSizeVariant1
@@ -5452,10 +5539,14 @@ class ResetPower(TypedDict, total=False):
     additional_panels: NotRequired[list[ResetPanelRoute] | None]
     boot_reply: Required[int]
     mcu_registers: NotRequired[list[int] | None]
-    panel_contract: NotRequired[tuple[list[int], list[int], list[int | None], int] | None]
+    panel_contract: NotRequired[
+        tuple[list[int], list[int], list[int | None], int] | None
+    ]
     profile_name: Required[str]
     spi0_input_profile: NotRequired[str | None]
-    spi_endpoints: NotRequired[list[tuple[int, int, list[int], bool, list[list[int]]]] | None]
+    spi_endpoints: NotRequired[
+        list[tuple[int, int, list[int], bool, list[list[int]]]] | None
+    ]
     spi_status_registers: NotRequired[list[list[int]] | None]
 
 
@@ -5708,6 +5799,7 @@ class ResolvedConfiguration(TypedDict, total=False):
 
 
 class ResolvedSelection(TypedDict, total=False):
+    application_startup: NotRequired[ApplicationStartup | None]
     body: Required[Body]
     bulk: NotRequired[FirmwareBulk | None]
     card_files: NotRequired[FirmwareCard | None]
@@ -5718,6 +5810,7 @@ class ResolvedSelection(TypedDict, total=False):
     flash: NotRequired[FirmwareFlash | None]
     parts: Required[list[Part]]
     physical_controls: NotRequired[PhysicalControls | None]
+    rec_readiness: NotRequired[RecReadiness | None]
     restart: NotRequired[FirmwareRestart | None]
     settings: NotRequired[FirmwareSettings | None]
     soc: Required[Soc]
@@ -6222,6 +6315,16 @@ type RunNativeDeviceInputs = (
     | RunNativeDeviceInputsVariant40
     | RunNativeDeviceInputsVariant41
     | RunNativeDeviceInputsVariant42
+    | RunNativeDeviceInputsVariant43
+    | RunNativeDeviceInputsVariant44
+    | RunNativeDeviceInputsVariant45
+    | RunNativeDeviceInputsVariant46
+    | RunNativeDeviceInputsVariant47
+    | RunNativeDeviceInputsVariant48
+    | RunNativeDeviceInputsVariant49
+    | RunNativeDeviceInputsVariant50
+    | RunNativeDeviceInputsVariant51
+    | RunNativeDeviceInputsVariant52
 )
 
 
@@ -6254,10 +6357,13 @@ class RunNativeDeviceInputsVariant12(TypedDict, total=False):
 class RunNativeDeviceInputsVariant13(TypedDict, total=False):
     ack_ticks: Required[int]
     clock: Required[NativeStatisticsInputsClock]
+    contrast: NotRequired[object]
     diagnostic_reads: NotRequired[bool]
     external_statistics: Required[bool]
     histogram: Required[bool]
     kind: Required[Literal["statistics"]]
+    metering: NotRequired[str | None]
+    pixels_per_tick: NotRequired[int | None]
     stop_ticks: Required[int]
 
 
@@ -6283,7 +6389,9 @@ class RunNativeDeviceInputsVariant16(TypedDict, total=False):
 
 class RunNativeDeviceInputsVariant17(TypedDict, total=False):
     kind: Required[Literal["external-frames"]]
+    optics: NotRequired[object]
     period_ticks: Required[int]
+    phase_source: NotRequired[int | None]
 
 
 class RunNativeDeviceInputsVariant18(TypedDict, total=False):
@@ -6428,7 +6536,7 @@ class RunNativeDeviceInputsVariant36(TypedDict, total=False):
     max_pixels: Required[int]
     packing: Required[NativeScanoutInputsPacking]
     ram_bytes: Required[int]
-    rectangle_profile: Required[NativeScanoutInputsRectangleProfile]
+    rectangle_profile: NotRequired[NativeScanoutInputsRectangleProfile | None]
     reset_ticks: Required[int]
 
 
@@ -6458,8 +6566,9 @@ class RunNativeDeviceInputsVariant4(TypedDict, total=False):
 
 class RunNativeDeviceInputsVariant40(TypedDict, total=False):
     kind: Required[Literal["encoder"]]
+    outputs: NotRequired[object]
     phase_ticks: Required[int]
-    pins: Required[list[NativeEncoderInputsPinsItem]]
+    pins: NotRequired[list[NativeEncoderInputsPinsItem]]
     rest_phase: Required[int]
 
 
@@ -6479,8 +6588,72 @@ class RunNativeDeviceInputsVariant42(TypedDict, total=False):
     transfer_ticks: Required[int]
 
 
+class RunNativeDeviceInputsVariant43(TypedDict, total=False):
+    arithmetic: Required[str]
+    kind: Required[Literal["window-analysis"]]
+    ticks_per_window: Required[int]
+
+
+class RunNativeDeviceInputsVariant44(TypedDict, total=False):
+    initial_position: Required[int]
+    kind: Required[Literal["i2c-motor-bridge"]]
+    position_units_per_step: Required[int]
+    pulse_channel: Required[int]
+    pulse_function: Required[int]
+    pulse_pin: Required[NativeGpioInputsOutputLevelsItemPin]
+    travel_limits: NotRequired[list[int] | None]
+
+
+class RunNativeDeviceInputsVariant45(TypedDict, total=False):
+    completion_ticks: Required[int]
+    kind: Required[Literal["scaler"]]
+
+
+class RunNativeDeviceInputsVariant46(TypedDict, total=False):
+    kind: Required[Literal["serial-audio-duplex"]]
+    receive: Required[NativeSerialAudioReceive]
+    sinks: Required[list[bool]]
+    transmit: Required[NativeSerialAudioTransmit]
+
+
+class RunNativeDeviceInputsVariant47(TypedDict, total=False):
+    completion_ticks: Required[int]
+    kind: Required[Literal["prefilter"]]
+    reset_ticks: Required[int]
+
+
+class RunNativeDeviceInputsVariant48(TypedDict, total=False):
+    completion_ticks: Required[int]
+    kind: Required[Literal["raw-statistics"]]
+    reset_ticks: Required[int]
+
+
+class RunNativeDeviceInputsVariant49(TypedDict, total=False):
+    cfa: Required[list[int]]
+    completion_ticks: Required[int]
+    kind: Required[Literal["still-processor"]]
+
+
 class RunNativeDeviceInputsVariant5(TypedDict, total=False):
     kind: Required[Literal["dram"]]
+
+
+class RunNativeDeviceInputsVariant50(TypedDict, total=False):
+    completion_ticks: Required[int]
+    kind: Required[Literal["warp"]]
+    stop_ticks: Required[int]
+
+
+class RunNativeDeviceInputsVariant51(TypedDict, total=False):
+    completion_ticks: Required[int]
+    kind: Required[Literal["jpeg-encoder"]]
+    reset_ticks: Required[int]
+
+
+class RunNativeDeviceInputsVariant52(TypedDict, total=False):
+    completion_ticks: Required[int]
+    kind: Required[Literal["jpeg-decoder"]]
+    reset_ticks: Required[int]
 
 
 class RunNativeDeviceInputsVariant6(TypedDict, total=False):
@@ -7102,6 +7275,11 @@ class StateRegion(TypedDict, total=False):
     size: Required[int]
 
 
+class StateWord(TypedDict, total=False):
+    address: Required[int]
+    bytes: Required[int]
+
+
 class StatusRegister(TypedDict, total=False):
     address: Required[int]
     value: Required[int]
@@ -7111,6 +7289,7 @@ type StillEngineKind = Literal["iifp", "recc", "resz", "reszl", "retch", "mix"]
 
 
 class StorageSlot(TypedDict, total=False):
+    basis: Required[str]
     id: Required[StorageSlotId]
     label: NotRequired[str | None]
 

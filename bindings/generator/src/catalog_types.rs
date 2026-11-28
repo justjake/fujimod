@@ -457,6 +457,16 @@ fn property_type(schema: &Value, python_string_refs: bool) -> Result<String, Str
     if schema.get("properties").is_some() || schema.get("additionalProperties").is_some() {
         return Err("nested object catalog schemas must have a named Rust type".into());
     }
+    // A schema that only documents its value is any JSON value.
+    if schema == &Value::Bool(true)
+        || schema.as_object().is_some_and(|object| {
+            object
+                .keys()
+                .all(|key| matches!(key.as_str(), "description" | "title" | "default"))
+        })
+    {
+        return Ok("object".into());
+    }
     Err("catalog schema has no type, reference, literal or composition".into())
 }
 
@@ -596,7 +606,13 @@ fn python(definitions: &Definitions) -> Result<String, String> {
                     } else {
                         "NotRequired"
                     };
-                    output.push_str(&format!("    {field}: {marker}[{ty}]\n"));
+                    if format!("    {field}: {marker}[{ty}]").len() > 88 {
+                        output.push_str(&format!(
+                            "    {field}: {marker}[\n        {ty}\n    ]\n"
+                        ));
+                    } else {
+                        output.push_str(&format!("    {field}: {marker}[{ty}]\n"));
+                    }
                 }
             } else {
                 output.push_str(&format!("{name} = TypedDict(\n    {name:?},\n    {{\n"));

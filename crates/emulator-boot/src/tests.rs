@@ -172,7 +172,7 @@ fn checked_run_configuration_selects_runtime_and_supplies_scene_and_quantum() {
     assert_eq!(json["overlays"], serde_json::json!([]));
     assert_eq!(json["resolved"]["reference"]["body"]["id"], "x70");
     assert!(json["inputs"]["mcu"]["route"].is_number());
-    let settings = &json["resolved"]["configuration"]["inputs"]["settings"];
+    let settings = &json["resolved"]["inputs"]["settings"];
     assert_eq!(settings["camera"], "reference");
     assert_eq!(settings["requested"]["setup"], "done");
 }

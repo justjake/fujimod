@@ -873,7 +873,10 @@ mod tests {
         };
         assert!(!inputs.usb.connected);
         assert_eq!(
-            inputs.settings.as_ref().map(|settings| &settings.requested["setup"]),
+            inputs
+                .settings
+                .as_ref()
+                .map(|settings| &settings.requested["setup"]),
             Some(&"done".to_owned())
         );
         assert_eq!(base.start, RunStart::Rom);
@@ -885,7 +888,11 @@ mod tests {
         };
         assert!(inputs.usb.connected);
         assert_eq!(resolved.configuration.overlays, ["x70-110-rec-usb"]);
-        assert_eq!(resolved.board(), base.board(), "the cable changes no hardware");
+        assert_eq!(
+            resolved.board(),
+            base.board(),
+            "the cable changes no hardware"
+        );
     }
 
     #[test]
@@ -1002,11 +1009,8 @@ mod tests {
         refused(&|ladders| ladders[0].basis = " ".into(), "needs a basis");
 
         let mut declared = resolved.clone();
-        declared
-            .reference
-            .physical_controls
-            .as_mut()
-            .unwrap()["ladders"][3]["released"] = 1000.into();
+        declared.reference.physical_controls.as_mut().unwrap()["ladders"][3]["released"] =
+            1000.into();
         let error = declared.validate().unwrap_err();
         assert!(
             error.contains("already declares its released value"),

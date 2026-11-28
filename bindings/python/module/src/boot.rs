@@ -18,9 +18,7 @@ impl Boot for CatalogBoot {
             &inputs.configuration_id,
             &inputs.overlays,
         )?;
-        if !inputs.flash_seeds.is_empty()
-            && !matches!(resolved.inputs, Some(RunInputs::Xp5(_)))
-        {
+        if !inputs.flash_seeds.is_empty() && !matches!(resolved.inputs, Some(RunInputs::Xp5(_))) {
             return Err("flash seeds require an XP5 run configuration".into());
         }
         if let Some(engine) = inputs.engine {
