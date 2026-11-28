@@ -18,7 +18,11 @@
     "dat_offset": 628,
     "xor": 255
   },
-  "transport": null,
+  "reader": {
+    "symbol": "stock flash reader",
+    "alignment": 128
+  },
+  "transport": "xp4-stock-query",
   "code_ranges": [
     {
       "name": "flash command routine",
