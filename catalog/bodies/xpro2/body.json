@@ -1,0 +1,18 @@
+{
+  "$schema": "https://fujimod.com/schemas/body.schema.json",
+  "schema": 1,
+  "id": "xpro2",
+  "soc_id": "xpp",
+  "storage_slots": [
+    {
+      "id": "sd_card",
+      "label": "1",
+      "basis": "X-Pro2 specifications: two SD card slots, slot 1 UHS-II and slot 2 UHS-I."
+    },
+    {
+      "id": "sd_card_2",
+      "label": "2",
+      "basis": "X-Pro2 specifications: two SD card slots, slot 1 UHS-II and slot 2 UHS-I."
+    }
+  ]
+}

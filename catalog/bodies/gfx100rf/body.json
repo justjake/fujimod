@@ -44,7 +44,8 @@
   },
   "storage_slots": [
     {
-      "id": "sd_card"
+      "id": "sd_card",
+      "basis": "GFX100RF specifications: one SD card slot (UHS-II)."
     }
   ],
   "parts": [

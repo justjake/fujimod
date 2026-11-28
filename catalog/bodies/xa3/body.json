@@ -6,7 +6,8 @@
   "dram_bytes": 536870912,
   "storage_slots": [
     {
-      "id": "sd_card"
+      "id": "sd_card",
+      "basis": "X-A3 specifications: one SD card slot (UHS-I)."
     }
   ]
 }

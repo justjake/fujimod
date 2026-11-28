@@ -1547,6 +1547,15 @@ impl Body {
                 self.id
             ));
         }
+        let mut slots = BTreeSet::new();
+        for slot in &self.storage_slots {
+            if !slots.insert(slot.id) || slot.basis.trim().is_empty() {
+                return Err(format!(
+                    "body {} repeats a storage slot or declares one without a basis",
+                    self.id
+                ));
+            }
+        }
         unique_ids(self.parts.iter().map(String::as_str), "body part")?;
         unique_ids(
             self.absent_blocks.iter().map(String::as_str),
@@ -2103,6 +2112,9 @@ pub struct StorageSlot {
         tsify(type = "string | null")
     )]
     pub label: Option<String>,
+    /// Where the slot comes from: the camera's published specification, or
+    /// for a synthetic body, why it has the slot.
+    pub basis: String,
 }
 
 /// The kind and place of a removable storage slot.

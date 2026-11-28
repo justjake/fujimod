@@ -34121,6 +34121,10 @@
       "additionalProperties": false,
       "description": "One removable storage slot of a body.",
       "properties": {
+        "basis": {
+          "description": "Where the slot comes from: the camera's published specification, or\nfor a synthetic body, why it has the slot.",
+          "type": "string"
+        },
         "id": {
           "$ref": "#/$defs/StorageSlotId",
           "description": "The slot's name in an open request."
@@ -34134,7 +34138,8 @@
         }
       },
       "required": [
-        "id"
+        "id",
+        "basis"
       ],
       "type": "object"
     },

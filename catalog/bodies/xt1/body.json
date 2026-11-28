@@ -2614,7 +2614,8 @@
   },
   "storage_slots": [
     {
-      "id": "sd_card"
+      "id": "sd_card",
+      "basis": "X-T1 specifications: one SD card slot (UHS-II)."
     }
   ],
   "control_bus_chips": [

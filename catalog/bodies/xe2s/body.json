@@ -3140,7 +3140,8 @@
   },
   "storage_slots": [
     {
-      "id": "sd_card"
+      "id": "sd_card",
+      "basis": "X-E2S specifications: one SD card slot (UHS-I)."
     }
   ],
   "control_bus_chips": [

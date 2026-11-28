@@ -204,7 +204,8 @@
   },
   "storage_slots": [
     {
-      "id": "sd_card"
+      "id": "sd_card",
+      "basis": "X100V specifications: one SD card slot (UHS-I)."
     }
   ],
   "connections": [

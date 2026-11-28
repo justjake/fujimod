@@ -295,7 +295,8 @@
   },
   "storage_slots": [
     {
-      "id": "sd_card"
+      "id": "sd_card",
+      "basis": "Synthetic discovery body: one SD card slot, as the EXR II bodies it stands in for."
     }
   ],
   "control_bus_chips": [

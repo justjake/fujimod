@@ -1,0 +1,12 @@
+{
+  "$schema": "https://fujimod.com/schemas/body.schema.json",
+  "schema": 1,
+  "id": "xt30iii",
+  "soc_id": "xp5",
+  "storage_slots": [
+    {
+      "id": "sd_card",
+      "basis": "X-T30 III specifications: one SD card slot (UHS-I)."
+    }
+  ]
+}

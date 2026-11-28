@@ -3762,7 +3762,8 @@
   },
   "storage_slots": [
     {
-      "id": "sd_card"
+      "id": "sd_card",
+      "basis": "XQ1 and XQ2 specifications: one SD card slot (UHS-I)."
     }
   ],
   "control_bus_chips": [

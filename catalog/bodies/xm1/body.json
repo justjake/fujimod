@@ -2708,7 +2708,8 @@
   },
   "storage_slots": [
     {
-      "id": "sd_card"
+      "id": "sd_card",
+      "basis": "X-M1 specifications: one SD card slot."
     }
   ],
   "control_bus_chips": [

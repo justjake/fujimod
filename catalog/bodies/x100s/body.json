@@ -2928,7 +2928,8 @@
   },
   "storage_slots": [
     {
-      "id": "sd_card"
+      "id": "sd_card",
+      "basis": "X100S specifications: one SD card slot."
     }
   ],
   "control_bus_chips": [

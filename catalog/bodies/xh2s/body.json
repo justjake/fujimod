@@ -306,11 +306,13 @@
   "storage_slots": [
     {
       "id": "cfexpress_card",
-      "label": "1"
+      "label": "1",
+      "basis": "X-H2S specifications: a CFexpress Type B slot (1) and an SD card slot (2, UHS-II); the SD socket is wired to the first SD host."
     },
     {
       "id": "sd_card",
-      "label": "2"
+      "label": "2",
+      "basis": "X-H2S specifications: a CFexpress Type B slot (1) and an SD card slot (2, UHS-II); the SD socket is wired to the first SD host."
     }
   ],
   "connections": [
