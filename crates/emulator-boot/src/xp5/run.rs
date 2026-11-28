@@ -215,6 +215,16 @@ impl Run {
 /// 800-950 ms. The configuration's 1000 is the measured optimum, so
 /// Interactive keeps it and Exact, whose quantum is not a scheduling knob,
 /// is left to the configuration.
+///
+/// Re-calibrated at 1000, 10,000, 25,000 and 50,000 on both bodies (Linux,
+/// Unicorn, 2 s guest time, one run each): only 1000 leaves the board state
+/// byte-identical to the accepted build. Every larger slice moves a processor
+/// past a peer's interrupt deadline, so the M-core's NVIC deadline, the timer
+/// generations, the per-core instruction totals and the final `waiting` set
+/// all change; the display frames happen to stay equal, so the state is the
+/// check that matters. Host time does not improve either (xt5-431 53.7 s at
+/// 1000 vs 50.1/49.5/51.5 s at 10k/25k/50k; x100vi-131 76.1 s at 1000 vs
+/// 94.4/106.4/131.1 s), so 1000 stays.
 fn interactive_quantum(policy: ExecutionPolicy) -> Option<usize> {
     matches!(policy, ExecutionPolicy::Interactive).then_some(INTERACTIVE_QUANTUM)
 }
